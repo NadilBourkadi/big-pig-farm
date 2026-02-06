@@ -1,0 +1,350 @@
+"""Main game screen - the primary farm view."""
+
+from textual.app import ComposeResult
+from textual.screen import Screen
+from textual.containers import Container, Horizontal
+from textual.widgets import Footer
+
+from big_pig_farm.data.config import GameSpeed
+from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.game.state import GameState
+from big_pig_farm.economy.shop import get_facility_cost
+from big_pig_farm.ui.widgets.status_bar import StatusBar
+from big_pig_farm.ui.widgets.farm_view import FarmView
+from big_pig_farm.ui.widgets.notification import NotificationBar
+from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
+from big_pig_farm.ui.screens.shop import ShopScreen
+from big_pig_farm.ui.screens.pig_list import PigListScreen
+from big_pig_farm.ui.screens.breeding import BreedingScreen
+from big_pig_farm.ui.screens.facilities import FacilitiesScreen
+from big_pig_farm.ui.screens.confirm import ConfirmScreen
+from big_pig_farm.ui.screens.adoption import AdoptionScreen
+
+
+class MainGameScreen(Screen):
+    """The main game screen showing the farm view."""
+
+    BINDINGS = [
+        ("f", "feed", "Feed"),
+        ("s", "open_shop", "Shop"),
+        ("a", "open_adoption", "Adopt"),
+        ("p", "open_pigs", "Pigs"),
+        ("b", "open_breeding", "Breed"),
+        ("e", "toggle_edit", "Edit"),
+        ("n", "new_game", "New"),
+        ("space", "toggle_pause", "Pause"),
+        ("plus", "speed_up", "+Spd"),
+        ("minus", "slow_down", "-Spd"),
+        ("equal", "speed_up", None),  # Hidden duplicate
+        ("tab", "next_pig", "Next"),
+        ("up", "handle_up", None),  # Hidden - arrow keys are intuitive
+        ("down", "handle_down", None),
+        ("left", "handle_left", None),
+        ("right", "handle_right", None),
+        ("enter", "handle_enter", None),
+        ("m", "start_move", None),
+        ("r", "remove_facility", None),
+        ("delete", "remove_facility", None),
+        ("escape", "handle_escape", "Esc"),
+        ("q", "quit_game", "Quit"),
+    ]
+
+    DEFAULT_CSS = """
+    MainGameScreen {
+        layout: vertical;
+    }
+
+    #main-content {
+        height: 1fr;
+        layout: horizontal;
+    }
+
+    #farm-container {
+        width: 1fr;
+        height: 100%;
+        border: solid $primary;
+        margin: 0 1;
+    }
+
+    #notification-container {
+        height: 1;
+        margin: 0 1;
+    }
+    """
+
+    def __init__(self, state: GameState, **kwargs):
+        super().__init__(**kwargs)
+        self.state = state
+        self._status_bar: StatusBar | None = None
+        self._farm_view: FarmView | None = None
+        self._notification_bar: NotificationBar | None = None
+        self._pig_sidebar: PigSidebar | None = None
+        self._selected_pig_index = -1
+
+    def compose(self) -> ComposeResult:
+        """Compose the screen layout."""
+        self._status_bar = StatusBar()
+        yield self._status_bar
+
+        with Horizontal(id="main-content"):
+            with Container(id="farm-container"):
+                self._farm_view = FarmView(self.state)
+                yield self._farm_view
+
+            self._pig_sidebar = PigSidebar(self.state)
+            self._pig_sidebar.add_class("hidden")
+            yield self._pig_sidebar
+
+        with Container(id="notification-container"):
+            self._notification_bar = NotificationBar()
+            yield self._notification_bar
+
+        yield Footer()
+
+    def on_mount(self) -> None:
+        """Handle screen mount."""
+        self.update_display()
+        self.set_interval(0.1, self.update_display)
+
+    def update_display(self) -> None:
+        """Update all display elements."""
+        # Check if we should follow a pig (set by pig list/detail screens)
+        if self.app.pig_to_follow:
+            pig = self.app.pig_to_follow
+            self.app.pig_to_follow = None  # Clear it
+            self._follow_pig(pig)
+
+        if self._status_bar:
+            self._status_bar.update_from_state(self.state)
+
+        if self._farm_view:
+            self._farm_view.refresh()
+
+        if self._pig_sidebar:
+            self._pig_sidebar.refresh_content()
+
+        if self._notification_bar and self.state.events:
+            last_event = self.state.events[-1]
+            if not self._notification_bar.messages or \
+               self._notification_bar.messages[-1] != f"🔔 {last_event.message}":
+                self._notification_bar.add_message(
+                    last_event.message,
+                    last_event.event_type,
+                )
+
+    def action_toggle_pause(self) -> None:
+        """Toggle game pause."""
+        self.app.engine.toggle_pause()
+        status = "PAUSED" if self.state.is_paused else "RUNNING"
+        self.notify(f"Game {status}")
+
+    def action_speed_up(self) -> None:
+        """Increase game speed."""
+        new_speed = self.app.engine.cycle_speed()
+        self.notify(f"Speed: {new_speed.value}x")
+
+    def action_slow_down(self) -> None:
+        """Decrease game speed."""
+        speeds = [GameSpeed.NORMAL, GameSpeed.FAST, GameSpeed.FASTER, GameSpeed.FASTEST]
+        current = self.state.speed
+        if current in speeds:
+            idx = speeds.index(current)
+            if idx > 0:
+                self.state.speed = speeds[idx - 1]
+                self.notify(f"Speed: {self.state.speed.value}x")
+
+    def _follow_pig(self, pig) -> None:
+        """Start following a specific pig."""
+        # Find the pig's index in the list
+        pigs = self.state.get_pigs_list()
+        for i, p in enumerate(pigs):
+            if p.id == pig.id:
+                self._selected_pig_index = i
+                break
+
+        if self._farm_view:
+            self._farm_view.select_pig(pig.id)
+        if self._pig_sidebar:
+            self._pig_sidebar.set_pig(pig)
+        self.notify(f"Following: {pig.name}")
+
+    def action_feed(self) -> None:
+        """Refill all food and water facilities."""
+        food_bowls = 0
+        water_bottles = 0
+        hay_racks = 0
+
+        for facility in self.state.get_facilities_list():
+            if facility.facility_type == FacilityType.FOOD_BOWL:
+                facility.refill()
+                food_bowls += 1
+            elif facility.facility_type == FacilityType.WATER_BOTTLE:
+                facility.refill()
+                water_bottles += 1
+            elif facility.facility_type == FacilityType.HAY_RACK:
+                facility.refill()
+                hay_racks += 1
+
+        parts = []
+        if food_bowls:
+            parts.append(f"{food_bowls} food")
+        if water_bottles:
+            parts.append(f"{water_bottles} water")
+        if hay_racks:
+            parts.append(f"{hay_racks} hay")
+
+        if parts:
+            self.notify(f"Refilled: {', '.join(parts)}")
+        else:
+            self.notify("No facilities to refill")
+
+    def action_next_pig(self) -> None:
+        """Select the next guinea pig."""
+        pigs = self.state.get_pigs_list()
+        if not pigs:
+            self.notify("No guinea pigs!")
+            return
+
+        self._selected_pig_index = (self._selected_pig_index + 1) % len(pigs)
+        pig = pigs[self._selected_pig_index]
+
+        if self._farm_view:
+            self._farm_view.select_pig(pig.id)
+        if self._pig_sidebar:
+            self._pig_sidebar.set_pig(pig)
+        self.notify(f"Selected: {pig.name}")
+
+    def action_toggle_edit(self) -> None:
+        """Toggle facility edit mode."""
+        if self._farm_view:
+            is_edit = self._farm_view.toggle_edit_mode()
+            if is_edit:
+                self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
+            else:
+                self.notify("Edit mode off")
+
+    def action_handle_escape(self) -> None:
+        """Handle escape - exit edit mode or deselect."""
+        if self._farm_view and self._farm_view.edit_mode:
+            if self._farm_view.moving_facility:
+                self._farm_view.confirm_placement()
+                self.notify("Placement cancelled")
+            else:
+                self._farm_view.toggle_edit_mode()
+                self.notify("Edit mode off")
+        else:
+            self._selected_pig_index = -1
+            if self._farm_view:
+                self._farm_view.select_pig(None)
+            if self._pig_sidebar:
+                self._pig_sidebar.set_pig(None)
+
+    def action_handle_up(self) -> None:
+        """Handle up arrow."""
+        if self._farm_view:
+            if self._farm_view.edit_mode:
+                self._farm_view.move_cursor(0, -1)
+            else:
+                self._farm_view.scroll(0, -2)
+
+    def action_handle_down(self) -> None:
+        """Handle down arrow."""
+        if self._farm_view:
+            if self._farm_view.edit_mode:
+                self._farm_view.move_cursor(0, 1)
+            else:
+                self._farm_view.scroll(0, 2)
+
+    def action_handle_left(self) -> None:
+        """Handle left arrow."""
+        if self._farm_view:
+            if self._farm_view.edit_mode:
+                self._farm_view.move_cursor(-1, 0)
+            else:
+                self._farm_view.scroll(-2, 0)
+
+    def action_handle_right(self) -> None:
+        """Handle right arrow."""
+        if self._farm_view:
+            if self._farm_view.edit_mode:
+                self._farm_view.move_cursor(1, 0)
+            else:
+                self._farm_view.scroll(2, 0)
+
+    def action_handle_enter(self) -> None:
+        """Handle enter key."""
+        if not self._farm_view or not self._farm_view.edit_mode:
+            return
+
+        if self._farm_view.moving_facility:
+            self._farm_view.confirm_placement()
+            self.notify("Facility placed!")
+        else:
+            facility = self._farm_view.select_facility_at_cursor()
+            if facility:
+                name = facility.facility_type.value.replace("_", " ").title()
+                self.notify(f"Selected: {name} (M to move, R to remove)")
+            else:
+                self.notify("No facility here")
+
+    def action_start_move(self) -> None:
+        """Start moving selected facility."""
+        if self._farm_view and self._farm_view.edit_mode:
+            if self._farm_view.start_moving_facility():
+                self.notify("Moving facility - arrows to move, Enter to place")
+            else:
+                self.notify("Select a facility first (Enter)")
+
+    def action_remove_facility(self) -> None:
+        """Remove the selected facility and refund its cost."""
+        if self._farm_view and self._farm_view.edit_mode:
+            facility = self._farm_view.get_selected_facility()
+            if facility:
+                # Get refund amount before removing
+                refund = get_facility_cost(facility.facility_type)
+                # Remove the facility
+                self._farm_view.remove_selected_facility()
+                # Add refund
+                self.state.add_money(refund)
+                name = facility.facility_type.value.replace("_", " ").title()
+                self.notify(f"Removed: {name} (+${refund})")
+            else:
+                self.notify("Select a facility first (Enter)")
+
+    def action_open_shop(self) -> None:
+        """Open the shop screen."""
+        self.app.push_screen(ShopScreen(self.state))
+
+    def action_open_adoption(self) -> None:
+        """Open the adoption center screen."""
+        self.app.push_screen(AdoptionScreen(self.state))
+
+    def action_open_pigs(self) -> None:
+        """Open the pig list screen."""
+        self.app.push_screen(PigListScreen(self.state))
+
+    def action_open_breeding(self) -> None:
+        """Open the breeding screen."""
+        self.app.push_screen(BreedingScreen(self.state))
+
+    def action_open_facilities(self) -> None:
+        """Open the facilities screen."""
+        self.app.push_screen(FacilitiesScreen(self.state))
+
+    def action_new_game(self) -> None:
+        """Start a new game (with confirmation)."""
+        def handle_confirm(confirmed: bool) -> None:
+            if confirmed:
+                # Delete save and restart
+                self.app.save_manager.delete_save()
+                self.notify("Starting new game...")
+                self.app.exit()
+
+        self.app.push_screen(
+            ConfirmScreen("Start a new game?\nAll progress will be lost!"),
+            handle_confirm
+        )
+
+    def action_quit_game(self) -> None:
+        """Quit the game."""
+        self.app.exit()
