@@ -20,6 +20,7 @@ class FacilityType(str, Enum):
     NURSERY = "nursery"
     VEGGIE_GARDEN = "veggie_garden"
     GROOMING_STATION = "grooming_station"
+    GENETICS_LAB = "genetics_lab"
 
 
 class FacilitySize(BaseModel):
@@ -111,6 +112,12 @@ FACILITY_INFO: dict[FacilityType, dict] = {
         "base_cost": 150,
         "description": "Health and appearance, +15% sale value",
         "sale_bonus": 0.15,
+    },
+    FacilityType.GENETICS_LAB: {
+        "name": "Genetics Lab",
+        "size": FacilitySize(width=3, height=2),
+        "base_cost": 350,
+        "description": "Reveals carrier alleles and boosts mutation rate",
     },
 }
 

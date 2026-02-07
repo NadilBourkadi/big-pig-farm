@@ -22,6 +22,8 @@ from big_pig_farm.ui.screens.breeding import BreedingScreen
 from big_pig_farm.ui.screens.facilities import FacilitiesScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.adoption import AdoptionScreen
+from big_pig_farm.ui.screens.pigdex import PigdexScreen
+from big_pig_farm.ui.screens.contracts import ContractsScreen
 
 
 class MainGameScreen(Screen):
@@ -33,6 +35,8 @@ class MainGameScreen(Screen):
         ("a", "open_adoption", "Adopt"),
         ("p", "open_pigs", "Pigs"),
         ("b", "open_breeding", "Breed"),
+        ("x", "open_pigdex", "Pigdex"),
+        ("c", "open_contracts", "Contracts"),
         ("e", "toggle_edit", "Edit"),
         ("n", "new_game", "New"),
         ("space", "toggle_pause", "Pause"),
@@ -330,6 +334,14 @@ class MainGameScreen(Screen):
     def action_open_breeding(self) -> None:
         """Open the breeding screen."""
         self.app.push_screen(BreedingScreen(self.state))
+
+    def action_open_pigdex(self) -> None:
+        """Open the pigdex screen."""
+        self.app.push_screen(PigdexScreen(self.state))
+
+    def action_open_contracts(self) -> None:
+        """Open the contracts screen."""
+        self.app.push_screen(ContractsScreen(self.state))
 
     def action_open_facilities(self) -> None:
         """Open the facilities screen."""

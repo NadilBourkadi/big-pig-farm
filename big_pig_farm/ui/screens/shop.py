@@ -79,7 +79,7 @@ class ShopScreen(Screen):
     }
 
     #item-detail {
-        height: 5;
+        height: 7;
         padding: 1;
         border: solid $secondary;
         margin: 1;

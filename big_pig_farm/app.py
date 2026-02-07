@@ -13,7 +13,8 @@ from big_pig_farm.game.save_manager import SaveManager
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import update_all_needs
-from big_pig_farm.simulation.breeding import advance_pregnancies, age_all_pigs, check_breeding_opportunities
+from big_pig_farm.simulation.breeding import advance_pregnancies, age_all_pigs, check_breeding_opportunities, register_pig_in_pigdex
+from big_pig_farm.economy.contracts import generate_contracts
 from big_pig_farm.ui.screens.main_game import MainGameScreen
 
 
@@ -39,6 +40,11 @@ class BigPigFarmApp(App):
         loaded_state = self.save_manager.load()
         if loaded_state:
             self.state = loaded_state
+            # Backfill pigdex from existing pigs (for saves that predate pigdex)
+            for pig in self.state.get_pigs_list():
+                from big_pig_farm.entities.pigdex import phenotype_key
+                key = phenotype_key(pig.phenotype)
+                self.state.pigdex.register_phenotype(key, self.state.game_time.day)
             self.state.log_event("Welcome back to Big Pig Farm!", "info")
         else:
             self.state = GameState()
@@ -77,6 +83,10 @@ class BigPigFarmApp(App):
                 age_days=5.0,  # Start as adults
             )
             self.state.add_guinea_pig(pig)
+
+        # Register starter pigs in pigdex
+        for pig in self.state.get_pigs_list():
+            register_pig_in_pigdex(self.state, pig)
 
         # Place starting facilities
         food_bowl = Facility.create(FacilityType.FOOD_BOWL, 5, 3)
@@ -141,6 +151,15 @@ class BigPigFarmApp(App):
 
         # Check for breeding
         check_breeding_opportunities(self.state)
+
+        # Check contract refresh/expiry
+        game_day = self.state.game_time.day
+        board = self.state.contract_board
+        board.check_expiry(game_day)
+        if board.needs_refresh(game_day) or (not board.active_contracts and board.last_refresh_day == 0):
+            new_contracts = generate_contracts(self.state.farm.tier, game_day)
+            board.active_contracts.extend(new_contracts)
+            board.last_refresh_day = game_day
 
         # Debug logging
         if self.debug_logger:

@@ -168,7 +168,8 @@ class TestBreeding:
         parent2 = Genotype.random()
 
         for _ in range(10):
-            child = breed(parent1, parent2)
+            result = breed(parent1, parent2)
+            child = result.genotype
             assert child.e_locus is not None
             assert child.b_locus is not None
             # Should be able to calculate phenotype
@@ -195,5 +196,5 @@ class TestBreeding:
 
         # Should never produce RR offspring
         for _ in range(100):
-            child = breed(parent1, parent2)
-            assert child.r_locus != ("R", "R"), "Lethal RR should be re-rolled"
+            result = breed(parent1, parent2)
+            assert result.genotype.r_locus != ("R", "R"), "Lethal RR should be re-rolled"

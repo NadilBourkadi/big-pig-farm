@@ -5,7 +5,7 @@ import random
 from typing import Optional
 from uuid import UUID
 
-from big_pig_farm.data.config import SIMULATION
+from big_pig_farm.data.config import NEEDS, SIMULATION
 from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Personality, Position
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
@@ -92,19 +92,30 @@ class BehaviorController:
             # Clear failed facilities when making a completely fresh decision
             self._failed_facilities[pig.id] = set()
 
-        # If sleeping and energy is full, wake up
+        # If sleeping, wake up when energy full or when hunger/thirst is critical
         if pig.behavior_state == BehaviorState.SLEEPING:
             if pig.needs.energy >= 90:
                 pig.log_behavior("Woke up (energy full)")
                 pig.behavior_state = BehaviorState.IDLE
                 pig.target_description = None
+            elif ((pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                    or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD)
+                    and pig.needs.energy >= 15):
+                pig.log_behavior("Woke up (hunger/thirst critical)")
+                pig.behavior_state = BehaviorState.IDLE
+                pig.target_description = None
             return
 
-        # If eating/drinking and still hungry/thirsty, keep doing it
+        # If eating/drinking and still hungry/thirsty, keep doing it.
+        # Never cross-interrupt between eating and drinking — the pig commits
+        # to its current action until satisfied (need >= 90). Without this,
+        # pigs with both hunger and thirst critical oscillate forever between
+        # food and water (Buridan's ass), because the needs cross each other's
+        # critical threshold during recovery.
         if pig.behavior_state == BehaviorState.EATING and pig.needs.hunger < 90:
-            return  # Keep eating until satisfied
+            return
         if pig.behavior_state == BehaviorState.DRINKING and pig.needs.thirst < 90:
-            return  # Keep drinking until satisfied
+            return
 
         # Just finished eating/drinking - wander away to make room for others
         if pig.behavior_state in (BehaviorState.EATING, BehaviorState.DRINKING):
@@ -692,19 +703,28 @@ class BehaviorController:
     def separate_overlapping_pigs(self) -> None:
         """Push apart any pigs that are too close to each other.
 
-        Uses a smaller separation threshold when either pig is actively
-        moving, so the separation force doesn't fight pathfinding.
+        Uses tiered separation thresholds based on movement state.
+        The invariant is: separation threshold < blocking threshold
+        for the same movement state, so separation never undoes
+        movement that passed the blocking check.
         """
         pigs = self.game_state.get_pigs_list()
         farm = self.game_state.farm
 
         for i, pig_a in enumerate(pigs):
             for pig_b in pigs[i + 1:]:
-                # Use a smaller threshold when either pig is actively pathing.
-                # This must be less than the movement blocking distance (2.5)
-                # so separation doesn't undo movement that passed the block check.
-                either_moving = pig_a.path or pig_b.path
-                threshold = 2.0 if either_moving else self.MIN_PIG_DISTANCE
+                # Three-tier separation: must stay below corresponding
+                # blocking threshold to avoid separation vs pathfinding deadlock.
+                # Both moving: 1.0 (blocking = 1.5)
+                # One moving:  2.0 (blocking = 2.5)
+                # Both idle:   3.0 (MIN_PIG_DISTANCE)
+                both_moving = pig_a.path and pig_b.path
+                if both_moving:
+                    threshold = 1.0
+                elif pig_a.path or pig_b.path:
+                    threshold = 2.0
+                else:
+                    threshold = self.MIN_PIG_DISTANCE
 
                 dx = pig_b.position.x - pig_a.position.x
                 dy = pig_b.position.y - pig_a.position.y

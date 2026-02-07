@@ -18,7 +18,7 @@ class NeedsConfig:
     """Configuration for guinea pig needs decay and thresholds."""
     # Decay rates per game hour
     HUNGER_DECAY: float = 5.0
-    THIRST_DECAY: float = 8.0
+    THIRST_DECAY: float = 6.0
     ENERGY_DECAY: float = 3.0
     HAPPINESS_BASE_DECAY: float = 2.0
 
@@ -27,10 +27,16 @@ class NeedsConfig:
     LOW_THRESHOLD: int = 40
     HIGH_THRESHOLD: int = 70
 
+    # Health
+    HEALTH_DRAIN_HUNGER: float = 0.3
+    HEALTH_DRAIN_THIRST: float = 0.5
+    HEALTH_PASSIVE_RECOVERY: float = 1.0
+    HEALTH_SLEEP_RECOVERY: float = 1.5
+
     # Recovery amounts
     FOOD_RECOVERY: float = 40.0
     WATER_RECOVERY: float = 50.0
-    SLEEP_RECOVERY_PER_HOUR: float = 20.0
+    SLEEP_RECOVERY_PER_HOUR: float = 25.0
     PLAY_HAPPINESS_BOOST: float = 15.0
     SOCIAL_HAPPINESS_BOOST: float = 10.0
 
@@ -110,6 +116,54 @@ class EconomyConfig:
     NURSERY_COST: int = 250
     VEGGIE_GARDEN_COST: int = 300
     GROOMING_STATION_COST: int = 150
+    GENETICS_LAB_COST: int = 350
+
+
+@dataclass(frozen=True)
+class BloodlineConfig:
+    """Configuration for bloodline adoption pigs."""
+    BLOODLINE_PIG_CHANCE: float = 0.5  # 50% of adoption pigs are bloodline carriers
+    ADOPTION_REFRESH_DAYS: int = 5
+
+
+@dataclass(frozen=True)
+class GeneticsConfig:
+    """Configuration for genetics and mutations."""
+    MUTATION_RATE: float = 0.02  # 2% per locus
+    MUTATION_RATE_WITH_LAB: float = 0.03  # 3% per locus with Genetics Lab
+
+
+@dataclass(frozen=True)
+class PigdexConfig:
+    """Configuration for Pigdex rewards."""
+    # Discovery rewards by rarity
+    COMMON_REWARD: int = 10
+    UNCOMMON_REWARD: int = 20
+    RARE_REWARD: int = 35
+    VERY_RARE_REWARD: int = 50
+    LEGENDARY_REWARD: int = 100
+    # Milestone rewards (at 25/50/75/100% completion)
+    MILESTONE_25_REWARD: int = 250
+    MILESTONE_50_REWARD: int = 750
+    MILESTONE_75_REWARD: int = 2000
+    MILESTONE_100_REWARD: int = 10000
+
+
+@dataclass(frozen=True)
+class ContractConfig:
+    """Configuration for breeding contracts."""
+    MAX_ACTIVE_CONTRACTS: int = 4
+    REFRESH_INTERVAL_DAYS: int = 10
+    EXPIRY_DAYS: int = 20
+    # Reward ranges by difficulty
+    EASY_REWARD_MIN: int = 50
+    EASY_REWARD_MAX: int = 100
+    MEDIUM_REWARD_MIN: int = 100
+    MEDIUM_REWARD_MAX: int = 200
+    HARD_REWARD_MIN: int = 200
+    HARD_REWARD_MAX: int = 500
+    EXPERT_REWARD_MIN: int = 500
+    EXPERT_REWARD_MAX: int = 1000
 
 
 @dataclass(frozen=True)
@@ -140,3 +194,7 @@ BREEDING = BreedingConfig()
 TIME = TimeConfig()
 ECONOMY = EconomyConfig()
 SIMULATION = SimulationConfig()
+BLOODLINE = BloodlineConfig()
+GENETICS = GeneticsConfig()
+PIGDEX = PigdexConfig()
+CONTRACTS = ContractConfig()

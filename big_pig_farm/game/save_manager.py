@@ -74,9 +74,16 @@ class SaveManager:
                     partner_id TEXT,
                     last_birth_time TEXT,
                     mother_id TEXT,
-                    father_id TEXT
+                    father_id TEXT,
+                    origin_tag TEXT
                 )
             """)
+
+            # Migration: add origin_tag column to existing tables
+            try:
+                cursor.execute("ALTER TABLE guinea_pigs ADD COLUMN origin_tag TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
 
             # Facilities table
             cursor.execute("""
@@ -100,6 +107,45 @@ class SaveManager:
                     game_day INTEGER NOT NULL,
                     message TEXT NOT NULL,
                     event_type TEXT NOT NULL
+                )
+            """)
+
+            # Pigdex tables
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pigdex (
+                    phenotype_key TEXT PRIMARY KEY,
+                    discovered_day INTEGER NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pigdex_meta (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    milestones_json TEXT NOT NULL
+                )
+            """)
+
+            # Contracts tables
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS contracts (
+                    id TEXT PRIMARY KEY,
+                    description TEXT NOT NULL,
+                    required_color TEXT,
+                    required_pattern TEXT,
+                    required_intensity TEXT,
+                    required_roan TEXT,
+                    difficulty TEXT NOT NULL,
+                    reward INTEGER NOT NULL,
+                    deadline_day INTEGER NOT NULL,
+                    created_day INTEGER NOT NULL,
+                    fulfilled INTEGER NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS contract_meta (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    completed_count INTEGER NOT NULL,
+                    total_earnings INTEGER NOT NULL,
+                    last_refresh_day INTEGER NOT NULL
                 )
             """)
 
@@ -141,9 +187,12 @@ class SaveManager:
             # Save guinea pigs
             for pig in state.guinea_pigs.values():
                 cursor.execute("""
-                    INSERT INTO guinea_pigs VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                    )
+                    INSERT INTO guinea_pigs (
+                        id, name, gender, age_days, birth_time, genotype_json,
+                        personality_json, needs_json, behavior_state,
+                        position_x, position_y, is_pregnant, pregnancy_days,
+                        partner_id, last_birth_time, mother_id, father_id, origin_tag
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(pig.id),
                     pig.name,
@@ -162,6 +211,7 @@ class SaveManager:
                     pig.last_birth_time.isoformat() if pig.last_birth_time else None,
                     str(pig.mother_id) if pig.mother_id else None,
                     str(pig.father_id) if pig.father_id else None,
+                    pig.origin_tag,
                 ))
 
             # Save facilities
@@ -190,6 +240,45 @@ class SaveManager:
                     event.message,
                     event.event_type,
                 ))
+
+            # Save pigdex
+            cursor.execute("DELETE FROM pigdex")
+            cursor.execute("DELETE FROM pigdex_meta")
+            for key, day in state.pigdex.discovered.items():
+                cursor.execute(
+                    "INSERT INTO pigdex (phenotype_key, discovered_day) VALUES (?, ?)",
+                    (key, day),
+                )
+            cursor.execute(
+                "INSERT INTO pigdex_meta VALUES (1, ?)",
+                (json.dumps(state.pigdex.milestone_rewards_claimed),),
+            )
+
+            # Save contracts
+            cursor.execute("DELETE FROM contracts")
+            cursor.execute("DELETE FROM contract_meta")
+            if hasattr(state, 'contract_board'):
+                board = state.contract_board
+                for contract in board.active_contracts:
+                    cursor.execute("""
+                        INSERT INTO contracts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        str(contract.id),
+                        contract.description,
+                        contract.required_color.value if contract.required_color else None,
+                        contract.required_pattern.value if contract.required_pattern else None,
+                        contract.required_intensity.value if contract.required_intensity else None,
+                        contract.required_roan.value if contract.required_roan else None,
+                        contract.difficulty.value,
+                        contract.reward,
+                        contract.deadline_day,
+                        contract.created_day,
+                        1 if contract.fulfilled else 0,
+                    ))
+                cursor.execute(
+                    "INSERT INTO contract_meta VALUES (1, ?, ?, ?)",
+                    (board.completed_contracts, board.total_contract_earnings, board.last_refresh_day),
+                )
 
             conn.commit()
 
@@ -243,6 +332,9 @@ class SaveManager:
                     personality = [Personality(p) for p in json.loads(row[6])]
                     needs = Needs.model_validate_json(row[7])
 
+                    # origin_tag is column 17, may not exist in old saves
+                    origin_tag = row[17] if len(row) > 17 else None
+
                     pig = GuineaPig(
                         id=UUID(row[0]),
                         name=row[1],
@@ -261,6 +353,7 @@ class SaveManager:
                         last_birth_time=datetime.fromisoformat(row[14]) if row[14] else None,
                         mother_id=UUID(row[15]) if row[15] else None,
                         father_id=UUID(row[16]) if row[16] else None,
+                        origin_tag=origin_tag,
                     )
                     state.add_guinea_pig(pig)
 
@@ -291,6 +384,52 @@ class SaveManager:
                     state.events.append(event)
 
                 state.events.reverse()  # Put in chronological order
+
+                # Load pigdex
+                try:
+                    cursor.execute("SELECT phenotype_key, discovered_day FROM pigdex")
+                    for row in cursor.fetchall():
+                        state.pigdex.discovered[row[0]] = row[1]
+
+                    cursor.execute("SELECT milestones_json FROM pigdex_meta WHERE id = 1")
+                    meta_row = cursor.fetchone()
+                    if meta_row:
+                        state.pigdex.milestone_rewards_claimed = json.loads(meta_row[0])
+                except sqlite3.OperationalError:
+                    pass  # Table doesn't exist in old saves
+
+                # Load contracts
+                try:
+                    from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
+                    from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
+
+                    cursor.execute("SELECT * FROM contracts WHERE fulfilled = 0")
+                    contracts = []
+                    for row in cursor.fetchall():
+                        contract = BreedingContract(
+                            id=UUID(row[0]),
+                            description=row[1],
+                            required_color=BaseColor(row[2]) if row[2] else None,
+                            required_pattern=Pattern(row[3]) if row[3] else None,
+                            required_intensity=ColorIntensity(row[4]) if row[4] else None,
+                            required_roan=RoanType(row[5]) if row[5] else None,
+                            difficulty=ContractDifficulty(row[6]),
+                            reward=row[7],
+                            deadline_day=row[8],
+                            created_day=row[9],
+                            fulfilled=bool(row[10]),
+                        )
+                        contracts.append(contract)
+
+                    cursor.execute("SELECT * FROM contract_meta WHERE id = 1")
+                    cmeta = cursor.fetchone()
+                    if cmeta:
+                        state.contract_board.active_contracts = contracts
+                        state.contract_board.completed_contracts = cmeta[1]
+                        state.contract_board.total_contract_earnings = cmeta[2]
+                        state.contract_board.last_refresh_day = cmeta[3]
+                except (sqlite3.OperationalError, ImportError):
+                    pass  # Table doesn't exist or contracts module not yet available
 
                 # Check if farm needs resizing to match current config
                 resized, offset_x, offset_y = state.farm.resize_to_match_config()

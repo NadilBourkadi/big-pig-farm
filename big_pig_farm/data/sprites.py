@@ -197,6 +197,12 @@ FACILITY_SPRITES = {
         "│  ✂  │",
         "└─────┘",
     ],
+    "genetics_lab": [
+        "┌─G.LAB──┐",
+        "│ ⚗ DNA ⚗│",
+        "│ ◊  ◊  ◊│",
+        "└─────────┘",
+    ],
 }
 
 # Terrain characters

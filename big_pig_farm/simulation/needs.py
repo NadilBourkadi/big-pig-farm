@@ -25,11 +25,11 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
     # Happiness decay - faster when other needs are low
     happiness_decay = NEEDS.HAPPINESS_BASE_DECAY
     if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= 2
-    if pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= 2
-    if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
         happiness_decay *= 1.5
+    if pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD:
+        happiness_decay *= 1.5
+    if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
+        happiness_decay *= 1.25
 
     pig.needs.happiness -= happiness_decay * hours
 
@@ -53,9 +53,14 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
 
     # Health effects from critically low needs
     if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
-        pig.needs.health -= 0.5 * hours
+        pig.needs.health -= NEEDS.HEALTH_DRAIN_HUNGER * hours
     if pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD:
-        pig.needs.health -= 1.0 * hours
+        pig.needs.health -= NEEDS.HEALTH_DRAIN_THIRST * hours
+
+    # Passive health recovery when no primary need is critical
+    if (pig.needs.hunger >= NEEDS.CRITICAL_THRESHOLD
+            and pig.needs.thirst >= NEEDS.CRITICAL_THRESHOLD):
+        pig.needs.health += NEEDS.HEALTH_PASSIVE_RECOVERY * hours
 
     # Recovery from current behavior
     _apply_behavior_recovery(pig, game_minutes, game_state)
@@ -77,7 +82,7 @@ def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state) ->
 
     elif pig.behavior_state == BehaviorState.SLEEPING:
         pig.needs.energy += NEEDS.SLEEP_RECOVERY_PER_HOUR * hours
-        pig.needs.health += 0.5 * hours
+        pig.needs.health += NEEDS.HEALTH_SLEEP_RECOVERY * hours
 
     elif pig.behavior_state == BehaviorState.PLAYING:
         pig.needs.happiness += NEEDS.PLAY_HAPPINESS_BOOST * hours

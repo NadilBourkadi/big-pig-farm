@@ -8,11 +8,16 @@ from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Static, Label, ListView, ListItem, Footer
 
-from big_pig_farm.data.config import ECONOMY
+from big_pig_farm.data.config import ECONOMY, BLOODLINE
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.economy.currency import format_money
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.genetics import Rarity
+from big_pig_farm.entities.bloodlines import (
+    pick_random_bloodline,
+    generate_bloodline_pig_genotype,
+    Bloodline,
+)
 from big_pig_farm.game.state import GameState
 
 
@@ -21,7 +26,11 @@ ADOPTION_BASE_COST = 50  # Common pigs cost 50 (sell for 25)
 
 
 def calculate_adoption_cost(pig: GuineaPig) -> int:
-    """Calculate the adoption cost for a guinea pig."""
+    """Calculate the adoption cost for a guinea pig.
+
+    Bloodline pigs have their cost multiplied by the bloodline cost_multiplier
+    (applied on top of rarity multiplier).
+    """
     multipliers = {
         Rarity.COMMON: 1.0,
         Rarity.UNCOMMON: ECONOMY.UNCOMMON_MULTIPLIER,
@@ -30,20 +39,44 @@ def calculate_adoption_cost(pig: GuineaPig) -> int:
         Rarity.LEGENDARY: ECONOMY.LEGENDARY_MULTIPLIER,
     }
     multiplier = multipliers.get(pig.phenotype.rarity, 1.0)
-    return int(ADOPTION_BASE_COST * multiplier)
+    base_cost = int(ADOPTION_BASE_COST * multiplier)
+
+    # Bloodline pigs cost more based on their bloodline
+    if pig.origin_tag:
+        from big_pig_farm.entities.bloodlines import BLOODLINES
+        for bloodline in BLOODLINES.values():
+            if bloodline.display_name == pig.origin_tag:
+                base_cost = int(base_cost * bloodline.cost_multiplier)
+                break
+
+    return base_cost
 
 
-def generate_adoption_pig(existing_names: set[str]) -> GuineaPig:
-    """Generate a random guinea pig available for adoption."""
+def generate_adoption_pig(existing_names: set[str], farm_tier: int = 1) -> GuineaPig:
+    """Generate a random guinea pig available for adoption.
+
+    About 50% of generated pigs are bloodline carriers (filtered by farm tier).
+    """
     gender = random.choice([Gender.MALE, Gender.FEMALE])
     name = generate_unique_name(existing_names)
+
+    # Chance to generate a bloodline carrier pig
+    origin_tag = None
+    genotype = None
+    if random.random() < BLOODLINE.BLOODLINE_PIG_CHANCE:
+        bloodline = pick_random_bloodline(farm_tier)
+        if bloodline:
+            genotype = generate_bloodline_pig_genotype(bloodline)
+            origin_tag = bloodline.display_name
 
     # Create an adult pig (age 5 days) with random genetics
     pig = GuineaPig.create(
         name=name,
         gender=gender,
+        genotype=genotype,
         age_days=5.0,  # Adults ready for adoption
     )
+    pig.origin_tag = origin_tag
     return pig
 
 
@@ -55,8 +88,9 @@ class AdoptionPigWidget(ListItem):
         rarity = pig.phenotype.rarity.value.title()
         color = pig.phenotype.display_name
         afford_str = "" if can_afford else " (!)"
+        bloodline_str = f"  [{pig.origin_tag}]" if pig.origin_tag else ""
 
-        label = f"{pig.name:18} {gender_symbol} | {color:12} ({rarity:10}) | ${cost:>4}{afford_str}"
+        label = f"{pig.name:18} {gender_symbol} | {color:12} ({rarity:10}) | ${cost:>4}{afford_str}{bloodline_str}"
 
         super().__init__(Label(label))
         self.pig = pig
@@ -156,9 +190,10 @@ class AdoptionScreen(Screen):
 
         self._available_pigs = []
         num_pigs = random.randint(3, 5)
+        farm_tier = self.state.farm.tier
 
         for _ in range(num_pigs):
-            pig = generate_adoption_pig(existing_names)
+            pig = generate_adoption_pig(existing_names, farm_tier=farm_tier)
             self._available_pigs.append(pig)
             existing_names.add(pig.name)
 
@@ -204,12 +239,19 @@ class AdoptionScreen(Screen):
             gender = "Male" if pig.gender == Gender.MALE else "Female"
             traits = ", ".join(t.value.title() for t in pig.personality)
             rarity = pig.phenotype.rarity.value.title()
+            bloodline_line = ""
+            if pig.origin_tag:
+                from big_pig_farm.entities.bloodlines import BLOODLINES
+                for bloodline in BLOODLINES.values():
+                    if bloodline.display_name == pig.origin_tag:
+                        bloodline_line = f"\nBloodline: {pig.origin_tag} - {bloodline.description}"
+                        break
 
             detail.update(
                 f"{pig.name} - ${cost}\n"
                 f"Gender: {gender} | Color: {pig.phenotype.display_name}\n"
                 f"Rarity: {rarity} | Personality: {traits}\n"
-                f"Can afford: {can_afford}"
+                f"Can afford: {can_afford}{bloodline_line}"
             )
         else:
             detail.update("Select a pig to see details")
@@ -270,6 +312,10 @@ class AdoptionScreen(Screen):
         pig.position = position
         self.state.spend_money(cost)
         self.state.add_guinea_pig(pig)
+
+        # Register in pigdex
+        from big_pig_farm.simulation.breeding import register_pig_in_pigdex
+        register_pig_in_pigdex(self.state, pig)
 
         # Log the event
         self.state.log_event(

@@ -1,6 +1,7 @@
 """Tests for the simulation systems."""
 
 import pytest
+from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Needs, Position
 from big_pig_farm.simulation.needs import (
     update_all_needs,
@@ -80,6 +81,65 @@ class TestNeeds:
         pig.needs.thirst = 90
         urgent = get_most_urgent_need(pig)
         assert urgent == "hunger"
+
+    def test_health_passive_recovery(self):
+        """Test that health recovers passively when no needs are critical."""
+        pig = GuineaPig.create(
+            name="Test Pig",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.hunger = 80
+        pig.needs.thirst = 80
+        pig.needs.health = 50
+
+        state = GameState()
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Health should increase (passive recovery = 1.0/hr)
+        assert pig.needs.health > 50
+
+    def test_health_drain_reduced(self):
+        """Test that health drain is reduced with new config values."""
+        pig = GuineaPig.create(
+            name="Test Pig",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.hunger = 5  # Critical
+        pig.needs.thirst = 5  # Critical
+        pig.needs.health = 100
+
+        state = GameState()
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Total drain should be ~0.8/hr (0.3 hunger + 0.5 thirst), not 1.5
+        expected_drain = NEEDS_CONFIG.HEALTH_DRAIN_HUNGER + NEEDS_CONFIG.HEALTH_DRAIN_THIRST
+        assert pig.needs.health >= 100 - expected_drain - 0.1
+        assert pig.needs.health < 100
+
+    def test_sleep_health_recovery_outpaces_drain(self):
+        """Test that sleeping pig gains net health even with critical needs."""
+        from big_pig_farm.entities.guinea_pig import BehaviorState
+
+        pig = GuineaPig.create(
+            name="Test Pig",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.hunger = 5  # Critical
+        pig.needs.thirst = 5  # Critical
+        pig.needs.health = 50
+        pig.behavior_state = BehaviorState.SLEEPING
+
+        state = GameState()
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Net health change = +1.5 (sleep recovery) - 0.3 (hunger) - 0.5 (thirst) = +0.7
+        assert pig.needs.health > 50
 
     def test_calculate_wellbeing(self):
         """Test overall wellbeing calculation."""

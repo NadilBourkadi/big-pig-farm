@@ -130,6 +130,9 @@ class GuineaPig(BaseModel):
     # Breeding control
     breeding_locked: bool = False  # If True, pig won't auto-breed
 
+    # Origin info (e.g., "Spotted Bloodline" for bloodline pigs)
+    origin_tag: Optional[str] = None
+
     # Behavior log for debugging (recent decisions/actions)
     behavior_log: list[str] = Field(default_factory=list)
 

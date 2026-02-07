@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from big_pig_farm.data.config import ECONOMY, GameSpeed
 from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.facilities import Facility
+from big_pig_farm.entities.pigdex import Pigdex
+from big_pig_farm.economy.contracts import ContractBoard
 from big_pig_farm.game.world import FarmGrid
 
 
@@ -92,6 +94,10 @@ class GameState(BaseModel):
     # Event log (recent events for display)
     events: list[EventLog] = Field(default_factory=list)
     max_events: int = 100
+
+    # Collections
+    pigdex: Pigdex = Field(default_factory=Pigdex)
+    contract_board: ContractBoard = Field(default_factory=ContractBoard)
 
     # Statistics
     total_pigs_born: int = 0

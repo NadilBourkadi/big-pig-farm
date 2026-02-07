@@ -7,6 +7,7 @@ from textual.widgets import Static, Footer
 
 from big_pig_farm.economy.market import calculate_pig_value
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
+from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
 
 
@@ -70,6 +71,8 @@ class PigDetailScreen(Screen):
                 yield Static(f"  Gender: {gender}")
                 yield Static(f"  Color: {pig.phenotype.display_name}")
                 yield Static(f"  Rarity: {pig.phenotype.rarity.value.title()}")
+                if pig.origin_tag:
+                    yield Static(f"  Origin: {pig.origin_tag}")
                 value = calculate_pig_value(pig, self.state)
                 yield Static(f"  Sale Value: ${value}")
 
@@ -103,6 +106,13 @@ class PigDetailScreen(Screen):
                 yield Static(f"  Mother: {mother}")
                 yield Static(f"  Father: {father}")
 
+            # Genetics Section (only with Genetics Lab)
+            has_lab = bool(self.state.get_facilities_by_type(FacilityType.GENETICS_LAB))
+            if has_lab:
+                with Vertical(classes="info-section"):
+                    yield Static("GENETICS", classes="section-title")
+                    yield Static(self._format_genetics())
+
             # Needs Section
             with Vertical(classes="info-section"):
                 yield Static("NEEDS", classes="section-title")
@@ -125,6 +135,37 @@ class PigDetailScreen(Screen):
         if stored_name:
             return f"{stored_name} (sold)"
         return "Unknown (no longer on farm)"
+
+    def _format_genetics(self) -> str:
+        """Format genotype and carrier info."""
+        g = self.pig.genotype
+        lines = []
+
+        # Full genotype notation
+        lines.append(f"  Genotype: E({g.e_locus[0]}/{g.e_locus[1]}) B({g.b_locus[0]}/{g.b_locus[1]}) S({g.s_locus[0]}/{g.s_locus[1]}) C({g.c_locus[0]}/{g.c_locus[1]}) R({g.r_locus[0]}/{g.r_locus[1]})")
+
+        # Carrier summary
+        carriers = []
+        if g.e_locus[0] != g.e_locus[1] and "e" in g.e_locus:
+            carriers.append(f"Golden (E/e)")
+        if g.b_locus[0] != g.b_locus[1] and "b" in g.b_locus:
+            carriers.append(f"Chocolate (B/b)")
+        if g.s_locus[0] != g.s_locus[1] and "s" in g.s_locus:
+            carriers.append(f"Spotted (S/s)")
+        if g.c_locus[0] != g.c_locus[1] and "ch" in g.c_locus:
+            carriers.append(f"Chinchilla (C/ch)")
+        if "R" in g.r_locus:
+            if g.r_locus[0] == "R" and g.r_locus[1] == "R":
+                carriers.append(f"Roan (R/R)")
+            elif "r" in g.r_locus:
+                carriers.append(f"Roan (R/r)")
+
+        if carriers:
+            lines.append(f"  Carries: {', '.join(carriers)}")
+        else:
+            lines.append(f"  Carries: No hidden alleles")
+
+        return "\n".join(lines)
 
     def _format_needs(self) -> str:
         """Format all needs as text with bars."""

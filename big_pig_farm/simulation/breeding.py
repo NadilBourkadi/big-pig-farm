@@ -5,10 +5,12 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from big_pig_farm.data.config import BREEDING
+from big_pig_farm.data.config import BREEDING, GENETICS
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
 from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
+from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.pigdex import phenotype_key, get_discovery_reward, key_to_rarity, get_milestone_reward
 
 
 def check_breeding_opportunities(game_state) -> int:
@@ -67,10 +69,17 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     # Get existing names for uniqueness
     existing_names = {p.name for p in game_state.get_pigs_list()}
 
+    # Determine mutation rate based on Genetics Lab
+    mutation_rate = GENETICS.MUTATION_RATE
+    genetics_labs = game_state.get_facilities_by_type(FacilityType.GENETICS_LAB)
+    if genetics_labs:
+        mutation_rate = GENETICS.MUTATION_RATE_WITH_LAB
+
     babies_born = []
     for _ in range(litter_size):
-        # Generate genetics
-        baby_genotype = breed_genetics(mother.genotype, father.genotype)
+        # Generate genetics with mutations
+        breed_result = breed_genetics(mother.genotype, father.genotype, mutation_rate=mutation_rate)
+        baby_genotype = breed_result.genotype
         baby_phenotype = calculate_phenotype(baby_genotype)
 
         # Random gender
@@ -102,6 +111,17 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         game_state.add_guinea_pig(baby)
         game_state.total_pigs_born += 1
         babies_born.append(baby)
+
+        # Log mutations
+        if breed_result.mutations:
+            mutation_desc = ", ".join(breed_result.mutations)
+            game_state.log_event(
+                f"{baby.name} was born with a mutation! ({mutation_desc})",
+                event_type="mutation",
+            )
+
+        # Register in pigdex
+        _register_pigdex(game_state, baby)
 
     # Reset mother's pregnancy state
     mother.is_pregnant = False
@@ -184,7 +204,6 @@ def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state) -> bool:
     base_chance = 0.05  # 5% per check
 
     # Bonus from breeding den
-    from big_pig_farm.entities.facilities import FacilityType
     breeding_dens = game_state.get_facilities_by_type(FacilityType.BREEDING_DEN)
     if breeding_dens:
         base_chance += 0.10
@@ -221,6 +240,38 @@ def advance_pregnancies(game_state, game_hours: float) -> None:
     for pig in game_state.get_pigs_list():
         if pig.is_pregnant:
             pig.pregnancy_days += game_days
+
+
+def _register_pigdex(game_state, pig: GuineaPig) -> None:
+    """Register a pig's phenotype in the pigdex with rewards."""
+    key = phenotype_key(pig.phenotype)
+    game_day = game_state.game_time.day
+    is_new = game_state.pigdex.register_phenotype(key, game_day)
+
+    if is_new:
+        rarity = key_to_rarity(key)
+        reward = get_discovery_reward(rarity)
+        game_state.add_money(reward)
+        game_state.log_event(
+            f"Pigdex: New discovery! {pig.phenotype.display_name} ({rarity.value.title()}) +{reward} Squeaks",
+            event_type="pigdex",
+        )
+
+        # Check milestones
+        milestones = game_state.pigdex.check_milestones()
+        for threshold in milestones:
+            milestone_reward = get_milestone_reward(threshold)
+            game_state.pigdex.claim_milestone(threshold)
+            game_state.add_money(milestone_reward)
+            game_state.log_event(
+                f"Pigdex Milestone: {threshold}% complete! +{milestone_reward} Squeaks",
+                event_type="pigdex",
+            )
+
+
+def register_pig_in_pigdex(game_state, pig: GuineaPig) -> None:
+    """Public function to register a pig in the pigdex (for adoption, loading, etc.)."""
+    _register_pigdex(game_state, pig)
 
 
 def age_all_pigs(game_state, game_hours: float) -> list[GuineaPig]:

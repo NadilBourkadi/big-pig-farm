@@ -48,25 +48,44 @@ def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> in
 
 
 def sell_pig(state: GameState, pig: GuineaPig) -> int:
-    """Sell a guinea pig. Returns the sale price."""
+    """Sell a guinea pig. Returns the total sale price (including contract bonus)."""
     from big_pig_farm.economy.currency import add_money
 
     value = calculate_pig_value(pig, state)
+
+    # Check for contract fulfillment
+    contract_bonus = 0
+    matched_contract = state.contract_board.check_and_fulfill(pig)
+    if matched_contract:
+        contract_bonus = matched_contract.reward
+        state.contract_board.remove_fulfilled()
+
+    total = value + contract_bonus
 
     # Remove pig from game
     state.remove_guinea_pig(pig.id)
     state.total_pigs_sold += 1
 
     # Add money
-    add_money(state, value, f"Sold {pig.name}")
+    add_money(state, total, f"Sold {pig.name}")
 
     # Log event
-    state.log_event(
-        f"Rehomed {pig.name} ({pig.phenotype.display_name}) for {value} Squeaks",
-        event_type="sale",
-    )
+    if contract_bonus > 0:
+        state.log_event(
+            f"Rehomed {pig.name} ({pig.phenotype.display_name}) for {value} + {contract_bonus} contract bonus = {total} Squeaks",
+            event_type="sale",
+        )
+        state.log_event(
+            f"Contract fulfilled: \"{matched_contract.description}\" (+{contract_bonus} bonus)",
+            event_type="contract",
+        )
+    else:
+        state.log_event(
+            f"Rehomed {pig.name} ({pig.phenotype.display_name}) for {value} Squeaks",
+            event_type="sale",
+        )
 
-    return value
+    return total
 
 
 def get_market_info(state: GameState) -> dict:

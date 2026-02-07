@@ -57,10 +57,13 @@ class PigSidebar(Static):
 
         # Needs bars
         lines.append("[dim]Needs:[/]")
-        lines.append(f" Hunger {self._bar(pig.needs.hunger)}")
-        lines.append(f" Thirst {self._bar(pig.needs.thirst)}")
-        lines.append(f" Energy {self._bar(pig.needs.energy)}")
-        lines.append(f" Happy  {self._bar(pig.needs.happiness)}")
+        lines.append(f" Hunger  {self._bar(pig.needs.hunger)}")
+        lines.append(f" Thirst  {self._bar(pig.needs.thirst)}")
+        lines.append(f" Energy  {self._bar(pig.needs.energy)}")
+        lines.append(f" Happy   {self._bar(pig.needs.happiness)}")
+        lines.append(f" Health  {self._bar(pig.needs.health)}")
+        lines.append(f" Social  {self._bar(pig.needs.social)}")
+        lines.append(f" Fun     {self._bar(100 - pig.needs.boredom)}")
         lines.append("")
 
         # AI State

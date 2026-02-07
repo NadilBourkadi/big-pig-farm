@@ -36,7 +36,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="food_bowl",
         name="Food Bowl",
-        description="A ceramic bowl for pellets and veggies. Essential for keeping your pigs fed and happy. Holds enough food for multiple pigs.",
+        description="Feeds pigs to reduce hunger. Capacity: 100 units. Size: 2x1. Refill cost: 5 coins.",
         cost=ECONOMY.FOOD_BOWL_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.FOOD_BOWL,
@@ -45,7 +45,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="water_bottle",
         name="Water Bottle",
-        description="Drip-feed water bottle that keeps water clean and fresh. Guinea pigs need constant access to water for good health.",
+        description="Hydrates pigs to reduce thirst. Capacity: 100 units. Size: 1x2. Refill cost: 2 coins.",
         cost=ECONOMY.WATER_BOTTLE_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.WATER_BOTTLE,
@@ -54,7 +54,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="hay_rack",
         name="Hay Rack",
-        description="Wall-mounted hay feeder providing essential fiber. Hay aids digestion and dental health. Grants +5% health bonus while eating.",
+        description="Alternative food source — pigs prefer it over food bowls. +5% health bonus while eating. Capacity: 100 units. Size: 2x1.",
         cost=ECONOMY.HAY_RACK_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.HAY_RACK,
@@ -63,7 +63,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="hideout",
         name="Hideout",
-        description="A cozy wooden shelter where pigs can sleep and feel safe. Reduces stress and restores energy. Grants +10% happiness bonus.",
+        description="Pigs sleep here to restore energy. +10% happiness bonus while resting. Fits 2 pigs at once. Size: 3x2.",
         cost=ECONOMY.HIDEOUT_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.HIDEOUT,
@@ -73,7 +73,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="exercise_wheel",
         name="Exercise Wheel",
-        description="A large running wheel for exercise and entertainment. Helps burn off energy and keeps pigs fit. Grants +5% health bonus.",
+        description="Pigs play here to reduce boredom. +5% health bonus while playing. Size: 2x2.",
         cost=ECONOMY.EXERCISE_WHEEL_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.EXERCISE_WHEEL,
@@ -82,7 +82,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="tunnel",
         name="Tunnel System",
-        description="Interconnected tubes for exploration and hide-and-seek. Pigs love running through tunnels! Grants +15% happiness bonus.",
+        description="Pigs play here to reduce boredom. +15% happiness bonus while playing. Size: 3x1.",
         cost=ECONOMY.TUNNEL_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.TUNNEL,
@@ -92,7 +92,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="play_area",
         name="Play Area",
-        description="Open space with toys where multiple pigs can play together. Encourages social bonding and group activities.",
+        description="Pigs play and socialize here — reduces boredom and fulfills social needs. +20% social bonus. Size: 3x2.",
         cost=ECONOMY.PLAY_AREA_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.PLAY_AREA,
@@ -102,7 +102,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="breeding_den",
         name="Breeding Den",
-        description="A private, comfortable space for courting pairs. Provides the right environment for successful mating. +15% breeding success rate.",
+        description="+15% breeding success rate. Required for pigs to mate. Size: 2x2.",
         cost=ECONOMY.BREEDING_DEN_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.BREEDING_DEN,
@@ -111,7 +111,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="nursery",
         name="Nursery",
-        description="Specialized care area for mothers and newborn pups. Warm bedding and easy food access help babies grow 20% faster.",
+        description="Newborn pigs grow 20% faster near a nursery. Fits 4 pigs. Size: 3x2.",
         cost=ECONOMY.NURSERY_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.NURSERY,
@@ -120,7 +120,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="veggie_garden",
         name="Veggie Garden",
-        description="A self-sustaining garden that grows fresh vegetables. Automatically refills nearby food bowls over time. Reduces feeding costs!",
+        description="Produces 10 food units per day, auto-refilling nearby food bowls. Size: 2x2.",
         cost=ECONOMY.VEGGIE_GARDEN_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.VEGGIE_GARDEN,
@@ -129,17 +129,26 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="grooming_station",
         name="Grooming Station",
-        description="Brushes and nail clippers keep pigs looking their best. Well-groomed pigs are healthier and sell for +15% more at market.",
+        description="Pigs that use this sell for +15% more at market. Size: 2x1.",
         cost=ECONOMY.GROOMING_STATION_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.GROOMING_STATION,
+        required_tier=3,
+    ),
+    ShopItem(
+        id="genetics_lab",
+        name="Genetics Lab",
+        description="Reveals carrier alleles on pig detail screen and boosts mutation rate from 2% to 3% per locus. Size: 3x2.",
+        cost=ECONOMY.GENETICS_LAB_COST,
+        category=ShopCategory.FACILITIES,
+        facility_type=FacilityType.GENETICS_LAB,
         required_tier=3,
     ),
     # Food items
     ShopItem(
         id="food_refill",
         name="Food Refill",
-        description="Instantly refills all food bowls and hay racks on your farm to maximum capacity.",
+        description="Refills all food bowls and hay racks to max capacity instantly.",
         cost=10,
         category=ShopCategory.FOOD,
         required_tier=1,
@@ -147,7 +156,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="water_refill",
         name="Water Refill",
-        description="Instantly refills all water bottles on your farm to maximum capacity.",
+        description="Refills all water bottles to max capacity instantly.",
         cost=5,
         category=ShopCategory.FOOD,
         required_tier=1,
@@ -155,7 +164,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="premium_food",
         name="Premium Food Pack",
-        description="Gourmet blend of pellets, dried fruits, and vitamin supplements. Boosts happiness by +20 for all pigs when used.",
+        description="Instantly boosts happiness by +20 for all pigs on the farm.",
         cost=25,
         category=ShopCategory.FOOD,
         required_tier=2,

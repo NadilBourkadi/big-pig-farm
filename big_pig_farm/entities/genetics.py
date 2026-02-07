@@ -1,5 +1,6 @@
 """Genetic system for guinea pigs - alleles, inheritance, and phenotype calculation."""
 
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Self
 import random
@@ -250,6 +251,32 @@ def calculate_rarity(
     return Rarity.COMMON
 
 
+@dataclass
+class BreedResult:
+    """Result of breeding two guinea pigs."""
+    genotype: Genotype
+    mutations: list[str] = field(default_factory=list)
+
+
+# Locus definitions for mutation system: (locus_name, dominant, recessive)
+LOCUS_DEFINITIONS: list[tuple[str, str, str]] = [
+    ("e_locus", "E", "e"),
+    ("b_locus", "B", "b"),
+    ("s_locus", "S", "s"),
+    ("c_locus", "C", "ch"),
+    ("r_locus", "R", "r"),
+]
+
+# Human-readable names for mutation logging
+LOCUS_DISPLAY_NAMES: dict[str, str] = {
+    "e_locus": "Extension",
+    "b_locus": "Brown",
+    "s_locus": "Spotted",
+    "c_locus": "Intensity",
+    "r_locus": "Roan",
+}
+
+
 def inherit_allele(parent1_locus: tuple[str, str], parent2_locus: tuple[str, str]) -> tuple[str, str]:
     """Inherit one allele from each parent for a locus."""
     allele1 = random.choice(parent1_locus)
@@ -257,36 +284,99 @@ def inherit_allele(parent1_locus: tuple[str, str], parent2_locus: tuple[str, str
     return (allele1, allele2)
 
 
-def breed(parent1: Genotype, parent2: Genotype) -> Genotype:
-    """Create offspring genotype from two parents."""
-    # Check for lethal roan combination
+def mutate_locus(
+    locus: tuple[str, str],
+    dominant: str,
+    recessive: str,
+    rate: float,
+) -> tuple[tuple[str, str], bool]:
+    """Attempt to mutate one allele in a locus.
+
+    Returns (new_locus, did_mutate). Flips one random allele:
+    dominant -> recessive or recessive -> dominant.
+    """
+    if random.random() >= rate:
+        return locus, False
+
+    # Pick a random allele position to mutate
+    idx = random.randint(0, 1)
+    allele = locus[idx]
+
+    if allele == dominant:
+        new_allele = recessive
+    else:
+        new_allele = dominant
+
+    new_locus = list(locus)
+    new_locus[idx] = new_allele
+    return tuple(new_locus), True
+
+
+def breed(parent1: Genotype, parent2: Genotype, mutation_rate: float = 0.0) -> BreedResult:
+    """Create offspring genotype from two parents with optional mutations.
+
+    Args:
+        parent1: First parent genotype
+        parent2: Second parent genotype
+        mutation_rate: Per-locus mutation rate (0.0 = no mutations, 0.02 = 2%)
+
+    Returns:
+        BreedResult with genotype and list of mutation descriptions
+    """
+    # Normal Mendelian inheritance
+    child_e = inherit_allele(parent1.e_locus, parent2.e_locus)
+    child_b = inherit_allele(parent1.b_locus, parent2.b_locus)
+    child_s = inherit_allele(parent1.s_locus, parent2.s_locus)
+    child_c = inherit_allele(parent1.c_locus, parent2.c_locus)
     child_r = inherit_allele(parent1.r_locus, parent2.r_locus)
+
+    # Check for lethal roan combination
     if child_r[0] == "R" and child_r[1] == "R":
-        # Lethal - re-roll (in real genetics this would be stillborn)
-        # We handle gracefully by re-rolling
         while child_r[0] == "R" and child_r[1] == "R":
             child_r = inherit_allele(parent1.r_locus, parent2.r_locus)
 
-    return Genotype(
-        e_locus=inherit_allele(parent1.e_locus, parent2.e_locus),
-        b_locus=inherit_allele(parent1.b_locus, parent2.b_locus),
-        s_locus=inherit_allele(parent1.s_locus, parent2.s_locus),
-        c_locus=inherit_allele(parent1.c_locus, parent2.c_locus),
-        r_locus=child_r,
+    # Apply mutations
+    mutations = []
+    loci = {
+        "e_locus": (child_e, "E", "e"),
+        "b_locus": (child_b, "B", "b"),
+        "s_locus": (child_s, "S", "s"),
+        "c_locus": (child_c, "C", "ch"),
+        "r_locus": (child_r, "R", "r"),
+    }
+
+    if mutation_rate > 0:
+        for locus_name, (locus_val, dom, rec) in loci.items():
+            new_val, did_mutate = mutate_locus(locus_val, dom, rec, mutation_rate)
+            if did_mutate:
+                # If mutation creates RR, force to Rr instead
+                if locus_name == "r_locus" and new_val[0] == "R" and new_val[1] == "R":
+                    new_val = ("R", "r")
+                loci[locus_name] = (new_val, dom, rec)
+                display = LOCUS_DISPLAY_NAMES[locus_name]
+                mutations.append(f"{display} ({locus_val[0]}/{locus_val[1]} -> {new_val[0]}/{new_val[1]})")
+
+    genotype = Genotype(
+        e_locus=loci["e_locus"][0],
+        b_locus=loci["b_locus"][0],
+        s_locus=loci["s_locus"][0],
+        c_locus=loci["c_locus"][0],
+        r_locus=loci["r_locus"][0],
     )
+
+    return BreedResult(genotype=genotype, mutations=mutations)
 
 
 def predict_offspring_probabilities(
     parent1: Genotype, parent2: Genotype
 ) -> dict[str, float]:
     """Predict probability of offspring phenotypes using Punnett squares."""
-    # This is a simplified calculation - for full accuracy we'd enumerate all combinations
     phenotype_counts: dict[str, int] = {}
-    total = 1000  # Sample size for probability estimation
+    total = 1000
 
     for _ in range(total):
-        child = breed(parent1, parent2)
-        phenotype = calculate_phenotype(child)
+        result = breed(parent1, parent2)
+        phenotype = calculate_phenotype(result.genotype)
         name = phenotype.display_name
         phenotype_counts[name] = phenotype_counts.get(name, 0) + 1
 
