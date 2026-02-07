@@ -8,7 +8,7 @@ from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer
 
-from big_pig_farm.data.config import GameSpeed
+from big_pig_farm.data.config import GameSpeed, SPEED_DISPLAY
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
 from big_pig_farm.economy.currency import add_money
@@ -25,6 +25,7 @@ from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.adoption import AdoptionScreen
 from big_pig_farm.ui.screens.pigdex import PigdexScreen
 from big_pig_farm.ui.screens.contracts import ContractsScreen
+from big_pig_farm.ui.screens.event_log import EventLogScreen
 
 
 class MainGameScreen(Screen):
@@ -38,6 +39,7 @@ class MainGameScreen(Screen):
         ("b", "open_breeding", "Breed"),
         ("x", "open_pigdex", "Pigdex"),
         ("c", "open_contracts", "Contracts"),
+        ("l", "open_event_log", "Log"),
         ("e", "toggle_edit", "Edit"),
         ("n", "new_game", "New"),
         ("space", "toggle_pause", "Pause"),
@@ -150,7 +152,7 @@ class MainGameScreen(Screen):
     def action_speed_up(self) -> None:
         """Increase game speed."""
         new_speed = self.app.engine.cycle_speed()
-        self.notify(f"Speed: {new_speed.value}x")
+        self.notify(f"Speed: {SPEED_DISPLAY[new_speed]}")
 
     def action_slow_down(self) -> None:
         """Decrease game speed."""
@@ -160,7 +162,7 @@ class MainGameScreen(Screen):
             idx = speeds.index(current)
             if idx > 0:
                 self.state.speed = speeds[idx - 1]
-                self.notify(f"Speed: {self.state.speed.value}x")
+                self.notify(f"Speed: {SPEED_DISPLAY[self.state.speed]}")
 
     def _follow_pig(self, pig) -> None:
         """Start following a specific pig."""
@@ -344,6 +346,10 @@ class MainGameScreen(Screen):
         """Open the contracts screen."""
         self.app.push_screen(ContractsScreen(self.state))
 
+    def action_open_event_log(self) -> None:
+        """Open the event log screen."""
+        self.app.push_screen(EventLogScreen(self.state))
+
     def action_open_facilities(self) -> None:
         """Open the facilities screen."""
         self.app.push_screen(FacilitiesScreen(self.state))
@@ -368,7 +374,7 @@ class MainGameScreen(Screen):
         lines = []
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines.append(f"=== DEBUG DUMP {now} ===")
-        lines.append(f"Speed: {self.state.speed.value}x  Paused: {self.state.is_paused}")
+        lines.append(f"Speed: {SPEED_DISPLAY[self.state.speed]}  Paused: {self.state.is_paused}")
         lines.append(f"Money: ${self.state.money}  Pigs: {len(self.state.get_pigs_list())}  Facilities: {len(self.state.get_facilities_list())}")
         lines.append("")
 
