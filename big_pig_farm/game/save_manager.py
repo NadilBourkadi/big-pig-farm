@@ -1,17 +1,23 @@
 """SQLite save/load functionality for game persistence."""
 
 import json
+import logging
+import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
+from big_pig_farm.data.config import GameSpeed
+from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
 from big_pig_farm.game.state import GameState, GameTime, EventLog
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Personality, Needs, Position
-from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype
+from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype, BaseColor, Pattern, ColorIntensity, RoanType
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.game.world import FarmGrid
+
+logger = logging.getLogger(__name__)
 
 
 def get_save_path() -> Path:
@@ -79,11 +85,17 @@ class SaveManager:
                 )
             """)
 
-            # Migration: add origin_tag column to existing tables
-            try:
-                cursor.execute("ALTER TABLE guinea_pigs ADD COLUMN origin_tag TEXT")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
+            # Migrations: add columns to existing tables
+            for col, typedef in [
+                ("origin_tag", "TEXT"),
+                ("breeding_locked", "INTEGER DEFAULT 0"),
+                ("mother_name", "TEXT"),
+                ("father_name", "TEXT"),
+            ]:
+                try:
+                    cursor.execute(f"ALTER TABLE guinea_pigs ADD COLUMN {col} {typedef}")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
 
             # Facilities table
             cursor.execute("""
@@ -151,16 +163,38 @@ class SaveManager:
 
             conn.commit()
 
+    def _backup_save(self) -> None:
+        """Create a backup of the current save file before overwriting."""
+        if not self.save_path.exists():
+            return
+        backup_path = self.save_path.with_suffix(".db.bak")
+        try:
+            shutil.copy2(self.save_path, backup_path)
+        except OSError as e:
+            logger.warning("Failed to create save backup: %s", e)
+
     def save(self, state: GameState) -> None:
-        """Save the current game state."""
-        with sqlite3.connect(self.save_path) as conn:
+        """Save the current game state.
+
+        Uses a single transaction so that a crash mid-save cannot corrupt
+        the database.  A backup of the previous save is kept as .db.bak.
+        """
+        self._backup_save()
+
+        conn = sqlite3.connect(self.save_path)
+        try:
             cursor = conn.cursor()
+            cursor.execute("BEGIN")
 
             # Clear existing data
             cursor.execute("DELETE FROM game_state")
             cursor.execute("DELETE FROM guinea_pigs")
             cursor.execute("DELETE FROM facilities")
             cursor.execute("DELETE FROM events")
+            cursor.execute("DELETE FROM pigdex")
+            cursor.execute("DELETE FROM pigdex_meta")
+            cursor.execute("DELETE FROM contracts")
+            cursor.execute("DELETE FROM contract_meta")
 
             # Save game state
             cursor.execute("""
@@ -191,8 +225,9 @@ class SaveManager:
                         id, name, gender, age_days, birth_time, genotype_json,
                         personality_json, needs_json, behavior_state,
                         position_x, position_y, is_pregnant, pregnancy_days,
-                        partner_id, last_birth_time, mother_id, father_id, origin_tag
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        partner_id, last_birth_time, mother_id, father_id,
+                        origin_tag, breeding_locked, mother_name, father_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(pig.id),
                     pig.name,
@@ -212,6 +247,9 @@ class SaveManager:
                     str(pig.mother_id) if pig.mother_id else None,
                     str(pig.father_id) if pig.father_id else None,
                     pig.origin_tag,
+                    1 if pig.breeding_locked else 0,
+                    pig.mother_name,
+                    pig.father_name,
                 ))
 
             # Save facilities
@@ -242,8 +280,6 @@ class SaveManager:
                 ))
 
             # Save pigdex
-            cursor.execute("DELETE FROM pigdex")
-            cursor.execute("DELETE FROM pigdex_meta")
             for key, day in state.pigdex.discovered.items():
                 cursor.execute(
                     "INSERT INTO pigdex (phenotype_key, discovered_day) VALUES (?, ?)",
@@ -255,8 +291,6 @@ class SaveManager:
             )
 
             # Save contracts
-            cursor.execute("DELETE FROM contracts")
-            cursor.execute("DELETE FROM contract_meta")
             if hasattr(state, 'contract_board'):
                 board = state.contract_board
                 for contract in board.active_contracts:
@@ -281,180 +315,196 @@ class SaveManager:
                 )
 
             conn.commit()
+        except Exception:
+            conn.rollback()
+            logger.exception("Failed to save game")
+            raise
+        finally:
+            conn.close()
 
         state.last_save = datetime.now()
 
     def load(self) -> Optional[GameState]:
-        """Load game state from save file."""
+        """Load game state from save file.
+
+        Uses sqlite3.Row for name-based column access so column order
+        changes don't silently corrupt data.
+        """
         if not self.save_path.exists():
             return None
 
         try:
-            with sqlite3.connect(self.save_path) as conn:
-                cursor = conn.cursor()
+            conn = sqlite3.connect(self.save_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
 
-                # Load game state
-                cursor.execute("SELECT * FROM game_state WHERE id = 1")
-                row = cursor.fetchone()
+            # Load game state
+            cursor.execute("SELECT * FROM game_state WHERE id = 1")
+            row = cursor.fetchone()
 
-                if not row:
-                    return None
+            if not row:
+                conn.close()
+                return None
 
-                from big_pig_farm.data.config import GameSpeed
+            try:
+                saved_speed = GameSpeed(row["speed"])
+            except ValueError:
+                saved_speed = GameSpeed.NORMAL
 
-                try:
-                    saved_speed = GameSpeed(row[7])
-                except ValueError:
-                    saved_speed = GameSpeed.NORMAL
+            state = GameState(
+                money=row["money"],
+                game_time=GameTime(
+                    day=row["day"],
+                    hour=row["hour"],
+                    minute=row["minute"],
+                    total_game_minutes=row["total_game_minutes"],
+                    last_update=datetime.fromisoformat(row["last_update"]),
+                ),
+                speed=saved_speed,
+                is_paused=bool(row["is_paused"]),
+                farm=FarmGrid(width=row["farm_width"], height=row["farm_height"], tier=row["farm_tier"]),
+                total_pigs_born=row["total_pigs_born"],
+                total_pigs_sold=row["total_pigs_sold"],
+                total_earnings=row["total_earnings"],
+            )
 
-                state = GameState(
-                    money=row[1],
-                    game_time=GameTime(
-                        day=row[2],
-                        hour=row[3],
-                        minute=row[4],
-                        total_game_minutes=row[5],
-                        last_update=datetime.fromisoformat(row[6]),
-                    ),
-                    speed=saved_speed,
-                    is_paused=bool(row[8]),
-                    farm=FarmGrid(width=row[9], height=row[10], tier=row[11]),
-                    total_pigs_born=row[12],
-                    total_pigs_sold=row[13],
-                    total_earnings=row[14],
+            # Load guinea pigs
+            cursor.execute("SELECT * FROM guinea_pigs")
+            for row in cursor.fetchall():
+                genotype = Genotype.model_validate_json(row["genotype_json"])
+                phenotype = calculate_phenotype(genotype)
+                personality = [Personality(p) for p in json.loads(row["personality_json"])]
+                needs = Needs.model_validate_json(row["needs_json"])
+
+                # Columns that may not exist in old saves
+                row_keys = row.keys()
+                origin_tag = row["origin_tag"] if "origin_tag" in row_keys else None
+                breeding_locked = bool(row["breeding_locked"]) if "breeding_locked" in row_keys else False
+                mother_name = row["mother_name"] if "mother_name" in row_keys else None
+                father_name = row["father_name"] if "father_name" in row_keys else None
+
+                pig = GuineaPig(
+                    id=UUID(row["id"]),
+                    name=row["name"],
+                    gender=Gender(row["gender"]),
+                    age_days=row["age_days"],
+                    birth_time=datetime.fromisoformat(row["birth_time"]),
+                    genotype=genotype,
+                    phenotype=phenotype,
+                    personality=personality,
+                    needs=needs,
+                    behavior_state=BehaviorState(row["behavior_state"]),
+                    position=Position(x=row["position_x"], y=row["position_y"]),
+                    is_pregnant=bool(row["is_pregnant"]),
+                    pregnancy_days=row["pregnancy_days"],
+                    partner_id=UUID(row["partner_id"]) if row["partner_id"] else None,
+                    last_birth_time=datetime.fromisoformat(row["last_birth_time"]) if row["last_birth_time"] else None,
+                    mother_id=UUID(row["mother_id"]) if row["mother_id"] else None,
+                    father_id=UUID(row["father_id"]) if row["father_id"] else None,
+                    origin_tag=origin_tag,
+                    breeding_locked=breeding_locked,
+                    mother_name=mother_name,
+                    father_name=father_name,
                 )
+                state.add_guinea_pig(pig)
 
-                # Load guinea pigs
-                cursor.execute("SELECT * FROM guinea_pigs")
+            # Load facilities
+            cursor.execute("SELECT * FROM facilities")
+            for row in cursor.fetchall():
+                facility = Facility(
+                    id=UUID(row["id"]),
+                    facility_type=FacilityType(row["facility_type"]),
+                    position_x=row["position_x"],
+                    position_y=row["position_y"],
+                    level=row["level"],
+                    current_amount=row["current_amount"],
+                    max_amount=row["max_amount"],
+                    auto_refill=bool(row["auto_refill"]),
+                )
+                state.add_facility(facility)
+
+            # Load events
+            cursor.execute("SELECT * FROM events ORDER BY id DESC LIMIT 50")
+            for row in cursor.fetchall():
+                event = EventLog(
+                    timestamp=datetime.fromisoformat(row["timestamp"]),
+                    game_day=row["game_day"],
+                    message=row["message"],
+                    event_type=row["event_type"],
+                )
+                state.events.append(event)
+
+            state.events.reverse()  # Put in chronological order
+
+            # Load pigdex
+            try:
+                cursor.execute("SELECT phenotype_key, discovered_day FROM pigdex")
                 for row in cursor.fetchall():
-                    genotype = Genotype.model_validate_json(row[5])
-                    phenotype = calculate_phenotype(genotype)
-                    personality = [Personality(p) for p in json.loads(row[6])]
-                    needs = Needs.model_validate_json(row[7])
+                    state.pigdex.discovered[row["phenotype_key"]] = row["discovered_day"]
 
-                    # origin_tag is column 17, may not exist in old saves
-                    origin_tag = row[17] if len(row) > 17 else None
+                cursor.execute("SELECT milestones_json FROM pigdex_meta WHERE id = 1")
+                meta_row = cursor.fetchone()
+                if meta_row:
+                    state.pigdex.milestone_rewards_claimed = json.loads(meta_row["milestones_json"])
+            except sqlite3.OperationalError:
+                pass  # Table doesn't exist in old saves
 
-                    pig = GuineaPig(
-                        id=UUID(row[0]),
-                        name=row[1],
-                        gender=Gender(row[2]),
-                        age_days=row[3],
-                        birth_time=datetime.fromisoformat(row[4]),
-                        genotype=genotype,
-                        phenotype=phenotype,
-                        personality=personality,
-                        needs=needs,
-                        behavior_state=BehaviorState(row[8]),
-                        position=Position(x=row[9], y=row[10]),
-                        is_pregnant=bool(row[11]),
-                        pregnancy_days=row[12],
-                        partner_id=UUID(row[13]) if row[13] else None,
-                        last_birth_time=datetime.fromisoformat(row[14]) if row[14] else None,
-                        mother_id=UUID(row[15]) if row[15] else None,
-                        father_id=UUID(row[16]) if row[16] else None,
-                        origin_tag=origin_tag,
-                    )
-                    state.add_guinea_pig(pig)
-
-                # Load facilities
-                cursor.execute("SELECT * FROM facilities")
+            # Load contracts
+            try:
+                cursor.execute("SELECT * FROM contracts WHERE fulfilled = 0")
+                contracts = []
                 for row in cursor.fetchall():
-                    facility = Facility(
-                        id=UUID(row[0]),
-                        facility_type=FacilityType(row[1]),
-                        position_x=row[2],
-                        position_y=row[3],
-                        level=row[4],
-                        current_amount=row[5],
-                        max_amount=row[6],
-                        auto_refill=bool(row[7]),
+                    contract = BreedingContract(
+                        id=UUID(row["id"]),
+                        description=row["description"],
+                        required_color=BaseColor(row["required_color"]) if row["required_color"] else None,
+                        required_pattern=Pattern(row["required_pattern"]) if row["required_pattern"] else None,
+                        required_intensity=ColorIntensity(row["required_intensity"]) if row["required_intensity"] else None,
+                        required_roan=RoanType(row["required_roan"]) if row["required_roan"] else None,
+                        difficulty=ContractDifficulty(row["difficulty"]),
+                        reward=row["reward"],
+                        deadline_day=row["deadline_day"],
+                        created_day=row["created_day"],
+                        fulfilled=bool(row["fulfilled"]),
                     )
-                    state.add_facility(facility)
+                    contracts.append(contract)
 
-                # Load events
-                cursor.execute("SELECT * FROM events ORDER BY id DESC LIMIT 50")
-                for row in cursor.fetchall():
-                    event = EventLog(
-                        timestamp=datetime.fromisoformat(row[1]),
-                        game_day=row[2],
-                        message=row[3],
-                        event_type=row[4],
-                    )
-                    state.events.append(event)
+                cursor.execute("SELECT * FROM contract_meta WHERE id = 1")
+                cmeta = cursor.fetchone()
+                if cmeta:
+                    state.contract_board.active_contracts = contracts
+                    state.contract_board.completed_contracts = cmeta["completed_count"]
+                    state.contract_board.total_contract_earnings = cmeta["total_earnings"]
+                    state.contract_board.last_refresh_day = cmeta["last_refresh_day"]
+            except (sqlite3.OperationalError, ImportError):
+                pass  # Table doesn't exist or contracts module not yet available
 
-                state.events.reverse()  # Put in chronological order
+            conn.close()
 
-                # Load pigdex
-                try:
-                    cursor.execute("SELECT phenotype_key, discovered_day FROM pigdex")
-                    for row in cursor.fetchall():
-                        state.pigdex.discovered[row[0]] = row[1]
+            # Check if farm needs resizing to match current config
+            resized, offset_x, offset_y = state.farm.resize_to_match_config()
+            if resized:
+                # Reposition all pigs
+                for pig in state.guinea_pigs.values():
+                    pig.position.x += offset_x
+                    pig.position.y += offset_y
+                    # Clear any paths that would be invalid now
+                    pig.path = []
+                    pig.target_position = None
 
-                    cursor.execute("SELECT milestones_json FROM pigdex_meta WHERE id = 1")
-                    meta_row = cursor.fetchone()
-                    if meta_row:
-                        state.pigdex.milestone_rewards_claimed = json.loads(meta_row[0])
-                except sqlite3.OperationalError:
-                    pass  # Table doesn't exist in old saves
+                # Reposition all facilities
+                for facility in state.facilities.values():
+                    facility.position_x += offset_x
+                    facility.position_y += offset_y
 
-                # Load contracts
-                try:
-                    from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
-                    from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
+                # Re-register facilities on the grid
+                for facility in state.facilities.values():
+                    state.farm.place_facility(facility)
 
-                    cursor.execute("SELECT * FROM contracts WHERE fulfilled = 0")
-                    contracts = []
-                    for row in cursor.fetchall():
-                        contract = BreedingContract(
-                            id=UUID(row[0]),
-                            description=row[1],
-                            required_color=BaseColor(row[2]) if row[2] else None,
-                            required_pattern=Pattern(row[3]) if row[3] else None,
-                            required_intensity=ColorIntensity(row[4]) if row[4] else None,
-                            required_roan=RoanType(row[5]) if row[5] else None,
-                            difficulty=ContractDifficulty(row[6]),
-                            reward=row[7],
-                            deadline_day=row[8],
-                            created_day=row[9],
-                            fulfilled=bool(row[10]),
-                        )
-                        contracts.append(contract)
+            return state
 
-                    cursor.execute("SELECT * FROM contract_meta WHERE id = 1")
-                    cmeta = cursor.fetchone()
-                    if cmeta:
-                        state.contract_board.active_contracts = contracts
-                        state.contract_board.completed_contracts = cmeta[1]
-                        state.contract_board.total_contract_earnings = cmeta[2]
-                        state.contract_board.last_refresh_day = cmeta[3]
-                except (sqlite3.OperationalError, ImportError):
-                    pass  # Table doesn't exist or contracts module not yet available
-
-                # Check if farm needs resizing to match current config
-                resized, offset_x, offset_y = state.farm.resize_to_match_config()
-                if resized:
-                    # Reposition all pigs
-                    for pig in state.guinea_pigs.values():
-                        pig.position.x += offset_x
-                        pig.position.y += offset_y
-                        # Clear any paths that would be invalid now
-                        pig.path = []
-                        pig.target_position = None
-
-                    # Reposition all facilities
-                    for facility in state.facilities.values():
-                        facility.position_x += offset_x
-                        facility.position_y += offset_y
-
-                    # Re-register facilities on the grid
-                    for facility in state.facilities.values():
-                        state.farm.place_facility(facility)
-
-                return state
-
-        except Exception as e:
-            print(f"Error loading save: {e}")
+        except Exception:
+            logger.exception("Error loading save file")
             return None
 
     def has_save(self) -> bool:
