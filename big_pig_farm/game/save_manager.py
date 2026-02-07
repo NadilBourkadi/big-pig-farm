@@ -213,6 +213,11 @@ class SaveManager:
 
                 from big_pig_farm.data.config import GameSpeed
 
+                try:
+                    saved_speed = GameSpeed(row[7])
+                except ValueError:
+                    saved_speed = GameSpeed.NORMAL
+
                 state = GameState(
                     money=row[1],
                     game_time=GameTime(
@@ -222,7 +227,7 @@ class SaveManager:
                         total_game_minutes=row[5],
                         last_update=datetime.fromisoformat(row[6]),
                     ),
-                    speed=GameSpeed(row[7]),
+                    speed=saved_speed,
                     is_paused=bool(row[8]),
                     farm=FarmGrid(width=row[9], height=row[10], tier=row[11]),
                     total_pigs_born=row[12],

@@ -23,6 +23,7 @@ class BehaviorController:
         self._decision_timers: dict[UUID, float] = {}
         self._blocked_timers: dict[UUID, float] = {}  # Track how long pigs have been blocked
         self._failed_facilities: dict[UUID, set[UUID]] = {}  # Track recently-failed facility IDs per pig
+        self._failed_cooldowns: dict[UUID, int] = {}  # Decisions remaining before clearing failed list
 
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
@@ -81,6 +82,12 @@ class BehaviorController:
             pig.target_facility_id = None
             pig.target_description = None
             # Don't clear failed facilities - keep them excluded
+        elif self._failed_cooldowns.get(pig.id, 0) > 0:
+            # Recently gave up on blocked facilities — count down before retrying
+            self._failed_cooldowns[pig.id] -= 1
+            if self._failed_cooldowns[pig.id] <= 0:
+                self._failed_facilities[pig.id] = set()
+                del self._failed_cooldowns[pig.id]
         else:
             # Clear failed facilities when making a completely fresh decision
             self._failed_facilities[pig.id] = set()
@@ -587,15 +594,26 @@ class BehaviorController:
         return False
 
     def _is_position_blocked(self, target_x: float, target_y: float, exclude_pig: GuineaPig, min_distance: float = 2.5) -> bool:
-        """Check if moving to a position would collide with another pig."""
+        """Check if moving to a position would collide with another pig.
+
+        Uses a reduced blocking radius against other pigs that are also
+        actively moving, so pigs can pass each other on their way to
+        facilities instead of forming traffic jams.
+        """
         for other_pig in self.game_state.get_pigs_list():
             if other_pig.id == exclude_pig.id:
                 continue
+            # If both pigs are actively moving, use a tighter radius so they
+            # can squeeze past each other without visually overlapping
+            if exclude_pig.path and other_pig.path:
+                effective_distance = 1.5
+            else:
+                effective_distance = min_distance
             # Check distance to other pig
             dx = target_x - other_pig.position.x
             dy = target_y - other_pig.position.y
             distance = (dx * dx + dy * dy) ** 0.5
-            if distance < min_distance:
+            if distance < effective_distance:
                 return True
         return False
 
@@ -672,19 +690,29 @@ class BehaviorController:
         return False
 
     def separate_overlapping_pigs(self) -> None:
-        """Push apart any pigs that are too close to each other."""
+        """Push apart any pigs that are too close to each other.
+
+        Uses a smaller separation threshold when either pig is actively
+        moving, so the separation force doesn't fight pathfinding.
+        """
         pigs = self.game_state.get_pigs_list()
         farm = self.game_state.farm
 
         for i, pig_a in enumerate(pigs):
             for pig_b in pigs[i + 1:]:
+                # Use a smaller threshold when either pig is actively pathing.
+                # This must be less than the movement blocking distance (2.5)
+                # so separation doesn't undo movement that passed the block check.
+                either_moving = pig_a.path or pig_b.path
+                threshold = 2.0 if either_moving else self.MIN_PIG_DISTANCE
+
                 dx = pig_b.position.x - pig_a.position.x
                 dy = pig_b.position.y - pig_a.position.y
                 distance = (dx * dx + dy * dy) ** 0.5
 
-                if distance < self.MIN_PIG_DISTANCE and distance > 0.01:
+                if distance < threshold and distance > 0.01:
                     # Calculate separation needed
-                    overlap = self.MIN_PIG_DISTANCE - distance
+                    overlap = threshold - distance
                     separation = overlap / 2 + 0.1
 
                     # Normalize direction
@@ -714,6 +742,62 @@ class BehaviorController:
                     if farm.is_walkable(int(new_x), int(new_y)):
                         pig_b.position.x = new_x
                         pig_b.position.y = new_y
+
+    def _give_up_and_fallback(self, pig: GuineaPig) -> None:
+        """Give up reaching a facility and apply a need-specific fallback behavior.
+
+        Instead of going IDLE (which causes immediate re-decision to the same
+        facility), apply a fallback: sleep where standing, wander away, etc.
+        Failed facilities are preserved so the pig doesn't immediately retry.
+        """
+        desc = pig.target_description or ""
+        pig.path = []
+        pig.target_position = None
+        pig.target_facility_id = None
+        pig.target_description = None
+        self._blocked_timers[pig.id] = 0
+        # Keep failed facilities for 3 decision cycles (~6 seconds) before retrying
+        self._failed_cooldowns[pig.id] = 3
+
+        if "Hideout" in desc or "sleep" in desc:
+            # Sleep where standing — the hideouts are all occupied
+            pig.behavior_state = BehaviorState.SLEEPING
+            pig.target_description = "sleeping (no hideout available)"
+            pig.log_behavior("All hideouts blocked, sleeping where standing")
+        else:
+            # Wander away and try again later
+            pig.behavior_state = BehaviorState.IDLE
+            pig.log_behavior("All facilities blocked, wandering away")
+            self._start_wandering(pig)
+            # Set a longer cooldown before next decision to avoid retrying immediately
+            self._decision_timers[pig.id] = 0
+
+    def _try_dodge(self, pig: GuineaPig, path_dx: float, path_dy: float, delta_seconds: float, speed: float) -> bool:
+        """Try to sidestep perpendicular to the path direction to get around a blocking pig.
+
+        Returns True if the pig successfully dodged.
+        """
+        farm = self.game_state.farm
+        move_dist = min(speed * delta_seconds, 1.0)  # Cap dodge step to 1 cell
+
+        # Calculate perpendicular directions (rotate 90 degrees both ways)
+        perp_dirs = [(-path_dy, path_dx), (path_dy, -path_dx)]
+        length = (path_dx * path_dx + path_dy * path_dy) ** 0.5
+        if length < 0.01:
+            return False
+
+        for pdx, pdy in perp_dirs:
+            pdx /= length
+            pdy /= length
+            new_x = pig.position.x + pdx * move_dist
+            new_y = pig.position.y + pdy * move_dist
+            if (farm.is_valid_position(int(new_x), int(new_y))
+                    and farm.is_walkable(int(new_x), int(new_y))
+                    and not self._is_position_blocked(new_x, new_y, pig)):
+                pig.position.x = new_x
+                pig.position.y = new_y
+                return True
+        return False
 
     def _update_movement(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update pig position along its path."""
@@ -753,27 +837,26 @@ class BehaviorController:
                 if not pig.path:
                     pig.target_position = None
             else:
-                # Blocked - track how long and try to find alternative
-                blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
-                self._blocked_timers[pig.id] = blocked_time
+                # Try dodging sideways to get around the blocking pig
+                if self._try_dodge(pig, dx, dy, delta_seconds, speed):
+                    if pig.target_description and "(blocked)" in pig.target_description:
+                        pig.target_description = pig.target_description.replace(" (blocked)", "")
+                    self._blocked_timers[pig.id] = 0
+                else:
+                    # Blocked - track how long and try to find alternative
+                    blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
+                    self._blocked_timers[pig.id] = blocked_time
 
-                if pig.target_description and "(blocked)" not in pig.target_description:
-                    pig.target_description = f"{pig.target_description} (blocked)"
+                    if pig.target_description and "(blocked)" not in pig.target_description:
+                        pig.target_description = f"{pig.target_description} (blocked)"
 
-                # After 2 seconds of being blocked, try to find an alternative facility
-                if blocked_time > 2.0:
-                    current_target = pig.target_position
-                    if current_target and self._try_alternative_facility(pig, current_target):
-                        self._blocked_timers[pig.id] = 0
-                    elif blocked_time > 5.0:
-                        pig.log_behavior("Gave up - no alternatives available")
-                        pig.path = []
-                        pig.target_position = None
-                        pig.target_facility_id = None
-                        pig.target_description = None
-                        pig.behavior_state = BehaviorState.IDLE
-                        self._blocked_timers[pig.id] = 0
-                        self._decision_timers[pig.id] = SIMULATION.DECISION_INTERVAL_SECONDS
+                    # After 2 seconds of being blocked, try to find an alternative facility
+                    if blocked_time > 2.0:
+                        current_target = pig.target_position
+                        if current_target and self._try_alternative_facility(pig, current_target):
+                            self._blocked_timers[pig.id] = 0
+                        elif blocked_time > 5.0:
+                            self._give_up_and_fallback(pig)
         else:
             # Calculate proposed new position
             move_distance = speed * delta_seconds
@@ -791,15 +874,19 @@ class BehaviorController:
                 if pig.target_description and "(blocked)" in pig.target_description:
                     pig.target_description = pig.target_description.replace(" (blocked)", "")
                 self._blocked_timers[pig.id] = 0
+            elif self._try_dodge(pig, dx, dy, delta_seconds, speed):
+                # Dodged sideways to get around blocking pig
+                if pig.target_description and "(blocked)" in pig.target_description:
+                    pig.target_description = pig.target_description.replace(" (blocked)", "")
+                self._blocked_timers[pig.id] = 0
             else:
-                # Blocked - track how long and try to find alternative
+                # Blocked and can't dodge - track how long and try to find alternative
                 blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
                 self._blocked_timers[pig.id] = blocked_time
 
                 if pig.target_description and "(blocked)" not in pig.target_description:
                     pig.target_description = f"{pig.target_description} (blocked)"
 
-                # After 1 second of being blocked, try to find an alternative facility
                 # After 2 seconds of being blocked, try to find an alternative facility
                 if blocked_time > 2.0:
                     current_target = pig.target_position
@@ -807,15 +894,7 @@ class BehaviorController:
                         # Found alternative, reset blocked timer
                         self._blocked_timers[pig.id] = 0
                     elif blocked_time > 5.0:
-                        # No alternative found and blocked too long - give up entirely
-                        pig.log_behavior("Gave up - no alternatives available")
-                        pig.path = []
-                        pig.target_position = None
-                        pig.target_facility_id = None
-                        pig.target_description = None
-                        pig.behavior_state = BehaviorState.IDLE
-                        self._blocked_timers[pig.id] = 0
-                        self._decision_timers[pig.id] = SIMULATION.DECISION_INTERVAL_SECONDS
+                        self._give_up_and_fallback(pig)
 
     def _update_current_behavior(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior-specific effects."""

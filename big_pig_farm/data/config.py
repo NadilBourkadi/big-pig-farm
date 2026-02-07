@@ -10,7 +10,7 @@ class GameSpeed(Enum):
     NORMAL = 1
     FAST = 2
     FASTER = 5
-    FASTEST = 10
+    FASTEST = 20
 
 
 @dataclass(frozen=True)

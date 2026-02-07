@@ -1,5 +1,8 @@
 """Main game screen - the primary farm view."""
 
+import datetime
+from pathlib import Path
+
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.containers import Container, Horizontal
@@ -46,6 +49,7 @@ class MainGameScreen(Screen):
         ("r", "remove_facility", None),
         ("delete", "remove_facility", None),
         ("escape", "handle_escape", "Esc"),
+        ("d", "dump_debug", None),  # Hidden debug dump
         ("q", "quit_game", "Quit"),
     ]
 
@@ -344,6 +348,56 @@ class MainGameScreen(Screen):
             ConfirmScreen("Start a new game?\nAll progress will be lost!"),
             handle_confirm
         )
+
+    def action_dump_debug(self) -> None:
+        """Dump full debug state for all pigs and facilities to a file."""
+        controller = self.app.behavior_controller
+        lines = []
+        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        lines.append(f"=== DEBUG DUMP {now} ===")
+        lines.append(f"Speed: {self.state.speed.value}x  Paused: {self.state.is_paused}")
+        lines.append(f"Money: ${self.state.money}  Pigs: {len(self.state.get_pigs_list())}  Facilities: {len(self.state.get_facilities_list())}")
+        lines.append("")
+
+        # Facilities
+        lines.append("--- FACILITIES ---")
+        for f in self.state.get_facilities_list():
+            lines.append(f"  {f.name} [{f.id.hex[:8]}] at ({f.position_x},{f.position_y}) size={f.width}x{f.height}")
+            lines.append(f"    amount={f.current_amount:.1f}/{f.max_amount:.1f} empty={f.is_empty}")
+            lines.append(f"    interaction_point={f.interaction_point}  all_points={f.interaction_points}")
+        lines.append("")
+
+        # Pigs
+        lines.append("--- PIGS ---")
+        for pig in self.state.get_pigs_list():
+            decision_timer = controller._decision_timers.get(pig.id, 0)
+            blocked_timer = controller._blocked_timers.get(pig.id, 0)
+            failed = controller._failed_facilities.get(pig.id, set())
+            failed_names = []
+            for fid in failed:
+                fac = self.state.get_facility(fid)
+                failed_names.append(f"{fac.name}[{fid.hex[:8]}]" if fac else f"[{fid.hex[:8]}]")
+
+            lines.append(f"  {pig.name} [{pig.id.hex[:8]}]")
+            lines.append(f"    state={pig.behavior_state.value}  pos=({pig.position.x:.1f},{pig.position.y:.1f})  grid={pig.position.grid_pos()}")
+            lines.append(f"    target_desc={pig.target_description}")
+            lines.append(f"    target_pos={f'({pig.target_position.x:.1f},{pig.target_position.y:.1f})' if pig.target_position else 'None'}")
+            lines.append(f"    target_facility={pig.target_facility_id.hex[:8] if pig.target_facility_id else 'None'}")
+            lines.append(f"    path_len={len(pig.path)}  path_next={pig.path[0] if pig.path else 'None'}")
+            lines.append(f"    needs: hunger={pig.needs.hunger:.1f} thirst={pig.needs.thirst:.1f} energy={pig.needs.energy:.1f} happiness={pig.needs.happiness:.1f} social={pig.needs.social:.1f} boredom={pig.needs.boredom:.1f} health={pig.needs.health:.1f}")
+            lines.append(f"    timers: decision={decision_timer:.2f}s  blocked={blocked_timer:.2f}s")
+            lines.append(f"    failed_facilities: {', '.join(failed_names) if failed_names else 'none'}")
+            lines.append(f"    personality: {[p.value for p in pig.personality]}")
+            lines.append(f"    behavior_log (last 10):")
+            for entry in pig.behavior_log[-10:]:
+                lines.append(f"      - {entry}")
+            lines.append("")
+
+        dump_dir = Path.home() / ".big_pig_farm"
+        dump_dir.mkdir(exist_ok=True)
+        dump_path = dump_dir / "debug_dump.txt"
+        dump_path.write_text("\n".join(lines))
+        self.notify(f"Debug dump saved to {dump_path}")
 
     def action_quit_game(self) -> None:
         """Quit the game."""

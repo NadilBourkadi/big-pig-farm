@@ -1,5 +1,7 @@
 """Main Textual Application class for Big Pig Farm."""
 
+from pathlib import Path
+
 from textual.app import App
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
@@ -8,6 +10,7 @@ from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.engine import GameEngine
 from big_pig_farm.game.save_manager import SaveManager
+from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import update_all_needs
 from big_pig_farm.simulation.breeding import advance_pregnancies, age_all_pigs, check_breeding_opportunities
@@ -26,7 +29,7 @@ class BigPigFarmApp(App):
     }
     """
 
-    def __init__(self):
+    def __init__(self, debug: bool = False):
         super().__init__()
         self.save_manager = SaveManager()
         self._save_counter = 0
@@ -43,6 +46,13 @@ class BigPigFarmApp(App):
 
         self.engine = GameEngine(self.state)
         self.behavior_controller = BehaviorController(self.state)
+
+        # Debug logging
+        self.debug_logger: DebugLogger | None = None
+        if debug:
+            log_path = Path.home() / ".big_pig_farm" / "debug_log.txt"
+            self.debug_logger = DebugLogger(log_path)
+            self.state.log_event("Debug mode enabled", "info")
 
     def _setup_new_game(self) -> None:
         """Set up a new game with starting resources."""
@@ -131,6 +141,10 @@ class BigPigFarmApp(App):
 
         # Check for breeding
         check_breeding_opportunities(self.state)
+
+        # Debug logging
+        if self.debug_logger:
+            self.debug_logger.tick(self.state, self.behavior_controller)
 
         # Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1

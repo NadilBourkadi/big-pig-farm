@@ -32,6 +32,9 @@ poetry install
 
 # Run the game
 poetry run big-pig-farm
+
+# Run with debug logging (writes to ~/.big_pig_farm/debug_log.txt)
+poetry run big-pig-farm --debug
 ```
 
 ## How to Play
@@ -48,8 +51,10 @@ poetry run big-pig-farm
 | `N` | Start New Game |
 | `Space` | Pause/Resume |
 | `+`/`-` | Adjust game speed |
+| `A` | Adoption center |
 | `Tab` | Select next pig |
 | `Arrow keys` | Scroll view (or move cursor in edit mode) |
+| `D` | Dump debug state to file |
 | `Esc` | Deselect / Exit mode |
 | `Q` | Quit game |
 
@@ -128,20 +133,22 @@ Rarity tiers affect sale value:
 
 | Tier | Name | Size | Capacity | Cost |
 |------|------|------|----------|------|
-| 1 | Starter Hutch | 20x10 | 4 pigs | Free |
-| 2 | Cozy Enclosure | 30x15 | 8 pigs | $500 |
-| 3 | Family Pen | 40x20 | 15 pigs | $2,000 |
-| 4 | Guinea Grove | 50x25 | 25 pigs | $8,000 |
-| 5 | Piggy Paradise | 60x30 | 40 pigs | $25,000 |
-| 6 | Ultimate Farm | 80x40 | 60 pigs | $100,000 |
+| 1 | Starter Hutch | 30x15 | 4 pigs | Free |
+| 2 | Cozy Enclosure | 40x20 | 12 pigs | $500 |
+| 3 | Family Pen | 50x25 | 20 pigs | $2,000 |
+| 4 | Guinea Grove | 60x30 | 35 pigs | $8,000 |
+| 5 | Piggy Paradise | 80x40 | 55 pigs | $25,000 |
+| 6 | Ultimate Farm | 100x50 | 80 pigs | $100,000 |
 
 Higher tiers unlock additional facilities and increase pig capacity.
 
-## Save Data
+## Save Data & Debug Files
 
-Game saves are stored at:
+Game data is stored at:
 ```
-~/.big_pig_farm/savegame.db
+~/.big_pig_farm/savegame.db    # Save file
+~/.big_pig_farm/debug_dump.txt # Debug dump (D key)
+~/.big_pig_farm/debug_log.txt  # Continuous debug log (--debug flag)
 ```
 
 The game auto-saves:
@@ -178,7 +185,8 @@ big_pig_farm/
 │   ├── engine.py       # Game loop and tick management
 │   ├── state.py        # Game state container
 │   ├── world.py        # Farm grid and pathfinding
-│   └── save_manager.py # SQLite persistence
+│   ├── save_manager.py # SQLite persistence
+│   └── debug_logger.py # Continuous debug logging (--debug)
 ├── simulation/         # Simulation logic
 │   ├── behavior.py     # AI state machine
 │   ├── needs.py        # Needs decay and recovery
@@ -193,11 +201,13 @@ big_pig_farm/
     │   ├── shop.py
     │   ├── pig_list.py
     │   ├── breeding.py
+    │   ├── adoption.py
     │   ├── facilities.py
     │   └── confirm.py
     └── widgets/        # Reusable components
         ├── farm_view.py
         ├── status_bar.py
+        ├── pig_sidebar.py
         └── notification.py
 ```
 
