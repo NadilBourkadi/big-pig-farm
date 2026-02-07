@@ -43,6 +43,13 @@ def _check_birth(mother: GuineaPig, game_state) -> bool:
 def _process_birth(mother: GuineaPig, game_state) -> bool:
     """Process a birth event. Returns True if successful."""
     if game_state.is_at_capacity:
+        mother.is_pregnant = False
+        mother.pregnancy_days = 0.0
+        mother.partner_id = None
+        game_state.log_event(
+            f"{mother.name}'s pregnancy ended - farm is at capacity.",
+            event_type="birth",
+        )
         return False
 
     # Find father
@@ -51,8 +58,13 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         father = game_state.get_guinea_pig(mother.partner_id)
 
     if father is None:
-        # Can't give birth without father genetics on record
         mother.is_pregnant = False
+        mother.pregnancy_days = 0.0
+        mother.partner_id = None
+        game_state.log_event(
+            f"{mother.name}'s pregnancy ended - father is no longer on the farm.",
+            event_type="birth",
+        )
         return False
 
     # Determine litter size
@@ -63,6 +75,13 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     litter_size = min(litter_size, available_space)
 
     if litter_size <= 0:
+        mother.is_pregnant = False
+        mother.pregnancy_days = 0.0
+        mother.partner_id = None
+        game_state.log_event(
+            f"{mother.name}'s pregnancy ended - farm is at capacity.",
+            event_type="birth",
+        )
         return False
 
     # Get existing names for uniqueness

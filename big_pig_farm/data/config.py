@@ -7,10 +7,25 @@ from enum import Enum
 class GameSpeed(Enum):
     """Game speed multipliers."""
     PAUSED = 0
-    NORMAL = 1
-    FAST = 2
-    FASTER = 5
-    FASTEST = 20
+    NORMAL = 3
+    FAST = 6
+    FASTER = 15
+    FASTEST = 60
+
+
+# Display labels for speed (decoupled from internal multiplier)
+SPEED_DISPLAY: dict["GameSpeed", str] = {}  # Populated after enum definition
+
+
+def _init_speed_display() -> None:
+    SPEED_DISPLAY[GameSpeed.PAUSED] = "0x"
+    SPEED_DISPLAY[GameSpeed.NORMAL] = "1x"
+    SPEED_DISPLAY[GameSpeed.FAST] = "2x"
+    SPEED_DISPLAY[GameSpeed.FASTER] = "5x"
+    SPEED_DISPLAY[GameSpeed.FASTEST] = "20x"
+
+
+_init_speed_display()
 
 
 @dataclass(frozen=True)
@@ -85,7 +100,7 @@ class BreedingConfig:
     MIN_HAPPINESS_TO_BREED: int = 70
     MIN_AGE_DAYS: int = 3  # Must be adult
     MAX_AGE_DAYS: int = 30  # Seniors can't breed
-    GESTATION_DAYS: int = 3
+    GESTATION_DAYS: int = 2
     MIN_LITTER_SIZE: int = 1
     MAX_LITTER_SIZE: int = 4
     RECOVERY_DAYS: int = 2  # Before female can breed again
