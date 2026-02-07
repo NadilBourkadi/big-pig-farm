@@ -1,8 +1,11 @@
 """Guinea pig entity - the core creature of the game."""
 
-from datetime import datetime
+from __future__ import annotations
+
+import random
+from datetime import datetime, timedelta
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -10,8 +13,14 @@ from pydantic import BaseModel, Field
 from big_pig_farm.entities.genetics import (
     Genotype,
     Phenotype,
+    Rarity,
     calculate_phenotype,
 )
+
+if TYPE_CHECKING:
+    pass
+
+from big_pig_farm.data.config import BREEDING, ECONOMY, NEEDS, SIMULATION
 
 
 class Gender(str, Enum):
@@ -154,13 +163,10 @@ class GuineaPig(BaseModel):
         father_id: Optional[UUID] = None,
         mother_name: Optional[str] = None,
         father_name: Optional[str] = None,
-    ) -> "GuineaPig":
+    ) -> GuineaPig:
         """Create a new guinea pig with calculated phenotype."""
-        import random
-        from big_pig_farm.entities.genetics import Genotype as GenotypeClass
-
         if genotype is None:
-            genotype = GenotypeClass.random_common()
+            genotype = Genotype.random_common()
 
         phenotype = calculate_phenotype(genotype)
 
@@ -186,8 +192,6 @@ class GuineaPig(BaseModel):
     @property
     def age_group(self) -> AgeGroup:
         """Determine life stage based on age."""
-        from big_pig_farm.data.config import SIMULATION
-
         if self.age_days < SIMULATION.ADULT_AGE_DAYS:
             return AgeGroup.BABY
         elif self.age_days >= SIMULATION.SENIOR_AGE_DAYS:
@@ -212,8 +216,6 @@ class GuineaPig(BaseModel):
     @property
     def can_breed(self) -> bool:
         """Check if this pig can currently breed."""
-        from big_pig_farm.data.config import BREEDING, NEEDS
-
         if self.breeding_locked:
             return False
         if not self.is_adult:
@@ -223,10 +225,14 @@ class GuineaPig(BaseModel):
         if self.is_pregnant:
             return False
         if self.gender == Gender.FEMALE and self.last_birth_time:
-            # Check recovery period
-            from datetime import timedelta
+            # Check recovery period using age as proxy for game time
+            # last_birth_time is set to datetime.now() at birth, and age_days
+            # tracks game days. We compare using real-time elapsed since birth
+            # as a conservative approximation.
             recovery = timedelta(days=BREEDING.RECOVERY_DAYS)
-            # This is simplified - in game we'd use game time
+            elapsed = datetime.now() - self.last_birth_time
+            if elapsed < recovery:
+                return False
         return True
 
     @property
@@ -250,9 +256,6 @@ class GuineaPig(BaseModel):
 
     def get_value(self) -> int:
         """Calculate the monetary value of this guinea pig."""
-        from big_pig_farm.data.config import ECONOMY
-        from big_pig_farm.entities.genetics import Rarity
-
         base_value = ECONOMY.COMMON_PIG_VALUE
 
         multipliers = {
