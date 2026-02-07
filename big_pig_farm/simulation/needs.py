@@ -10,12 +10,12 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
     hours = game_minutes / 60.0
 
     # Apply personality modifiers
-    hunger_modifier = 1.5 if pig.has_trait(Personality.GREEDY) else 1.0
-    energy_modifier = 0.7 if pig.has_trait(Personality.LAZY) else 1.0
-    boredom_modifier = 1.5 if pig.has_trait(Personality.PLAYFUL) else 1.0
-    social_modifier = 1.3 if pig.has_trait(Personality.SOCIAL) else 1.0
+    hunger_modifier = NEEDS.GREEDY_HUNGER_MULT if pig.has_trait(Personality.GREEDY) else 1.0
+    energy_modifier = NEEDS.LAZY_ENERGY_MULT if pig.has_trait(Personality.LAZY) else 1.0
+    boredom_modifier = NEEDS.PLAYFUL_BOREDOM_MULT if pig.has_trait(Personality.PLAYFUL) else 1.0
+    social_modifier = NEEDS.SOCIAL_SOCIAL_MULT if pig.has_trait(Personality.SOCIAL) else 1.0
     if pig.has_trait(Personality.SHY):
-        social_modifier = 0.5
+        social_modifier = NEEDS.SHY_SOCIAL_MULT
 
     # Decay primary needs
     pig.needs.hunger -= NEEDS.HUNGER_DECAY * hours * hunger_modifier
@@ -25,31 +25,31 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
     # Happiness decay - faster when other needs are low
     happiness_decay = NEEDS.HAPPINESS_BASE_DECAY
     if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= 1.5
+        happiness_decay *= NEEDS.HUNGER_CRITICAL_HAPPINESS_MULT
     if pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= 1.5
+        happiness_decay *= NEEDS.THIRST_CRITICAL_HAPPINESS_MULT
     if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= 1.25
+        happiness_decay *= NEEDS.ENERGY_CRITICAL_HAPPINESS_MULT
 
     pig.needs.happiness -= happiness_decay * hours
 
     # Boredom increases over time
-    pig.needs.boredom += 3.0 * hours * boredom_modifier
-    if pig.needs.boredom > 70:
-        pig.needs.happiness -= 1.0 * hours
+    pig.needs.boredom += NEEDS.BOREDOM_DECAY * hours * boredom_modifier
+    if pig.needs.boredom > NEEDS.BOREDOM_EXTRA_HAPPINESS_THRESHOLD:
+        pig.needs.happiness -= NEEDS.BOREDOM_EXTRA_HAPPINESS_DRAIN * hours
 
     # Social need decay - reduced if near other pigs
-    nearby_pigs = _count_nearby_pigs(pig, game_state, radius=8.0)
+    nearby_pigs = _count_nearby_pigs(pig, game_state, radius=NEEDS.SOCIAL_RADIUS)
     if nearby_pigs > 0:
         # Being near other pigs satisfies social need passively
         # More pigs nearby = more social satisfaction
-        social_boost = min(nearby_pigs * 3.0, 8.0) * hours
+        social_boost = min(nearby_pigs * NEEDS.SOCIAL_BOOST_PER_PIG, NEEDS.SOCIAL_BOOST_CAP) * hours
         pig.needs.social += social_boost
         # Slower decay when not alone
-        pig.needs.social -= 0.5 * hours * social_modifier
+        pig.needs.social -= NEEDS.SOCIAL_DECAY_WITH_PIGS * hours * social_modifier
     else:
         # Alone - normal decay
-        pig.needs.social -= 2.0 * hours * social_modifier
+        pig.needs.social -= NEEDS.SOCIAL_DECAY_ALONE * hours * social_modifier
 
     # Health effects from critically low needs
     if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
@@ -75,7 +75,7 @@ def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state) ->
 
     if pig.behavior_state == BehaviorState.EATING:
         pig.needs.hunger += NEEDS.FOOD_RECOVERY * hours * 2
-        pig.needs.happiness += 2.0 * hours
+        pig.needs.happiness += NEEDS.EATING_HAPPINESS_BOOST * hours
 
     elif pig.behavior_state == BehaviorState.DRINKING:
         pig.needs.thirst += NEEDS.WATER_RECOVERY * hours * 2
@@ -86,12 +86,12 @@ def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state) ->
 
     elif pig.behavior_state == BehaviorState.PLAYING:
         pig.needs.happiness += NEEDS.PLAY_HAPPINESS_BOOST * hours
-        pig.needs.boredom -= 15.0 * hours
-        pig.needs.energy -= 1.0 * hours  # Playing uses energy
+        pig.needs.boredom -= NEEDS.BOREDOM_PLAY_RECOVERY * hours
+        pig.needs.energy -= NEEDS.PLAY_ENERGY_COST * hours  # Playing uses energy
 
     elif pig.behavior_state == BehaviorState.SOCIALIZING:
         pig.needs.happiness += NEEDS.SOCIAL_HAPPINESS_BOOST * hours
-        pig.needs.social += 10.0 * hours
+        pig.needs.social += NEEDS.SOCIAL_RECOVERY * hours
 
 
 def _count_nearby_pigs(pig: GuineaPig, game_state, radius: float) -> int:
@@ -142,20 +142,12 @@ def get_target_facility_for_need(need: str) -> list[FacilityType] | None:
 
 def calculate_overall_wellbeing(pig: GuineaPig) -> float:
     """Calculate an overall wellbeing score (0-100)."""
-    weights = {
-        "hunger": 0.25,
-        "thirst": 0.25,
-        "energy": 0.15,
-        "happiness": 0.20,
-        "health": 0.15,
-    }
-
     score = (
-        pig.needs.hunger * weights["hunger"]
-        + pig.needs.thirst * weights["thirst"]
-        + pig.needs.energy * weights["energy"]
-        + pig.needs.happiness * weights["happiness"]
-        + pig.needs.health * weights["health"]
+        pig.needs.hunger * NEEDS.WELLBEING_HUNGER_WEIGHT
+        + pig.needs.thirst * NEEDS.WELLBEING_THIRST_WEIGHT
+        + pig.needs.energy * NEEDS.WELLBEING_ENERGY_WEIGHT
+        + pig.needs.happiness * NEEDS.WELLBEING_HAPPINESS_WEIGHT
+        + pig.needs.health * NEEDS.WELLBEING_HEALTH_WEIGHT
     )
 
     return score

@@ -26,6 +26,7 @@ class NeedsConfig:
     CRITICAL_THRESHOLD: int = 20
     LOW_THRESHOLD: int = 40
     HIGH_THRESHOLD: int = 70
+    SATISFACTION_THRESHOLD: int = 90  # Pigs commit to an action until the need reaches this level
 
     # Health
     HEALTH_DRAIN_HUNGER: float = 0.3
@@ -40,6 +41,43 @@ class NeedsConfig:
     PLAY_HAPPINESS_BOOST: float = 15.0
     SOCIAL_HAPPINESS_BOOST: float = 10.0
 
+    # Boredom
+    BOREDOM_DECAY: float = 3.0                # per game hour
+    BOREDOM_EXTRA_HAPPINESS_THRESHOLD: int = 70
+    BOREDOM_EXTRA_HAPPINESS_DRAIN: float = 1.0
+    BOREDOM_PLAY_RECOVERY: float = 15.0
+    PLAY_ENERGY_COST: float = 1.0
+    SOCIAL_RECOVERY: float = 10.0
+
+    # Social
+    SOCIAL_RADIUS: float = 8.0                # distance to check nearby pigs
+    SOCIAL_BOOST_PER_PIG: float = 3.0         # per nearby pig (capped)
+    SOCIAL_BOOST_CAP: float = 8.0
+    SOCIAL_DECAY_WITH_PIGS: float = 0.5
+    SOCIAL_DECAY_ALONE: float = 2.0
+
+    # Happiness boosts during behavior
+    EATING_HAPPINESS_BOOST: float = 2.0
+
+    # Happiness multipliers when needs are critical
+    HUNGER_CRITICAL_HAPPINESS_MULT: float = 1.5
+    THIRST_CRITICAL_HAPPINESS_MULT: float = 1.5
+    ENERGY_CRITICAL_HAPPINESS_MULT: float = 1.25
+
+    # Personality modifiers
+    GREEDY_HUNGER_MULT: float = 1.5
+    LAZY_ENERGY_MULT: float = 0.7
+    PLAYFUL_BOREDOM_MULT: float = 1.5
+    SOCIAL_SOCIAL_MULT: float = 1.3
+    SHY_SOCIAL_MULT: float = 0.5
+
+    # Wellbeing weights
+    WELLBEING_HUNGER_WEIGHT: float = 0.25
+    WELLBEING_THIRST_WEIGHT: float = 0.25
+    WELLBEING_ENERGY_WEIGHT: float = 0.15
+    WELLBEING_HAPPINESS_WEIGHT: float = 0.20
+    WELLBEING_HEALTH_WEIGHT: float = 0.15
+
 
 @dataclass(frozen=True)
 class BreedingConfig:
@@ -51,6 +89,12 @@ class BreedingConfig:
     MIN_LITTER_SIZE: int = 1
     MAX_LITTER_SIZE: int = 4
     RECOVERY_DAYS: int = 2  # Before female can breed again
+    BREEDING_DISTANCE: float = 3.0      # Max distance for pigs to breed
+    BASE_BREEDING_CHANCE: float = 0.05  # 5% per check
+    BREEDING_DEN_BONUS: float = 0.10    # +10% with breeding den
+    HIGH_HAPPINESS_THRESHOLD: int = 80  # Threshold for happiness breeding bonus
+    HIGH_HAPPINESS_BONUS: float = 0.05  # +5% with high happiness
+    OLD_AGE_DEATH_RATE: float = 0.1     # Base death rate multiplier per game day past max age
 
 
 @dataclass(frozen=True)
@@ -188,6 +232,71 @@ class SimulationConfig:
     MAX_AGE_DAYS: int = 45
 
 
+@dataclass(frozen=True)
+class BehaviorConfig:
+    """Configuration for pig AI behavior decisions."""
+    # Separation thresholds (must be < blocking threshold for same state)
+    SEPARATION_BOTH_MOVING: float = 1.0   # Both pigs moving
+    SEPARATION_ONE_MOVING: float = 2.0    # One pig moving
+    MIN_PIG_DISTANCE: float = 3.0         # Both stationary
+
+    # Movement blocking distances
+    BLOCKING_DEFAULT: float = 2.5         # Default (stationary blocks moving)
+    BLOCKING_BOTH_MOVING: float = 1.5     # Both pigs have active paths
+
+    # Facility interaction
+    OCCUPANCY_RADIUS: float = 2.0         # Distance to check facility occupancy
+    FACILITY_NEARBY_RADIUS: float = 6.0   # Distance for counting nearby pigs
+    FACILITY_HEADING_RADIUS: float = 3.0  # Distance for counting pigs heading to facility
+    CROWDING_PENALTY: float = 25.0        # Scoring penalty per nearby pig
+    SCORING_RANDOM_VARIANCE: float = 3.0  # Random variance in facility scoring
+    UNCROWDED_CHANCE: float = 0.3         # Chance to prioritize uncrowded facility
+
+    # Blocked behavior
+    BLOCKED_TIME_ALTERNATIVE: float = 2.0  # Seconds blocked before trying alternative
+    BLOCKED_TIME_GIVE_UP: float = 5.0      # Seconds blocked before giving up
+    FAILED_COOLDOWN_CYCLES: int = 3        # Decision cycles to preserve failed list
+
+    # Decision thresholds
+    ENERGY_SLEEP_THRESHOLD: int = 30       # Energy level to seek sleep
+    EMERGENCY_WAKE_ENERGY: int = 15        # Min energy to wake from sleep for critical need
+    BOREDOM_PLAY_THRESHOLD: int = 30       # Boredom level to seek play
+    BOREDOM_KEEP_PLAYING: int = 10         # Boredom level to keep playing
+
+    # Resource consumption
+    RESOURCE_CONSUME_RATE: float = 0.5     # Rate of consuming facility resources
+    FACILITY_BONUS_SCALE: float = 10.0     # Scaling factor for facility bonuses
+
+    # Personality behavior probabilities
+    LAZY_SLEEP_CHANCE: float = 0.3
+    PLAYFUL_PLAY_CHANCE: float = 0.4
+    SOCIAL_SOCIALIZE_CHANCE: float = 0.3
+    WANDER_CHANCE: float = 0.8             # Wander vs idle when nothing to do
+    NO_PLAY_FACILITY_PLAY_CHANCE: float = 0.5  # Play vs wander when no facility
+
+    # Wandering
+    WANDER_ATTEMPTS: int = 20              # Random positions to try when wandering
+    WANDER_PIG_DISTANCE_WEIGHT: float = 0.5  # Weight of min pig distance in scoring
+
+    # Movement modifiers
+    TIRED_SPEED_MULT: float = 0.5          # Speed when energy < sleep threshold
+    BABY_SPEED_MULT: float = 0.7
+    DODGE_MAX_STEP: float = 1.0            # Max dodge step distance
+    WAYPOINT_REACHED: float = 0.1          # Distance to consider a waypoint reached
+
+    # Overlap handling
+    OVERLAP_EPSILON: float = 0.01          # Minimum distance before treating as zero
+    SEPARATION_PADDING: float = 0.1        # Extra padding when separating
+    PATH_VECTOR_EPSILON: float = 0.01      # Min path vector magnitude
+
+
+@dataclass(frozen=True)
+class FacilityInteractionConfig:
+    """Configuration for facility adjacency checks."""
+    ADJACENCY_DISTANCE: int = 1  # Orthogonal adjacency for facility arrival/consumption
+    DEFAULT_HIDEOUT_CAPACITY: int = 2
+
+
 # Singleton instances
 NEEDS = NeedsConfig()
 BREEDING = BreedingConfig()
@@ -198,3 +307,5 @@ BLOODLINE = BloodlineConfig()
 GENETICS = GeneticsConfig()
 PIGDEX = PigdexConfig()
 CONTRACTS = ContractConfig()
+BEHAVIOR = BehaviorConfig()
+FACILITY_INTERACTION = FacilityInteractionConfig()
