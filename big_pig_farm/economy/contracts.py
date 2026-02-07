@@ -50,6 +50,28 @@ class BreedingContract(BaseModel):
         return True
 
     @property
+    def breeding_hint(self) -> str:
+        """Hint about which bloodlines help produce the required traits."""
+        hints = []
+        if self.required_color == BaseColor.LIGHT_GOLDEN:
+            hints.append("Golden + Chocolate bloodlines")
+        elif self.required_color == BaseColor.GOLDEN:
+            hints.append("Golden bloodline (Tier 2)")
+        elif self.required_color == BaseColor.CHOCOLATE:
+            hints.append("Chocolate bloodline")
+
+        if self.required_pattern in (Pattern.DUTCH, Pattern.DALMATIAN):
+            hints.append("Spotted bloodline")
+
+        if self.required_intensity in (ColorIntensity.CHINCHILLA, ColorIntensity.HIMALAYAN):
+            hints.append("Silver bloodline (Tier 2)")
+
+        if self.required_roan == RoanType.ROAN:
+            hints.append("Roan bloodline (Tier 3)")
+
+        return " + ".join(hints) if hints else ""
+
+    @property
     def requirements_text(self) -> str:
         """Human-readable description of requirements."""
         parts = []
@@ -122,27 +144,66 @@ def generate_contracts(farm_tier: int, game_day: int) -> list[BreedingContract]:
 
     for _ in range(num_contracts):
         difficulty = random.choice(available_difficulties)
-        contract = _generate_single_contract(difficulty, game_day)
+        contract = _generate_single_contract(difficulty, game_day, farm_tier)
         contracts.append(contract)
 
     return contracts
 
 
-def _generate_single_contract(difficulty: ContractDifficulty, game_day: int) -> BreedingContract:
+def _filter_by_tier(values: list, tier_map: dict[object, int], farm_tier: int) -> list:
+    """Filter enum values to those available at the given farm tier."""
+    return [v for v in values if tier_map.get(v, 1) <= farm_tier]
+
+
+# Minimum farm tier required for each trait to appear in contracts
+COLOR_TIER_REQUIREMENTS: dict[BaseColor, int] = {
+    BaseColor.BLACK: 1,
+    BaseColor.CHOCOLATE: 1,
+    BaseColor.GOLDEN: 1,
+    BaseColor.LIGHT_GOLDEN: 2,
+}
+
+PATTERN_TIER_REQUIREMENTS: dict[Pattern, int] = {
+    Pattern.SOLID: 1,
+    Pattern.DUTCH: 1,
+    Pattern.DALMATIAN: 1,
+}
+
+INTENSITY_TIER_REQUIREMENTS: dict[ColorIntensity, int] = {
+    ColorIntensity.FULL: 1,
+    ColorIntensity.CHINCHILLA: 2,
+    ColorIntensity.HIMALAYAN: 2,
+}
+
+ROAN_TIER_REQUIREMENTS: dict[RoanType, int] = {
+    RoanType.NONE: 1,
+    RoanType.ROAN: 3,
+}
+
+
+def _generate_single_contract(
+    difficulty: ContractDifficulty, game_day: int, farm_tier: int
+) -> BreedingContract:
     """Generate a single contract of the given difficulty."""
-    required_color = random.choice(list(BaseColor))
+    available_colors = _filter_by_tier(list(BaseColor), COLOR_TIER_REQUIREMENTS, farm_tier)
+    required_color = random.choice(available_colors)
     required_pattern = None
     required_intensity = None
     required_roan = None
 
     if difficulty in (ContractDifficulty.MEDIUM, ContractDifficulty.HARD, ContractDifficulty.EXPERT):
-        required_pattern = random.choice(list(Pattern))
+        available_patterns = _filter_by_tier(list(Pattern), PATTERN_TIER_REQUIREMENTS, farm_tier)
+        required_pattern = random.choice(available_patterns)
 
     if difficulty in (ContractDifficulty.HARD, ContractDifficulty.EXPERT):
-        required_intensity = random.choice(list(ColorIntensity))
+        available_intensities = _filter_by_tier(
+            list(ColorIntensity), INTENSITY_TIER_REQUIREMENTS, farm_tier
+        )
+        required_intensity = random.choice(available_intensities)
 
     if difficulty == ContractDifficulty.EXPERT:
-        required_roan = random.choice(list(RoanType))
+        available_roans = _filter_by_tier(list(RoanType), ROAN_TIER_REQUIREMENTS, farm_tier)
+        required_roan = random.choice(available_roans)
 
     # Calculate reward based on difficulty
     reward_ranges = {

@@ -96,6 +96,8 @@ class ContractsScreen(Screen):
             f"Difficulty: {difficulty} | Reward: +{contract.reward} Squeaks (bonus)",
             f"Expires: Day {contract.deadline_day} ({days_left} days left)",
         ]
+        if contract.breeding_hint:
+            lines.append(f"Tip: {contract.breeding_hint}")
         return "\n".join(lines)
 
     def action_go_back(self) -> None:
