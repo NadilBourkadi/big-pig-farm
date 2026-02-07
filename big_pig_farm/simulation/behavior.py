@@ -127,12 +127,24 @@ class BehaviorController:
             self._start_wandering(pig)
             return
 
-        # If playing and still bored, keep playing
+        # If playing and still bored, keep playing — unless hunger/thirst critical
         if pig.behavior_state == BehaviorState.PLAYING and pig.needs.boredom > BEHAVIOR.BOREDOM_KEEP_PLAYING:
-            return  # Keep playing until boredom is satisfied
-        # If socializing and still need social, keep socializing
+            if (pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                    or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD):
+                pig.log_behavior("Stopped playing (hunger/thirst critical)")
+                pig.behavior_state = BehaviorState.IDLE
+                pig.target_description = None
+            else:
+                return  # Keep playing until boredom is satisfied
+        # If socializing and still need social, keep socializing — unless hunger/thirst critical
         if pig.behavior_state == BehaviorState.SOCIALIZING and pig.needs.social < NEEDS.SATISFACTION_THRESHOLD:
-            return  # Keep socializing until satisfied
+            if (pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                    or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD):
+                pig.log_behavior("Stopped socializing (hunger/thirst critical)")
+                pig.behavior_state = BehaviorState.IDLE
+                pig.target_description = None
+            else:
+                return  # Keep socializing until satisfied
 
         # Just finished playing/socializing - wander away
         if pig.behavior_state in (BehaviorState.PLAYING, BehaviorState.SOCIALIZING):
