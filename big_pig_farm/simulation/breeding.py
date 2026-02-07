@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from big_pig_farm.data.config import BREEDING, GENETICS
+from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
 from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
@@ -170,7 +170,7 @@ def _can_breed_together(male: GuineaPig, female: GuineaPig, game_state) -> bool:
 
     # Must be close enough
     distance = male.position.distance_to(female.position)
-    if distance > 3.0:
+    if distance > BREEDING.BREEDING_DISTANCE:
         return False
 
     # Check for inbreeding (warn but allow)
@@ -201,17 +201,17 @@ def _are_closely_related(pig1: GuineaPig, pig2: GuineaPig, game_state) -> bool:
 def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state) -> bool:
     """Attempt to start a breeding event. Returns True if successful."""
     # Random chance based on conditions
-    base_chance = 0.05  # 5% per check
+    base_chance = BREEDING.BASE_BREEDING_CHANCE
 
     # Bonus from breeding den
     breeding_dens = game_state.get_facilities_by_type(FacilityType.BREEDING_DEN)
     if breeding_dens:
-        base_chance += 0.10
+        base_chance += BREEDING.BREEDING_DEN_BONUS
 
     # Bonus from high happiness
     avg_happiness = (male.needs.happiness + female.needs.happiness) / 2
-    if avg_happiness > 80:
-        base_chance += 0.05
+    if avg_happiness > BREEDING.HIGH_HAPPINESS_THRESHOLD:
+        base_chance += BREEDING.HIGH_HAPPINESS_BONUS
 
     if random.random() > base_chance:
         return False
@@ -276,8 +276,6 @@ def register_pig_in_pigdex(game_state, pig: GuineaPig) -> None:
 
 def age_all_pigs(game_state, game_hours: float) -> list[GuineaPig]:
     """Age all guinea pigs. Returns list of pigs that died of old age."""
-    from big_pig_farm.data.config import SIMULATION
-
     game_days = game_hours / 24.0
     deaths = []
 
@@ -286,7 +284,7 @@ def age_all_pigs(game_state, game_hours: float) -> list[GuineaPig]:
 
         # Check for death from old age
         if pig.age_days >= SIMULATION.MAX_AGE_DAYS:
-            if random.random() < 0.1 * game_days:  # Increasing chance
+            if random.random() < BREEDING.OLD_AGE_DEATH_RATE * game_days:  # Increasing chance
                 deaths.append(pig)
 
     # Process deaths

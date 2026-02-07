@@ -5,7 +5,7 @@ import random
 from typing import Optional
 from uuid import UUID
 
-from big_pig_farm.data.config import NEEDS, SIMULATION
+from big_pig_farm.data.config import NEEDS, SIMULATION, BEHAVIOR, FACILITY_INTERACTION
 from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Personality, Position
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
@@ -14,16 +14,19 @@ from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facil
 class BehaviorController:
     """Controls guinea pig behavior and decision making."""
 
-    # Minimum distance between pigs (needs to be large enough to prevent sprite overlap)
-    # Sprites are ~5 chars wide, so need at least 2.5 units between pig centers
-    MIN_PIG_DISTANCE = 3.0
-
     def __init__(self, game_state):
         self.game_state = game_state
         self._decision_timers: dict[UUID, float] = {}
         self._blocked_timers: dict[UUID, float] = {}  # Track how long pigs have been blocked
         self._failed_facilities: dict[UUID, set[UUID]] = {}  # Track recently-failed facility IDs per pig
         self._failed_cooldowns: dict[UUID, int] = {}  # Decisions remaining before clearing failed list
+
+    def cleanup_dead_pig(self, pig_id: UUID) -> None:
+        """Remove tracking state for a pig that is no longer alive."""
+        self._decision_timers.pop(pig_id, None)
+        self._blocked_timers.pop(pig_id, None)
+        self._failed_facilities.pop(pig_id, None)
+        self._failed_cooldowns.pop(pig_id, None)
 
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
@@ -34,7 +37,7 @@ class BehaviorController:
         if timer >= SIMULATION.DECISION_INTERVAL_SECONDS:
             self._make_decision(pig)
             # Add small random offset to prevent synchronized decisions
-            timer = random.uniform(0, 0.5)
+            timer = random.uniform(0, SIMULATION.DECISION_INTERVAL_SECONDS / 4)
 
         self._decision_timers[pig.id] = timer
 
@@ -94,13 +97,13 @@ class BehaviorController:
 
         # If sleeping, wake up when energy full or when hunger/thirst is critical
         if pig.behavior_state == BehaviorState.SLEEPING:
-            if pig.needs.energy >= 90:
+            if pig.needs.energy >= NEEDS.SATISFACTION_THRESHOLD:
                 pig.log_behavior("Woke up (energy full)")
                 pig.behavior_state = BehaviorState.IDLE
                 pig.target_description = None
             elif ((pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
                     or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD)
-                    and pig.needs.energy >= 15):
+                    and pig.needs.energy >= BEHAVIOR.EMERGENCY_WAKE_ENERGY):
                 pig.log_behavior("Woke up (hunger/thirst critical)")
                 pig.behavior_state = BehaviorState.IDLE
                 pig.target_description = None
@@ -112,9 +115,9 @@ class BehaviorController:
         # pigs with both hunger and thirst critical oscillate forever between
         # food and water (Buridan's ass), because the needs cross each other's
         # critical threshold during recovery.
-        if pig.behavior_state == BehaviorState.EATING and pig.needs.hunger < 90:
+        if pig.behavior_state == BehaviorState.EATING and pig.needs.hunger < NEEDS.SATISFACTION_THRESHOLD:
             return
-        if pig.behavior_state == BehaviorState.DRINKING and pig.needs.thirst < 90:
+        if pig.behavior_state == BehaviorState.DRINKING and pig.needs.thirst < NEEDS.SATISFACTION_THRESHOLD:
             return
 
         # Just finished eating/drinking - wander away to make room for others
@@ -125,10 +128,10 @@ class BehaviorController:
             return
 
         # If playing and still bored, keep playing
-        if pig.behavior_state == BehaviorState.PLAYING and pig.needs.boredom > 10:
+        if pig.behavior_state == BehaviorState.PLAYING and pig.needs.boredom > BEHAVIOR.BOREDOM_KEEP_PLAYING:
             return  # Keep playing until boredom is satisfied
         # If socializing and still need social, keep socializing
-        if pig.behavior_state == BehaviorState.SOCIALIZING and pig.needs.social < 90:
+        if pig.behavior_state == BehaviorState.SOCIALIZING and pig.needs.social < NEEDS.SATISFACTION_THRESHOLD:
             return  # Keep socializing until satisfied
 
         # Just finished playing/socializing - wander away
@@ -141,7 +144,7 @@ class BehaviorController:
         # Check for urgent needs
         urgent_need = get_most_urgent_need(pig)
 
-        if urgent_need == "energy" and pig.needs.energy < 30:
+        if urgent_need == "energy" and pig.needs.energy < BEHAVIOR.ENERGY_SLEEP_THRESHOLD:
             pig.log_behavior(f"Tired (energy={pig.needs.energy:.0f}), seeking sleep")
             self._seek_sleep(pig)
             return
@@ -157,29 +160,29 @@ class BehaviorController:
             return
 
         # Boredom drives exploration/play
-        if pig.needs.boredom > 30:
+        if pig.needs.boredom > BEHAVIOR.BOREDOM_PLAY_THRESHOLD:
             pig.log_behavior(f"Bored ({pig.needs.boredom:.0f}), seeking play")
             self._seek_play(pig)
             return
 
         # Default behaviors based on personality
-        if pig.has_trait(Personality.LAZY) and random.random() < 0.3:
+        if pig.has_trait(Personality.LAZY) and random.random() < BEHAVIOR.LAZY_SLEEP_CHANCE:
             pig.log_behavior("Feeling lazy, going to sleep")
             self._seek_sleep(pig)
             return
 
-        if pig.has_trait(Personality.PLAYFUL) and random.random() < 0.4:
+        if pig.has_trait(Personality.PLAYFUL) and random.random() < BEHAVIOR.PLAYFUL_PLAY_CHANCE:
             pig.log_behavior("Feeling playful, seeking play")
             self._seek_play(pig)
             return
 
-        if pig.has_trait(Personality.SOCIAL) and random.random() < 0.3:
+        if pig.has_trait(Personality.SOCIAL) and random.random() < BEHAVIOR.SOCIAL_SOCIALIZE_CHANCE:
             pig.log_behavior("Feeling social, seeking friends")
             self._seek_social_interaction(pig)
             return
 
-        # Random wandering or idle (80% wander, 20% idle)
-        if random.random() < 0.8:
+        # Random wandering or idle
+        if random.random() < BEHAVIOR.WANDER_CHANCE:
             pig.log_behavior("Nothing urgent, wandering")
             pig.target_description = None
             self._start_wandering(pig)
@@ -282,7 +285,7 @@ class BehaviorController:
 
         # Use a smaller distance threshold for interaction point occupancy
         # This is less than MIN_PIG_DISTANCE since pigs can squeeze past each other
-        occupancy_radius = 2.0
+        occupancy_radius = BEHAVIOR.OCCUPANCY_RADIUS
 
         # Get all interaction points and filter to walkable/valid ones
         candidates = []
@@ -336,15 +339,6 @@ class BehaviorController:
         # can try a different facility instead of sending the pig to cluster
         return None
 
-    def _find_walkable_near(self, pos: tuple[int, int]) -> Optional[tuple[int, int]]:
-        """Find a walkable cell near the given position."""
-        x, y = pos
-        for dx, dy in [(0, -1), (-1, 0), (1, 0), (0, 1), (-1, -1), (1, -1), (-1, 1), (1, 1)]:
-            nx, ny = x + dx, y + dy
-            if self.game_state.farm.is_walkable(nx, ny):
-                return (nx, ny)
-        return None
-
     def _count_pigs_near_or_heading_to(self, pig: GuineaPig, facility: Facility) -> int:
         """Count pigs near or heading to a facility (excluding the given pig)."""
         fx, fy = facility.interaction_point
@@ -355,14 +349,14 @@ class BehaviorController:
                 continue
             # Check if pig is near the facility
             dist = other_pig.position.distance_to(facility_pos)
-            if dist < 6.0:
+            if dist < BEHAVIOR.FACILITY_NEARBY_RADIUS:
                 count += 1
             # Check if pig is heading toward this facility
             elif other_pig.target_facility_id == facility.id:
                 count += 1
             elif other_pig.target_position:
                 target_dist = other_pig.target_position.distance_to(facility_pos)
-                if target_dist < 3.0:
+                if target_dist < BEHAVIOR.FACILITY_HEADING_RADIUS:
                     count += 1
         return count
 
@@ -375,23 +369,18 @@ class BehaviorController:
             fx, fy = f.interaction_point
             dist = pig.position.distance_to(Position(x=float(fx), y=float(fy)))
             crowd = self._count_pigs_near_or_heading_to(pig, f)
-            return dist + (crowd * 25.0) + random.uniform(0, 3)
+            return dist + (crowd * BEHAVIOR.CROWDING_PENALTY) + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE)
 
         ranked = sorted(facilities, key=score)
 
-        # 30% chance to shuffle an uncrowded facility to the front
+        # Chance to shuffle an uncrowded facility to the front
         uncrowded = [f for f in ranked if self._count_pigs_near_or_heading_to(pig, f) == 0]
-        if uncrowded and random.random() < 0.3:
+        if uncrowded and random.random() < BEHAVIOR.UNCROWDED_CHANCE:
             pick = random.choice(uncrowded)
             ranked.remove(pick)
             ranked.insert(0, pick)
 
         return ranked
-
-    def _pick_facility_with_spread(self, pig: GuineaPig, facilities: list[Facility]) -> Optional[Facility]:
-        """Pick a facility from the list, preferring less crowded ones."""
-        ranked = self._rank_facilities_by_spread(pig, facilities)
-        return ranked[0] if ranked else None
 
     def _seek_sleep(self, pig: GuineaPig) -> None:
         """Find a place to sleep."""
@@ -455,7 +444,7 @@ class BehaviorController:
         pig.log_behavior("No reachable play facility, wandering playfully")
         pig.target_description = None
         self._start_wandering(pig)
-        if random.random() < 0.5:
+        if random.random() < BEHAVIOR.NO_PLAY_FACILITY_PLAY_CHANCE:
             pig.behavior_state = BehaviorState.PLAYING
             pig.target_description = "playing around"
 
@@ -501,8 +490,8 @@ class BehaviorController:
         tx, ty = target
         farm = self.game_state.farm
 
-        # Check cells at MIN_PIG_DISTANCE away (3 units) for proper spacing
-        spacing = int(self.MIN_PIG_DISTANCE)
+        # Check cells at MIN_PIG_DISTANCE away for proper spacing
+        spacing = int(BEHAVIOR.MIN_PIG_DISTANCE)
         adjacents = [
             (tx - spacing, ty), (tx + spacing, ty),
             (tx, ty - spacing), (tx, ty + spacing),
@@ -536,7 +525,7 @@ class BehaviorController:
         best_score = -1
 
         # Try multiple random positions and pick one away from the pig cluster
-        for _ in range(20):
+        for _ in range(BEHAVIOR.WANDER_ATTEMPTS):
             target = farm.find_random_walkable()
             if target and not self._is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
                 # Score based on distance from center of pig cluster (higher = better)
@@ -550,7 +539,7 @@ class BehaviorController:
                     min_pig_dist = min(min_pig_dist, dist)
 
                 # Combined score: distance from cluster + minimum pig distance
-                score = dist_from_cluster + min_pig_dist * 0.5
+                score = dist_from_cluster + min_pig_dist * BEHAVIOR.WANDER_PIG_DISTANCE_WEIGHT
 
                 if score > best_score:
                     best_score = score
@@ -570,30 +559,6 @@ class BehaviorController:
             if pig.path:
                 pig.target_position = Position(x=float(target[0]), y=float(target[1]))
 
-    def _find_nearest_facility(
-        self,
-        pig: GuineaPig,
-        facility_type: FacilityType,
-    ) -> Optional[Facility]:
-        """Find the nearest facility of a given type."""
-        facilities = self.game_state.get_facilities_by_type(facility_type)
-
-        if not facilities:
-            return None
-
-        # Filter out empty facilities for consumables
-        if facility_type in (FacilityType.FOOD_BOWL, FacilityType.WATER_BOTTLE, FacilityType.HAY_RACK):
-            facilities = [f for f in facilities if not f.is_empty]
-            if not facilities:
-                return None
-
-        # Find nearest by interaction point distance
-        def distance(f: Facility) -> float:
-            fx, fy = f.interaction_point
-            return pig.position.distance_to(Position(x=float(fx), y=float(fy)))
-
-        return min(facilities, key=distance)
-
     def _is_cell_occupied_by_pig(self, x: int, y: int, exclude_pig: Optional[GuineaPig] = None) -> bool:
         """Check if a cell is occupied by another guinea pig."""
         for other_pig in self.game_state.get_pigs_list():
@@ -604,7 +569,7 @@ class BehaviorController:
                 return True
         return False
 
-    def _is_position_blocked(self, target_x: float, target_y: float, exclude_pig: GuineaPig, min_distance: float = 2.5) -> bool:
+    def _is_position_blocked(self, target_x: float, target_y: float, exclude_pig: GuineaPig, min_distance: float = BEHAVIOR.BLOCKING_DEFAULT) -> bool:
         """Check if moving to a position would collide with another pig.
 
         Uses a reduced blocking radius against other pigs that are also
@@ -617,7 +582,7 @@ class BehaviorController:
             # If both pigs are actively moving, use a tighter radius so they
             # can squeeze past each other without visually overlapping
             if exclude_pig.path and other_pig.path:
-                effective_distance = 1.5
+                effective_distance = BEHAVIOR.BLOCKING_BOTH_MOVING
             else:
                 effective_distance = min_distance
             # Check distance to other pig
@@ -637,7 +602,7 @@ class BehaviorController:
                     continue
                 # Check if pig is near this interaction point and in a using state
                 dist = other_pig.position.distance_to(Position(x=float(point[0]), y=float(point[1])))
-                if dist < 2.0:
+                if dist < BEHAVIOR.OCCUPANCY_RADIUS:
                     # Check if actually using (not just passing by)
                     if other_pig.behavior_state in (BehaviorState.SLEEPING, BehaviorState.EATING,
                                                      BehaviorState.DRINKING, BehaviorState.PLAYING):
@@ -720,20 +685,20 @@ class BehaviorController:
                 # Both idle:   3.0 (MIN_PIG_DISTANCE)
                 both_moving = pig_a.path and pig_b.path
                 if both_moving:
-                    threshold = 1.0
+                    threshold = BEHAVIOR.SEPARATION_BOTH_MOVING
                 elif pig_a.path or pig_b.path:
-                    threshold = 2.0
+                    threshold = BEHAVIOR.SEPARATION_ONE_MOVING
                 else:
-                    threshold = self.MIN_PIG_DISTANCE
+                    threshold = BEHAVIOR.MIN_PIG_DISTANCE
 
                 dx = pig_b.position.x - pig_a.position.x
                 dy = pig_b.position.y - pig_a.position.y
                 distance = (dx * dx + dy * dy) ** 0.5
 
-                if distance < threshold and distance > 0.01:
+                if distance < threshold and distance > BEHAVIOR.OVERLAP_EPSILON:
                     # Calculate separation needed
                     overlap = threshold - distance
-                    separation = overlap / 2 + 0.1
+                    separation = overlap / 2 + BEHAVIOR.SEPARATION_PADDING
 
                     # Normalize direction
                     nx = dx / distance
@@ -753,10 +718,10 @@ class BehaviorController:
                         pig_b.position.x = new_bx
                         pig_b.position.y = new_by
 
-                elif distance <= 0.01:
+                elif distance <= BEHAVIOR.OVERLAP_EPSILON:
                     # Pigs are exactly on top of each other - push one in random direction
                     angle = random.random() * 2 * math.pi  # Random angle in radians
-                    push = self.MIN_PIG_DISTANCE / 2
+                    push = BEHAVIOR.MIN_PIG_DISTANCE / 2
                     new_x = pig_b.position.x + push * math.cos(angle)
                     new_y = pig_b.position.y + push * math.sin(angle)
                     if farm.is_walkable(int(new_x), int(new_y)):
@@ -777,7 +742,7 @@ class BehaviorController:
         pig.target_description = None
         self._blocked_timers[pig.id] = 0
         # Keep failed facilities for 3 decision cycles (~6 seconds) before retrying
-        self._failed_cooldowns[pig.id] = 3
+        self._failed_cooldowns[pig.id] = BEHAVIOR.FAILED_COOLDOWN_CYCLES
 
         if "Hideout" in desc or "sleep" in desc:
             # Sleep where standing — the hideouts are all occupied
@@ -798,12 +763,12 @@ class BehaviorController:
         Returns True if the pig successfully dodged.
         """
         farm = self.game_state.farm
-        move_dist = min(speed * delta_seconds, 1.0)  # Cap dodge step to 1 cell
+        move_dist = min(speed * delta_seconds, BEHAVIOR.DODGE_MAX_STEP)  # Cap dodge step
 
         # Calculate perpendicular directions (rotate 90 degrees both ways)
         perp_dirs = [(-path_dy, path_dx), (path_dy, -path_dx)]
         length = (path_dx * path_dx + path_dy * path_dy) ** 0.5
-        if length < 0.01:
+        if length < BEHAVIOR.PATH_VECTOR_EPSILON:
             return False
 
         for pdx, pdy in perp_dirs:
@@ -832,12 +797,12 @@ class BehaviorController:
         speed = SIMULATION.BASE_MOVE_SPEED
 
         # Reduce speed if tired
-        if pig.needs.energy < 30:
-            speed *= 0.5
+        if pig.needs.energy < BEHAVIOR.ENERGY_SLEEP_THRESHOLD:
+            speed *= BEHAVIOR.TIRED_SPEED_MULT
 
         # Babies are slower
         if pig.is_baby:
-            speed *= 0.7
+            speed *= BEHAVIOR.BABY_SPEED_MULT
 
         # Get next path point
         next_point = pig.path[0]
@@ -847,7 +812,7 @@ class BehaviorController:
         dy = target_y - pig.position.y
         distance = (dx * dx + dy * dy) ** 0.5
 
-        if distance < 0.1:
+        if distance < BEHAVIOR.WAYPOINT_REACHED:
             # Reached this waypoint - check if we can actually move there
             if not self._is_position_blocked(target_x, target_y, pig):
                 pig.position.x = target_x
@@ -871,11 +836,11 @@ class BehaviorController:
                         pig.target_description = f"{pig.target_description} (blocked)"
 
                     # After 2 seconds of being blocked, try to find an alternative facility
-                    if blocked_time > 2.0:
+                    if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
                         current_target = pig.target_position
                         if current_target and self._try_alternative_facility(pig, current_target):
                             self._blocked_timers[pig.id] = 0
-                        elif blocked_time > 5.0:
+                        elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
                             self._give_up_and_fallback(pig)
         else:
             # Calculate proposed new position
@@ -887,7 +852,7 @@ class BehaviorController:
                 new_y = pig.position.y + (dy / distance) * move_distance
 
             # Check if new position would collide with another pig
-            if not self._is_position_blocked(new_x, new_y, pig, min_distance=2.5):
+            if not self._is_position_blocked(new_x, new_y, pig, min_distance=BEHAVIOR.BLOCKING_DEFAULT):
                 pig.position.x = new_x
                 pig.position.y = new_y
                 # Clear blocked status and timer
@@ -913,7 +878,7 @@ class BehaviorController:
                     if current_target and self._try_alternative_facility(pig, current_target):
                         # Found alternative, reset blocked timer
                         self._blocked_timers[pig.id] = 0
-                    elif blocked_time > 5.0:
+                    elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
                         self._give_up_and_fallback(pig)
 
     def _update_current_behavior(self, pig: GuineaPig, delta_seconds: float) -> None:
@@ -942,10 +907,10 @@ class BehaviorController:
                 dx = abs(grid_pos[0] - ix)
                 dy = abs(grid_pos[1] - iy)
                 # Allow same cell (0,0) or orthogonally adjacent (1,0) or (0,1)
-                if (dx + dy) <= 1:
+                if (dx + dy) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE:
                     # Found a nearby facility - check what type and set state
                     if facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.HAY_RACK):
-                        if not facility.is_empty and pig.needs.hunger < 90:
+                        if not facility.is_empty and pig.needs.hunger < NEEDS.SATISFACTION_THRESHOLD:
                             pig.behavior_state = BehaviorState.EATING
                             pig.target_position = None
                             pig.target_description = f"eating at {facility.name}"
@@ -962,7 +927,7 @@ class BehaviorController:
                             self._failed_facilities[pig.id] = set()
                             return
                     elif facility.facility_type == FacilityType.WATER_BOTTLE:
-                        if not facility.is_empty and pig.needs.thirst < 90:
+                        if not facility.is_empty and pig.needs.thirst < NEEDS.SATISFACTION_THRESHOLD:
                             pig.behavior_state = BehaviorState.DRINKING
                             pig.target_position = None
                             pig.target_description = f"drinking at {facility.name}"
@@ -977,9 +942,9 @@ class BehaviorController:
                             self._failed_facilities[pig.id] = set()
                             return
                     elif facility.facility_type == FacilityType.HIDEOUT:
-                        if pig.needs.energy < 90:
+                        if pig.needs.energy < NEEDS.SATISFACTION_THRESHOLD:
                             # Check hideout capacity
-                            capacity = facility.info.get("capacity", 2)
+                            capacity = facility.info.capacity
                             pigs_using = self._count_pigs_using_facility(facility, pig)
                             if pigs_using < capacity:
                                 pig.behavior_state = BehaviorState.SLEEPING
@@ -1021,23 +986,23 @@ class BehaviorController:
 
         for facility in self.game_state.get_facilities_list():
             ix, iy = facility.interaction_point
-            if abs(grid_pos[0] - ix) <= 1 and abs(grid_pos[1] - iy) <= 1:
+            if abs(grid_pos[0] - ix) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE and abs(grid_pos[1] - iy) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE:
                 if pig.behavior_state == BehaviorState.EATING:
                     if facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.HAY_RACK):
-                        consumed = facility.consume(delta_seconds * 0.5)
+                        consumed = facility.consume(delta_seconds * BEHAVIOR.RESOURCE_CONSUME_RATE)
                         if consumed <= 0:
                             # Bowl is empty, find another or stop
                             pig.behavior_state = BehaviorState.IDLE
                         else:
                             # Apply health bonus from hay rack (fiber is good for digestion!)
                             if facility.facility_type == FacilityType.HAY_RACK:
-                                health_bonus = facility.info.get("health_bonus", 0)
-                                pig.needs.health = min(100, pig.needs.health + health_bonus * delta_seconds * 10)
+                                health_bonus = facility.info.health_bonus
+                                pig.needs.health = min(100, pig.needs.health + health_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         break
 
                 elif pig.behavior_state == BehaviorState.DRINKING:
                     if facility.facility_type == FacilityType.WATER_BOTTLE:
-                        consumed = facility.consume(delta_seconds * 0.5)
+                        consumed = facility.consume(delta_seconds * BEHAVIOR.RESOURCE_CONSUME_RATE)
                         if consumed <= 0:
                             pig.behavior_state = BehaviorState.IDLE
                         break
@@ -1045,22 +1010,22 @@ class BehaviorController:
                 elif pig.behavior_state == BehaviorState.SLEEPING:
                     if facility.facility_type == FacilityType.HIDEOUT:
                         # Sleeping in a hideout gives happiness bonus (cozy!)
-                        happiness_bonus = facility.info.get("happiness_bonus", 0)
+                        happiness_bonus = facility.info.happiness_bonus
                         if happiness_bonus:
-                            pig.needs.happiness = min(100, pig.needs.happiness + happiness_bonus * delta_seconds * 10)
+                            pig.needs.happiness = min(100, pig.needs.happiness + happiness_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         break
 
                 elif pig.behavior_state == BehaviorState.PLAYING:
                     if facility.facility_type in (FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL, FacilityType.PLAY_AREA):
                         # Apply facility-specific bonuses
-                        health_bonus = facility.info.get("health_bonus", 0)
-                        happiness_bonus = facility.info.get("happiness_bonus", 0)
-                        social_bonus = facility.info.get("social_bonus", 0)
+                        health_bonus = facility.info.health_bonus
+                        happiness_bonus = facility.info.happiness_bonus
+                        social_bonus = facility.info.social_bonus
 
                         if health_bonus:
-                            pig.needs.health = min(100, pig.needs.health + health_bonus * delta_seconds * 10)
+                            pig.needs.health = min(100, pig.needs.health + health_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         if happiness_bonus:
-                            pig.needs.happiness = min(100, pig.needs.happiness + happiness_bonus * delta_seconds * 10)
+                            pig.needs.happiness = min(100, pig.needs.happiness + happiness_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         if social_bonus:
-                            pig.needs.social = min(100, pig.needs.social + social_bonus * delta_seconds * 10)
+                            pig.needs.social = min(100, pig.needs.social + social_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         break
