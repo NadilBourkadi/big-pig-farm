@@ -4,6 +4,7 @@ from textual.app import ComposeResult
 from textual.widgets import Static
 from textual.reactive import reactive
 
+from big_pig_farm.data.config import SPEED_DISPLAY, GameSpeed
 from big_pig_farm.economy.currency import format_money
 from big_pig_farm.entities.facilities import FacilityType
 
@@ -40,8 +41,8 @@ class StatusBar(Static):
         # Pause/speed indicator
         if self.is_paused:
             speed_str = "⏸ PAUSED"
-        elif self.speed > 1:
-            speed_str = f"▶▶ {self.speed}x"
+        elif self.speed > GameSpeed.NORMAL.value:
+            speed_str = f"▶▶ {SPEED_DISPLAY.get(GameSpeed(self.speed), f'{self.speed}x')}"
         else:
             speed_str = "▶"
 
@@ -67,6 +68,7 @@ class StatusBar(Static):
         self.capacity = state.capacity
         self.is_paused = state.is_paused
         self.speed = state.speed.value
+        self._speed_enum = state.speed
 
         # Calculate food level (bowls + hay racks) and water level separately
         food_facilities = (

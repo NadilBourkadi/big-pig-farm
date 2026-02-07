@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from uuid import UUID
 
+from big_pig_farm.data.config import SPEED_DISPLAY
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.behavior import BehaviorController
 
@@ -36,7 +37,7 @@ class DebugLogger:
 
     def _write_snapshot(self, state: GameState, controller: BehaviorController) -> None:
         now = datetime.now().strftime("%H:%M:%S")
-        lines = [f"--- TICK {self._total_ticks} | {now} | speed={state.speed.value}x ---"]
+        lines = [f"--- TICK {self._total_ticks} | {now} | speed={SPEED_DISPLAY[state.speed]} ---"]
 
         for pig in state.get_pigs_list():
             n = pig.needs
