@@ -367,6 +367,23 @@ def breed(parent1: Genotype, parent2: Genotype, mutation_rate: float = 0.0) -> B
     return BreedResult(genotype=genotype, mutations=mutations)
 
 
+def carrier_summary(genotype: Genotype) -> str:
+    """Get a short summary of hidden carrier alleles in a genotype."""
+    carriers = []
+    g = genotype
+    if g.e_locus[0] != g.e_locus[1] and "e" in g.e_locus:
+        carriers.append("E/e")
+    if g.b_locus[0] != g.b_locus[1] and "b" in g.b_locus:
+        carriers.append("B/b")
+    if g.s_locus[0] != g.s_locus[1] and "s" in g.s_locus:
+        carriers.append("S/s")
+    if g.c_locus[0] != g.c_locus[1] and "ch" in g.c_locus:
+        carriers.append("C/ch")
+    if "R" in g.r_locus and "r" in g.r_locus:
+        carriers.append("R/r")
+    return ", ".join(carriers) if carriers else "None"
+
+
 def predict_offspring_probabilities(
     parent1: Genotype, parent2: Genotype
 ) -> dict[str, float]:

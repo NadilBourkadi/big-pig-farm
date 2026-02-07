@@ -3,17 +3,15 @@
 from typing import Optional
 
 from big_pig_farm.data.config import ECONOMY
+from big_pig_farm.economy.currency import add_money
 from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.genetics import Rarity
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
 
 
-def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> int:
-    """Calculate the sale value of a guinea pig."""
-    base_value = ECONOMY.COMMON_PIG_VALUE
-
-    # Rarity multiplier
+def get_rarity_multiplier(rarity: Rarity) -> float:
+    """Get the price multiplier for a given rarity."""
     multipliers = {
         Rarity.COMMON: 1.0,
         Rarity.UNCOMMON: ECONOMY.UNCOMMON_MULTIPLIER,
@@ -21,7 +19,15 @@ def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> in
         Rarity.VERY_RARE: ECONOMY.VERY_RARE_MULTIPLIER,
         Rarity.LEGENDARY: ECONOMY.LEGENDARY_MULTIPLIER,
     }
-    rarity_mult = multipliers.get(pig.phenotype.rarity, 1.0)
+    return multipliers.get(rarity, 1.0)
+
+
+def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> int:
+    """Calculate the sale value of a guinea pig."""
+    base_value = ECONOMY.COMMON_PIG_VALUE
+
+    # Rarity multiplier
+    rarity_mult = get_rarity_multiplier(pig.phenotype.rarity)
 
     # Age modifier (babies worth less, adults full value, seniors slightly less)
     if pig.is_baby:
@@ -49,8 +55,6 @@ def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> in
 
 def sell_pig(state: GameState, pig: GuineaPig) -> int:
     """Sell a guinea pig. Returns the total sale price (including contract bonus)."""
-    from big_pig_farm.economy.currency import add_money
-
     value = calculate_pig_value(pig, state)
 
     # Check for contract fulfillment
