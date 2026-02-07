@@ -1,11 +1,14 @@
 """Game engine - tick management and simulation loop."""
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import Callable, Optional
 
 from big_pig_farm.data.config import SIMULATION, TIME, GameSpeed
 from big_pig_farm.game.state import GameState
+
+logger = logging.getLogger(__name__)
 
 
 class GameEngine:
@@ -109,62 +112,7 @@ class GameEngine:
         for callback in self._tick_callbacks:
             try:
                 callback(delta_seconds)
-            except Exception as e:
+            except Exception:
                 # Log but don't crash the game loop
-                print(f"Tick callback error: {e}")
+                logger.exception("Tick callback error")
 
-    def calculate_offline_progress(self) -> dict:
-        """Calculate what happened while the game was closed.
-
-        Returns a summary dict of events that occurred.
-        """
-        now = datetime.now()
-        last_update = self.state.game_time.last_update
-        elapsed_seconds = (now - last_update).total_seconds()
-
-        # Cap at maximum offline time
-        max_offline_seconds = TIME.MAX_OFFLINE_HOURS * 3600
-        elapsed_seconds = min(elapsed_seconds, max_offline_seconds)
-
-        if elapsed_seconds < 60:  # Less than a minute, no offline progress
-            return {"skipped": True, "reason": "Too short"}
-
-        # Convert to game time
-        game_hours = elapsed_seconds / 3600  # Real hours
-
-        summary = {
-            "real_hours": elapsed_seconds / 3600,
-            "game_days": game_hours,  # At 1x, 1 real hour = 60 game minutes = 1 game hour
-            "events": [],
-            "births": 0,
-            "deaths": 0,
-            "income": 0,
-        }
-
-        # Simplified offline simulation
-        # We simulate in hourly chunks
-        hours_to_simulate = int(game_hours)
-
-        for _ in range(hours_to_simulate):
-            self._simulate_offline_hour(summary)
-
-        # Update game time
-        self.state.game_time.advance(game_hours * 60)
-
-        return summary
-
-    def _simulate_offline_hour(self, summary: dict) -> None:
-        """Simulate one hour of offline progression."""
-        from big_pig_farm.simulation.needs import update_all_needs
-        from big_pig_farm.simulation.breeding import check_breeding_opportunities
-
-        # Update needs for all pigs (simplified)
-        for pig in self.state.get_pigs_list():
-            update_all_needs(pig, 60.0, self.state)  # 60 game minutes
-
-        # Check for breeding
-        births = check_breeding_opportunities(self.state)
-        summary["births"] += births
-
-        # Passive income (if any facilities generate it)
-        # This would be expanded based on facilities
