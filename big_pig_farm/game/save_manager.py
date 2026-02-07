@@ -94,6 +94,7 @@ class SaveManager:
                 ("last_birth_age", "REAL"),
                 ("partner_genotype_json", "TEXT"),
                 ("partner_name", "TEXT"),
+                ("marked_for_sale", "INTEGER DEFAULT 0"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE guinea_pigs ADD COLUMN {col} {typedef}")
@@ -230,8 +231,8 @@ class SaveManager:
                         position_x, position_y, is_pregnant, pregnancy_days,
                         partner_id, last_birth_age, mother_id, father_id,
                         origin_tag, breeding_locked, mother_name, father_name,
-                        partner_genotype_json, partner_name
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        partner_genotype_json, partner_name, marked_for_sale
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(pig.id),
                     pig.name,
@@ -256,6 +257,7 @@ class SaveManager:
                     pig.father_name,
                     pig.partner_genotype.model_dump_json() if pig.partner_genotype else None,
                     pig.partner_name,
+                    1 if pig.marked_for_sale else 0,
                 ))
 
             # Save facilities
@@ -390,6 +392,8 @@ class SaveManager:
                 father_name = row["father_name"] if "father_name" in row_keys else None
                 last_birth_age = row["last_birth_age"] if "last_birth_age" in row_keys else None
 
+                marked_for_sale = bool(row["marked_for_sale"]) if "marked_for_sale" in row_keys else False
+
                 # Load partner genotype stored at conception (for pregnancy survival)
                 partner_genotype = None
                 if "partner_genotype_json" in row_keys and row["partner_genotype_json"]:
@@ -421,6 +425,7 @@ class SaveManager:
                     father_id=UUID(row["father_id"]) if row["father_id"] else None,
                     origin_tag=origin_tag,
                     breeding_locked=breeding_locked,
+                    marked_for_sale=marked_for_sale,
                     mother_name=mother_name,
                     father_name=father_name,
                 )

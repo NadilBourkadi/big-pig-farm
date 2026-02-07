@@ -140,6 +140,7 @@ class GuineaPig(BaseModel):
 
     # Breeding control
     breeding_locked: bool = False  # If True, pig won't auto-breed
+    marked_for_sale: bool = False  # If True, pig will be auto-sold when it reaches adulthood
 
     # Origin info (e.g., "Spotted Bloodline" for bloodline pigs)
     origin_tag: Optional[str] = None
