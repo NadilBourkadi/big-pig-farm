@@ -32,9 +32,9 @@ _init_speed_display()
 class NeedsConfig:
     """Configuration for guinea pig needs decay and thresholds."""
     # Decay rates per game hour
-    HUNGER_DECAY: float = 3.5
-    THIRST_DECAY: float = 4.5
-    ENERGY_DECAY: float = 2.0
+    HUNGER_DECAY: float = 1.5
+    THIRST_DECAY: float = 2.0
+    ENERGY_DECAY: float = 1.5
     HAPPINESS_BASE_DECAY: float = 2.0
 
     # Thresholds
@@ -283,7 +283,7 @@ class BehaviorConfig:
     BOREDOM_KEEP_PLAYING: int = 10         # Boredom level to keep playing
 
     # Resource consumption
-    RESOURCE_CONSUME_RATE: float = 0.5     # Rate of consuming facility resources
+    RESOURCE_CONSUME_RATE: float = 0.15    # Rate of consuming facility resources
     FACILITY_BONUS_SCALE: float = 10.0     # Scaling factor for facility bonuses
 
     # Personality behavior probabilities

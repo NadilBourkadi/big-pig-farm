@@ -64,7 +64,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
         size=FacilitySize(width=2, height=1),
         base_cost=20,
         description="Provides food to reduce hunger",
-        capacity=100,
+        capacity=200,
         refill_cost=5,
     ),
     FacilityType.WATER_BOTTLE: FacilityInfo(
@@ -72,7 +72,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
         size=FacilitySize(width=1, height=2),
         base_cost=20,
         description="Provides water for hydration",
-        capacity=100,
+        capacity=200,
         refill_cost=2,
     ),
     FacilityType.HAY_RACK: FacilityInfo(
@@ -80,7 +80,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
         size=FacilitySize(width=2, height=1),
         base_cost=40,
         description="Fiber source, +5% health bonus",
-        capacity=100,
+        capacity=200,
         health_bonus=0.05,
     ),
     FacilityType.HIDEOUT: FacilityInfo(
