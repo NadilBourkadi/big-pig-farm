@@ -1,5 +1,6 @@
 """Farm grid and spatial management with A* pathfinding."""
 
+import random
 from enum import Enum
 from typing import Optional
 from uuid import UUID
@@ -33,6 +34,11 @@ class FarmGrid(BaseModel):
     tier: int = 1
     cells: list[list[Cell]] = Field(default_factory=list)
 
+    # Cached list of walkable interior positions (invalidated on grid changes)
+    _walkable_cache: Optional[list[tuple[int, int]]] = None
+
+    model_config = {"arbitrary_types_allowed": True}
+
     def model_post_init(self, __context) -> None:
         """Initialize grid cells after model creation."""
         if not self.cells:
@@ -41,6 +47,11 @@ class FarmGrid(BaseModel):
                 for _ in range(self.height)
             ]
             self._add_border_walls()
+        self._walkable_cache = None
+
+    def _invalidate_walkable_cache(self) -> None:
+        """Invalidate the cached list of walkable positions."""
+        self._walkable_cache = None
 
     def _add_border_walls(self) -> None:
         """Add walls around the farm perimeter."""
@@ -55,6 +66,8 @@ class FarmGrid(BaseModel):
             self.cells[y][0].is_walkable = False
             self.cells[y][self.width - 1].cell_type = CellType.WALL
             self.cells[y][self.width - 1].is_walkable = False
+
+        self._invalidate_walkable_cache()
 
     @classmethod
     def create_starter(cls) -> "FarmGrid":
@@ -199,6 +212,7 @@ class FarmGrid(BaseModel):
             # Interaction point is adjacent, should remain walkable
             pass
 
+        self._invalidate_walkable_cache()
         return True
 
     def remove_facility(self, facility: Facility) -> None:
@@ -207,6 +221,7 @@ class FarmGrid(BaseModel):
             if self.is_valid_position(cell_x, cell_y):
                 self.cells[cell_y][cell_x].facility_id = None
                 self.cells[cell_y][cell_x].is_walkable = True
+        self._invalidate_walkable_cache()
 
     def get_neighbors(self, x: int, y: int) -> list[tuple[int, int]]:
         """Get walkable neighboring cells (4-directional)."""
@@ -288,53 +303,14 @@ class FarmGrid(BaseModel):
 
     def find_random_walkable(self) -> Optional[tuple[int, int]]:
         """Find a random walkable position on the grid."""
-        import random
+        if self._walkable_cache is None:
+            self._walkable_cache = [
+                (x, y)
+                for y in range(1, self.height - 1)
+                for x in range(1, self.width - 1)
+                if self.is_walkable(x, y)
+            ]
 
-        walkable = []
-        for y in range(1, self.height - 1):
-            for x in range(1, self.width - 1):
-                if self.is_walkable(x, y):
-                    walkable.append((x, y))
-
-        if walkable:
-            return random.choice(walkable)
+        if self._walkable_cache:
+            return random.choice(self._walkable_cache)
         return None
-
-    def upgrade_tier(self, new_tier: int) -> bool:
-        """Upgrade the farm to a new tier with larger size."""
-        if new_tier <= self.tier or new_tier > len(FARM_TIERS):
-            return False
-
-        tier_info = FARM_TIERS[new_tier - 1]
-        new_width = tier_info.width
-        new_height = tier_info.height
-
-        # Create new larger grid
-        new_cells = [
-            [Cell() for _ in range(new_width)]
-            for _ in range(new_height)
-        ]
-
-        # Copy existing cells (centered in new grid)
-        offset_x = (new_width - self.width) // 2
-        offset_y = (new_height - self.height) // 2
-
-        for y in range(self.height):
-            for x in range(self.width):
-                new_y = y + offset_y
-                new_x = x + offset_x
-                if 0 <= new_x < new_width and 0 <= new_y < new_height:
-                    new_cells[new_y][new_x] = self.cells[y][x]
-
-        self.width = new_width
-        self.height = new_height
-        self.tier = new_tier
-        self.cells = new_cells
-        self._add_border_walls()
-
-        return True
-
-    @property
-    def capacity(self) -> int:
-        """Get the pig capacity for current tier."""
-        return FARM_TIERS[self.tier - 1].capacity
