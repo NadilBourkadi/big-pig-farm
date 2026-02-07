@@ -121,9 +121,5 @@ class PigdexScreen(Screen):
         yield Static(f"Milestones: {' | '.join(milestones)}", id="pigdex-footer-info")
         yield Footer()
 
-    def on_screen_resume(self) -> None:
-        """Refresh display when returning to this screen."""
-        self.recompose()
-
     def action_go_back(self) -> None:
         self.app.pop_screen()

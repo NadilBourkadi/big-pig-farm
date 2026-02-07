@@ -233,4 +233,3 @@ class PigDetailScreen(Screen):
         self.pig.breeding_locked = not self.pig.breeding_locked
         status = "locked" if self.pig.breeding_locked else "unlocked"
         self.notify(f"Breeding {status}")
-        self.recompose()
