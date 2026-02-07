@@ -6,6 +6,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION
 from big_pig_farm.data.names import generate_unique_name
+from big_pig_farm.economy.market import sell_pig
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
 from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
 from big_pig_farm.entities.facilities import FacilityType
@@ -328,3 +329,18 @@ def age_all_pigs(game_state, game_hours: float) -> list[GuineaPig]:
         )
 
     return deaths
+
+
+def sell_marked_adults(game_state) -> list[tuple[str, int, UUID]]:
+    """Auto-sell pigs that were marked for sale and have reached adulthood.
+
+    Returns list of (name, sale_total, pig_id) for each pig sold.
+    """
+    sold = []
+    for pig in game_state.get_pigs_list():
+        if pig.marked_for_sale and not pig.is_baby:
+            name = pig.name
+            pig_id = pig.id
+            total = sell_pig(game_state, pig)
+            sold.append((name, total, pig_id))
+    return sold

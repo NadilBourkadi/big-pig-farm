@@ -14,7 +14,7 @@ from big_pig_farm.game.save_manager import SaveManager
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import update_all_needs
-from big_pig_farm.simulation.breeding import advance_pregnancies, age_all_pigs, check_breeding_opportunities, register_pig_in_pigdex
+from big_pig_farm.simulation.breeding import advance_pregnancies, age_all_pigs, check_breeding_opportunities, register_pig_in_pigdex, sell_marked_adults
 from big_pig_farm.economy.contracts import generate_contracts
 from big_pig_farm.ui.screens.main_game import MainGameScreen
 
@@ -150,6 +150,12 @@ class BigPigFarmApp(App):
         deaths = age_all_pigs(self.state, game_hours)
         for dead_pig in deaths:
             self.behavior_controller.cleanup_dead_pig(dead_pig.id)
+
+        # Auto-sell marked pigs that reached adulthood
+        sold_pigs = sell_marked_adults(self.state)
+        for pig_name, total, pig_id in sold_pigs:
+            self.behavior_controller.cleanup_dead_pig(pig_id)
+            self.notify(f"{pig_name} grew up and was auto-sold for ${total}!")
 
         # Check for breeding
         check_breeding_opportunities(self.state)
