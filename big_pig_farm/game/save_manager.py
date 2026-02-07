@@ -78,7 +78,7 @@ class SaveManager:
                     is_pregnant INTEGER NOT NULL,
                     pregnancy_days REAL NOT NULL,
                     partner_id TEXT,
-                    last_birth_time TEXT,
+                    last_birth_age REAL,
                     mother_id TEXT,
                     father_id TEXT,
                     origin_tag TEXT
@@ -91,6 +91,7 @@ class SaveManager:
                 ("breeding_locked", "INTEGER DEFAULT 0"),
                 ("mother_name", "TEXT"),
                 ("father_name", "TEXT"),
+                ("last_birth_age", "REAL"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE guinea_pigs ADD COLUMN {col} {typedef}")
@@ -225,7 +226,7 @@ class SaveManager:
                         id, name, gender, age_days, birth_time, genotype_json,
                         personality_json, needs_json, behavior_state,
                         position_x, position_y, is_pregnant, pregnancy_days,
-                        partner_id, last_birth_time, mother_id, father_id,
+                        partner_id, last_birth_age, mother_id, father_id,
                         origin_tag, breeding_locked, mother_name, father_name
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -243,7 +244,7 @@ class SaveManager:
                     1 if pig.is_pregnant else 0,
                     pig.pregnancy_days,
                     str(pig.partner_id) if pig.partner_id else None,
-                    pig.last_birth_time.isoformat() if pig.last_birth_time else None,
+                    pig.last_birth_age,
                     str(pig.mother_id) if pig.mother_id else None,
                     str(pig.father_id) if pig.father_id else None,
                     pig.origin_tag,
@@ -382,6 +383,7 @@ class SaveManager:
                 breeding_locked = bool(row["breeding_locked"]) if "breeding_locked" in row_keys else False
                 mother_name = row["mother_name"] if "mother_name" in row_keys else None
                 father_name = row["father_name"] if "father_name" in row_keys else None
+                last_birth_age = row["last_birth_age"] if "last_birth_age" in row_keys else None
 
                 pig = GuineaPig(
                     id=UUID(row["id"]),
@@ -398,7 +400,7 @@ class SaveManager:
                     is_pregnant=bool(row["is_pregnant"]),
                     pregnancy_days=row["pregnancy_days"],
                     partner_id=UUID(row["partner_id"]) if row["partner_id"] else None,
-                    last_birth_time=datetime.fromisoformat(row["last_birth_time"]) if row["last_birth_time"] else None,
+                    last_birth_age=last_birth_age,
                     mother_id=UUID(row["mother_id"]) if row["mother_id"] else None,
                     father_id=UUID(row["father_id"]) if row["father_id"] else None,
                     origin_tag=origin_tag,

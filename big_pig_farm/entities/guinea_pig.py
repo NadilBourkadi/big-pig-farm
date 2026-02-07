@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID, uuid4
@@ -128,7 +128,7 @@ class GuineaPig(BaseModel):
     is_pregnant: bool = False
     pregnancy_days: float = 0.0
     partner_id: Optional[UUID] = None
-    last_birth_time: Optional[datetime] = None
+    last_birth_age: Optional[float] = None
 
     # Family
     mother_id: Optional[UUID] = None
@@ -224,14 +224,8 @@ class GuineaPig(BaseModel):
             return False
         if self.is_pregnant:
             return False
-        if self.gender == Gender.FEMALE and self.last_birth_time:
-            # Check recovery period using age as proxy for game time
-            # last_birth_time is set to datetime.now() at birth, and age_days
-            # tracks game days. We compare using real-time elapsed since birth
-            # as a conservative approximation.
-            recovery = timedelta(days=BREEDING.RECOVERY_DAYS)
-            elapsed = datetime.now() - self.last_birth_time
-            if elapsed < recovery:
+        if self.gender == Gender.FEMALE and self.last_birth_age is not None:
+            if self.age_days - self.last_birth_age < BREEDING.RECOVERY_DAYS:
                 return False
         return True
 

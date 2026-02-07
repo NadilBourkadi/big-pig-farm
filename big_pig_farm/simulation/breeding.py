@@ -1,7 +1,6 @@
 """Reproduction, pregnancy, and birth mechanics."""
 
 import random
-from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -126,7 +125,7 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     # Reset mother's pregnancy state
     mother.is_pregnant = False
     mother.pregnancy_days = 0.0
-    mother.last_birth_time = datetime.now()
+    mother.last_birth_age = mother.age_days
     mother.partner_id = None
 
     # Log event
