@@ -24,6 +24,7 @@ class PigListScreen(Screen):
         ("s", "sell_pig", "Sell"),
         ("r", "rename_pig", "Rename"),
         ("l", "toggle_breeding_lock", "Lock"),
+        ("m", "toggle_mark_sale", "Mark"),
     ]
 
     DEFAULT_CSS = """
@@ -65,7 +66,7 @@ class PigListScreen(Screen):
         self._table = DataTable(id="pig-table")
         yield self._table
 
-        yield Static("V = View | F = Follow | L = Lock | S = Sell", id="pig-footer-info")
+        yield Static("V = View | F = Follow | L = Lock | M = Mark | S = Sell", id="pig-footer-info")
 
         yield Footer()
 
@@ -90,7 +91,9 @@ class PigListScreen(Screen):
             value = calculate_pig_value(pig, self.state)
 
             # Breeding status column
-            if pig.breeding_locked:
+            if pig.is_baby and pig.marked_for_sale:
+                breed_status = "Sell@Adult"
+            elif pig.breeding_locked:
                 breed_status = "LOCKED"
             elif pig.is_pregnant:
                 breed_status = "Pregnant"
@@ -161,6 +164,19 @@ class PigListScreen(Screen):
             status = "locked" if pig.breeding_locked else "unlocked"
             self.notify(f"{pig.name} breeding {status}")
             self._refresh_table()
+
+    def action_toggle_mark_sale(self) -> None:
+        """Toggle auto-sell mark on the selected pig."""
+        pig = self._get_selected_pig()
+        if not pig:
+            return
+        if not pig.is_baby:
+            self.notify("Only baby pigs can be marked for auto-sell", severity="warning")
+            return
+        pig.marked_for_sale = not pig.marked_for_sale
+        status = "marked for auto-sell" if pig.marked_for_sale else "unmarked"
+        self.notify(f"{pig.name} {status}")
+        self._refresh_table()
 
     def action_follow_pig(self) -> None:
         """Follow the selected pig on the main screen."""

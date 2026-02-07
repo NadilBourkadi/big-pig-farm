@@ -21,6 +21,7 @@ class PigDetailScreen(Screen):
         ("q", "go_back", "Back"),
         ("f", "follow_pig", "Follow"),
         ("l", "toggle_lock", "Lock"),
+        ("m", "toggle_mark_sale", "Mark"),
     ]
 
     DEFAULT_CSS = """
@@ -97,6 +98,10 @@ class PigDetailScreen(Screen):
                     yield Static(f"  Status: Ready to breed")
                 elif not pig.is_adult:
                     yield Static(f"  Status: Too young (must be 3+ days)")
+                    if pig.marked_for_sale:
+                        yield Static(f"  Auto-sell: Will be sold at adulthood (press M to cancel)")
+                    else:
+                        yield Static(f"  Auto-sell: Off (press M to mark)")
                 else:
                     yield Static(f"  Status: Not ready (needs higher happiness)")
 
@@ -233,3 +238,12 @@ class PigDetailScreen(Screen):
         self.pig.breeding_locked = not self.pig.breeding_locked
         status = "locked" if self.pig.breeding_locked else "unlocked"
         self.notify(f"Breeding {status}")
+
+    def action_toggle_mark_sale(self) -> None:
+        """Toggle auto-sell mark on this pig."""
+        if not self.pig.is_baby:
+            self.notify("Only baby pigs can be marked for auto-sell", severity="warning")
+            return
+        self.pig.marked_for_sale = not self.pig.marked_for_sale
+        status = "marked for auto-sell" if self.pig.marked_for_sale else "unmarked"
+        self.notify(f"{self.pig.name} {status}")
