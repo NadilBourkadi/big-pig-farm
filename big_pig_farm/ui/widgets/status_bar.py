@@ -5,6 +5,7 @@ from textual.widgets import Static
 from textual.reactive import reactive
 
 from big_pig_farm.economy.currency import format_money
+from big_pig_farm.entities.facilities import FacilityType
 
 
 class StatusBar(Static):
@@ -68,7 +69,6 @@ class StatusBar(Static):
         self.speed = state.speed.value
 
         # Calculate food level (bowls + hay racks) and water level separately
-        from big_pig_farm.entities.facilities import FacilityType
         food_facilities = (
             state.get_facilities_by_type(FacilityType.FOOD_BOWL) +
             state.get_facilities_by_type(FacilityType.HAY_RACK)

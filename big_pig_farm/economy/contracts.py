@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
+from big_pig_farm.data.config import CONTRACTS
 from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
 from big_pig_farm.entities.guinea_pig import GuineaPig
 
@@ -100,14 +101,11 @@ class ContractBoard(BaseModel):
 
     def needs_refresh(self, game_day: int) -> bool:
         """Check if contracts should be refreshed."""
-        from big_pig_farm.data.config import CONTRACTS
         return game_day - self.last_refresh_day >= CONTRACTS.REFRESH_INTERVAL_DAYS
 
 
 def generate_contracts(farm_tier: int, game_day: int) -> list[BreedingContract]:
     """Generate a set of contracts appropriate for the farm tier."""
-    from big_pig_farm.data.config import CONTRACTS
-
     contracts = []
     num_contracts = min(CONTRACTS.MAX_ACTIVE_CONTRACTS, max(2, farm_tier))
 
@@ -132,8 +130,6 @@ def generate_contracts(farm_tier: int, game_day: int) -> list[BreedingContract]:
 
 def _generate_single_contract(difficulty: ContractDifficulty, game_day: int) -> BreedingContract:
     """Generate a single contract of the given difficulty."""
-    from big_pig_farm.data.config import CONTRACTS
-
     required_color = random.choice(list(BaseColor))
     required_pattern = None
     required_intensity = None

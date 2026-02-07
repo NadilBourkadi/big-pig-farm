@@ -8,7 +8,9 @@ from textual.widgets import Static, Footer
 from big_pig_farm.economy.market import calculate_pig_value
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.genetics import carrier_summary
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.needs import get_most_urgent_need
 
 
 class PigDetailScreen(Screen):
@@ -145,25 +147,8 @@ class PigDetailScreen(Screen):
         lines.append(f"  Genotype: E({g.e_locus[0]}/{g.e_locus[1]}) B({g.b_locus[0]}/{g.b_locus[1]}) S({g.s_locus[0]}/{g.s_locus[1]}) C({g.c_locus[0]}/{g.c_locus[1]}) R({g.r_locus[0]}/{g.r_locus[1]})")
 
         # Carrier summary
-        carriers = []
-        if g.e_locus[0] != g.e_locus[1] and "e" in g.e_locus:
-            carriers.append(f"Golden (E/e)")
-        if g.b_locus[0] != g.b_locus[1] and "b" in g.b_locus:
-            carriers.append(f"Chocolate (B/b)")
-        if g.s_locus[0] != g.s_locus[1] and "s" in g.s_locus:
-            carriers.append(f"Spotted (S/s)")
-        if g.c_locus[0] != g.c_locus[1] and "ch" in g.c_locus:
-            carriers.append(f"Chinchilla (C/ch)")
-        if "R" in g.r_locus:
-            if g.r_locus[0] == "R" and g.r_locus[1] == "R":
-                carriers.append(f"Roan (R/R)")
-            elif "r" in g.r_locus:
-                carriers.append(f"Roan (R/r)")
-
-        if carriers:
-            lines.append(f"  Carries: {', '.join(carriers)}")
-        else:
-            lines.append(f"  Carries: No hidden alleles")
+        summary = carrier_summary(g)
+        lines.append(f"  Carries: {summary if summary != 'None' else 'No hidden alleles'}")
 
         return "\n".join(lines)
 
@@ -218,7 +203,6 @@ class PigDetailScreen(Screen):
             lines.append(f"  Path: None")
 
         # Most urgent need
-        from big_pig_farm.simulation.needs import get_most_urgent_need
         urgent = get_most_urgent_need(pig)
         lines.append(f"  Urgent need: {urgent}")
 
@@ -249,6 +233,4 @@ class PigDetailScreen(Screen):
         self.pig.breeding_locked = not self.pig.breeding_locked
         status = "locked" if self.pig.breeding_locked else "unlocked"
         self.notify(f"Breeding {status}")
-        # Refresh by popping and re-pushing (simple approach)
-        self.app.pop_screen()
-        self.app.push_screen(PigDetailScreen(self.state, self.pig))
+        self.recompose()

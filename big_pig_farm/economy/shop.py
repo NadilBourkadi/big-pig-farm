@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from big_pig_farm.data.config import ECONOMY, FARM_TIERS
+from big_pig_farm.economy.currency import add_money, spend_money
 from big_pig_farm.entities.facilities import FacilityType, FACILITY_INFO, Facility
 from big_pig_farm.game.state import GameState
 
@@ -199,8 +200,6 @@ def get_shop_items(category: Optional[ShopCategory] = None, farm_tier: int = 1) 
 
 def purchase_item(state: GameState, item: ShopItem, position: Optional[tuple[int, int]] = None) -> bool:
     """Attempt to purchase a shop item. Returns True if successful."""
-    from big_pig_farm.economy.currency import spend_money
-
     if not item.unlocked:
         return False
 
@@ -223,6 +222,8 @@ def purchase_item(state: GameState, item: ShopItem, position: Optional[tuple[int
         _refill_all_facilities(state, FacilityType.HAY_RACK)
     elif item.id == "water_refill":
         _refill_all_facilities(state, FacilityType.WATER_BOTTLE)
+    elif item.id == "premium_food":
+        _boost_all_happiness(state, 20.0)
 
     return True
 
@@ -231,6 +232,13 @@ def _refill_all_facilities(state: GameState, facility_type: FacilityType) -> Non
     """Refill all facilities of a given type."""
     for facility in state.get_facilities_by_type(facility_type):
         facility.refill()
+
+
+def _boost_all_happiness(state: GameState, amount: float) -> None:
+    """Boost happiness for all pigs on the farm."""
+    for pig in state.get_pigs_list():
+        pig.needs.happiness = min(100.0, pig.needs.happiness + amount)
+        pig.needs.clamp_all()
 
 
 def get_facility_cost(facility_type: FacilityType) -> int:
@@ -245,7 +253,7 @@ def sell_facility(state: GameState, facility) -> int:
     """Remove a facility and refund its cost. Returns refund amount."""
     cost = get_facility_cost(facility.facility_type)
     state.remove_facility(facility.id)
-    state.add_money(cost)
+    add_money(state, cost, f"Removed {facility.facility_type.display_name}")
     return cost
 
 

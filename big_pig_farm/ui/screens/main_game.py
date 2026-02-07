@@ -11,6 +11,7 @@ from textual.widgets import Footer
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
+from big_pig_farm.economy.currency import add_money
 from big_pig_farm.economy.shop import get_facility_cost
 from big_pig_farm.ui.widgets.status_bar import StatusBar
 from big_pig_farm.ui.widgets.farm_view import FarmView
@@ -290,7 +291,7 @@ class MainGameScreen(Screen):
         else:
             facility = self._farm_view.select_facility_at_cursor()
             if facility:
-                name = facility.facility_type.value.replace("_", " ").title()
+                name = facility.facility_type.display_name
                 self.notify(f"Selected: {name} (M to move, R to remove)")
             else:
                 self.notify("No facility here")
@@ -313,8 +314,8 @@ class MainGameScreen(Screen):
                 # Remove the facility
                 self._farm_view.remove_selected_facility()
                 # Add refund
-                self.state.add_money(refund)
-                name = facility.facility_type.value.replace("_", " ").title()
+                add_money(self.state, refund, f"Removed {facility.facility_type.display_name}")
+                name = facility.facility_type.display_name
                 self.notify(f"Removed: {name} (+${refund})")
             else:
                 self.notify("Select a facility first (Enter)")

@@ -10,7 +10,7 @@ from textual.widgets import Static, ListView, ListItem, Label, Footer
 from textual.reactive import reactive
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
-from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype
+from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype, carrier_summary
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
 
@@ -213,23 +213,6 @@ class BreedingScreen(Screen):
         """Check if player has a Genetics Lab."""
         return bool(self.state.get_facilities_by_type(FacilityType.GENETICS_LAB))
 
-    @staticmethod
-    def _carrier_summary(genotype: Genotype) -> str:
-        """Get a short carrier summary for a genotype."""
-        carriers = []
-        g = genotype
-        if g.e_locus[0] != g.e_locus[1] and "e" in g.e_locus:
-            carriers.append("E/e")
-        if g.b_locus[0] != g.b_locus[1] and "b" in g.b_locus:
-            carriers.append("B/b")
-        if g.s_locus[0] != g.s_locus[1] and "s" in g.s_locus:
-            carriers.append("S/s")
-        if g.c_locus[0] != g.c_locus[1] and "ch" in g.c_locus:
-            carriers.append("C/ch")
-        if "R" in g.r_locus and "r" in g.r_locus:
-            carriers.append("R/r")
-        return ", ".join(carriers) if carriers else "None"
-
     def _update_male_info(self) -> None:
         """Update male parent info display."""
         info = self.query_one("#male-info", Static)
@@ -242,7 +225,7 @@ class BreedingScreen(Screen):
                 f"Can breed: {can_breed}",
             ]
             if self._has_genetics_lab():
-                lines.append(f"Carriers: {self._carrier_summary(pig.genotype)}")
+                lines.append(f"Carriers: {carrier_summary(pig.genotype)}")
             info.update("\n".join(lines))
         else:
             info.update("No male selected")
@@ -263,7 +246,7 @@ class BreedingScreen(Screen):
                 f"Can breed: {can_breed}{status}",
             ]
             if self._has_genetics_lab():
-                lines.append(f"Carriers: {self._carrier_summary(pig.genotype)}")
+                lines.append(f"Carriers: {carrier_summary(pig.genotype)}")
             info.update("\n".join(lines))
         else:
             info.update("No female selected")

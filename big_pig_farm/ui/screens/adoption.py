@@ -4,21 +4,23 @@ import random
 from typing import Optional
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Static, Label, ListView, ListItem, Footer
 
-from big_pig_farm.data.config import ECONOMY, BLOODLINE
+from big_pig_farm.data.config import BLOODLINE
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.economy.currency import format_money
+from big_pig_farm.economy.market import get_rarity_multiplier
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
-from big_pig_farm.entities.genetics import Rarity
 from big_pig_farm.entities.bloodlines import (
+    BLOODLINES,
     pick_random_bloodline,
     generate_bloodline_pig_genotype,
-    Bloodline,
 )
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.breeding import register_pig_in_pigdex
 
 
 # Adoption costs are higher than sale prices to prevent buy/sell exploits
@@ -31,19 +33,11 @@ def calculate_adoption_cost(pig: GuineaPig) -> int:
     Bloodline pigs have their cost multiplied by the bloodline cost_multiplier
     (applied on top of rarity multiplier).
     """
-    multipliers = {
-        Rarity.COMMON: 1.0,
-        Rarity.UNCOMMON: ECONOMY.UNCOMMON_MULTIPLIER,
-        Rarity.RARE: ECONOMY.RARE_MULTIPLIER,
-        Rarity.VERY_RARE: ECONOMY.VERY_RARE_MULTIPLIER,
-        Rarity.LEGENDARY: ECONOMY.LEGENDARY_MULTIPLIER,
-    }
-    multiplier = multipliers.get(pig.phenotype.rarity, 1.0)
+    multiplier = get_rarity_multiplier(pig.phenotype.rarity)
     base_cost = int(ADOPTION_BASE_COST * multiplier)
 
     # Bloodline pigs cost more based on their bloodline
     if pig.origin_tag:
-        from big_pig_farm.entities.bloodlines import BLOODLINES
         for bloodline in BLOODLINES.values():
             if bloodline.display_name == pig.origin_tag:
                 base_cost = int(base_cost * bloodline.cost_multiplier)
@@ -201,7 +195,7 @@ class AdoptionScreen(Screen):
         """Refresh the pig list display."""
         try:
             list_view = self.query_one("#pig-list", ListView)
-        except Exception:
+        except NoMatches:
             return
 
         list_view.clear()
@@ -241,7 +235,6 @@ class AdoptionScreen(Screen):
             rarity = pig.phenotype.rarity.value.title()
             bloodline_line = ""
             if pig.origin_tag:
-                from big_pig_farm.entities.bloodlines import BLOODLINES
                 for bloodline in BLOODLINES.values():
                     if bloodline.display_name == pig.origin_tag:
                         bloodline_line = f"\nBloodline: {pig.origin_tag} - {bloodline.description}"
@@ -270,7 +263,7 @@ class AdoptionScreen(Screen):
             if statics:
                 capacity_str = f"Farm: {self.state.pig_count}/{self.state.capacity} pigs"
                 statics[0].update(capacity_str)
-        except Exception:
+        except NoMatches:
             pass
 
     def action_go_back(self) -> None:
@@ -314,7 +307,6 @@ class AdoptionScreen(Screen):
         self.state.add_guinea_pig(pig)
 
         # Register in pigdex
-        from big_pig_farm.simulation.breeding import register_pig_in_pigdex
         register_pig_in_pigdex(self.state, pig)
 
         # Log the event

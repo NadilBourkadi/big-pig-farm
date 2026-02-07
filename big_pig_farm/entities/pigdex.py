@@ -4,6 +4,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from big_pig_farm.data.config import PIGDEX
 from big_pig_farm.entities.genetics import (
     BaseColor,
     Pattern,
@@ -11,6 +12,7 @@ from big_pig_farm.entities.genetics import (
     RoanType,
     Rarity,
     Phenotype,
+    calculate_rarity,
 )
 
 
@@ -50,7 +52,6 @@ def key_to_display_name(key: str) -> str:
     intensity = ColorIntensity(parts[2])
     roan = RoanType(parts[3])
 
-    from big_pig_farm.entities.genetics import calculate_rarity
     rarity = calculate_rarity(base_color, pattern, intensity, roan)
 
     phenotype = Phenotype(
@@ -69,7 +70,6 @@ def key_to_rarity(key: str) -> Rarity:
     if len(parts) != 4:
         return Rarity.COMMON
 
-    from big_pig_farm.entities.genetics import calculate_rarity
     return calculate_rarity(
         BaseColor(parts[0]),
         Pattern(parts[1]),
@@ -142,7 +142,6 @@ def get_all_phenotype_keys() -> list[str]:
 
 def get_discovery_reward(rarity: Rarity) -> int:
     """Get the Squeaks reward for discovering a phenotype of the given rarity."""
-    from big_pig_farm.data.config import PIGDEX
     rewards = {
         Rarity.COMMON: PIGDEX.COMMON_REWARD,
         Rarity.UNCOMMON: PIGDEX.UNCOMMON_REWARD,
@@ -155,7 +154,6 @@ def get_discovery_reward(rarity: Rarity) -> int:
 
 def get_milestone_reward(threshold: int) -> int:
     """Get the Squeaks reward for reaching a milestone percentage."""
-    from big_pig_farm.data.config import PIGDEX
     rewards = {
         25: PIGDEX.MILESTONE_25_REWARD,
         50: PIGDEX.MILESTONE_50_REWARD,

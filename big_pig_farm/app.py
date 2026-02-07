@@ -6,6 +6,7 @@ from textual.app import App
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.facilities import Facility, FacilityType
+from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.engine import GameEngine
@@ -42,7 +43,6 @@ class BigPigFarmApp(App):
             self.state = loaded_state
             # Backfill pigdex from existing pigs (for saves that predate pigdex)
             for pig in self.state.get_pigs_list():
-                from big_pig_farm.entities.pigdex import phenotype_key
                 key = phenotype_key(pig.phenotype)
                 self.state.pigdex.register_phenotype(key, self.state.game_time.day)
             self.state.log_event("Welcome back to Big Pig Farm!", "info")
@@ -146,8 +146,10 @@ class BigPigFarmApp(App):
         game_hours = game_minutes / 60.0
         advance_pregnancies(self.state, game_hours)
 
-        # Age pigs
-        age_all_pigs(self.state, game_hours)
+        # Age pigs and cleanup controller state for deaths
+        deaths = age_all_pigs(self.state, game_hours)
+        for dead_pig in deaths:
+            self.behavior_controller.cleanup_dead_pig(dead_pig.id)
 
         # Check for breeding
         check_breeding_opportunities(self.state)

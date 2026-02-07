@@ -98,5 +98,9 @@ class ContractsScreen(Screen):
         ]
         return "\n".join(lines)
 
+    def on_screen_resume(self) -> None:
+        """Refresh display when returning to this screen."""
+        self.recompose()
+
     def action_go_back(self) -> None:
         self.app.pop_screen()

@@ -3,7 +3,8 @@
 from datetime import datetime
 from typing import Any
 
-from big_pig_farm.data.config import TIME
+from big_pig_farm.data.config import TIME, NEEDS
+from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.needs import update_all_needs
 from big_pig_farm.simulation.breeding import (
@@ -99,9 +100,6 @@ def _simulate_offline_hour(state: GameState, summary: dict[str, Any]) -> None:
 
 def _auto_use_facilities(pig, state: GameState) -> None:
     """Automatically use facilities to satisfy needs during offline."""
-    from big_pig_farm.entities.facilities import FacilityType
-    from big_pig_farm.data.config import NEEDS
-
     # Auto-eat if hungry and food available
     if pig.needs.hunger < NEEDS.LOW_THRESHOLD:
         food_bowls = state.get_facilities_by_type(FacilityType.FOOD_BOWL)

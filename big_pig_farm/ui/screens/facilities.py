@@ -1,6 +1,7 @@
 """Facilities management screen."""
 
 from typing import Optional
+from uuid import UUID
 
 from textual.app import ComposeResult
 from textual.screen import Screen
@@ -8,6 +9,7 @@ from textual.containers import Container
 from textual.widgets import Static, DataTable, Footer
 
 from big_pig_farm.game.state import GameState
+from big_pig_farm.economy.currency import add_money
 from big_pig_farm.economy.shop import get_facility_cost
 
 
@@ -76,7 +78,7 @@ class FacilitiesScreen(Screen):
         table.clear()
 
         for facility in self.state.get_facilities_list():
-            name = facility.facility_type.value.replace("_", " ").title()
+            name = facility.facility_type.display_name
             position = f"({facility.position_x}, {facility.position_y})"
             level = f"Lv.{facility.level}"
 
@@ -106,7 +108,6 @@ class FacilitiesScreen(Screen):
 
         row_key, _ = table.coordinate_to_cell_key((table.cursor_row, 0))
         if row_key:
-            from uuid import UUID
             facility_id = UUID(str(row_key.value))
             facility = self.state.facilities.get(facility_id)
 
@@ -117,7 +118,7 @@ class FacilitiesScreen(Screen):
                 # Remove from state
                 self.state.remove_facility(facility_id)
                 # Refund
-                self.state.add_money(refund)
+                add_money(self.state, refund, f"Removed {name}")
                 self.notify(f"Removed {name} (+${refund})")
                 self._refresh_table()
                 self._update_header()

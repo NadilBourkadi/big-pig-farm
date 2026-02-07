@@ -3,6 +3,7 @@
 from typing import Optional
 
 from textual.app import ComposeResult
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Static, Button, Label, ListView, ListItem, Footer
@@ -139,7 +140,7 @@ class ShopScreen(Screen):
         """Refresh the item list."""
         try:
             list_view = self.query_one("#item-list", ListView)
-        except Exception:
+        except NoMatches:
             return
 
         list_view.clear()
