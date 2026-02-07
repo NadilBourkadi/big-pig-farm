@@ -1,5 +1,6 @@
 """Facility definitions for the farm."""
 
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Optional
 from uuid import UUID, uuid4
@@ -22,6 +23,11 @@ class FacilityType(str, Enum):
     GROOMING_STATION = "grooming_station"
     GENETICS_LAB = "genetics_lab"
 
+    @property
+    def display_name(self) -> str:
+        """Human-readable name for the facility type."""
+        return self.value.replace("_", " ").title()
+
 
 class FacilitySize(BaseModel):
     """Size of a facility in grid cells."""
@@ -29,96 +35,118 @@ class FacilitySize(BaseModel):
     height: int = 1
 
 
+@dataclass
+class FacilityInfo:
+    """Typed metadata for a facility type."""
+    name: str
+    size: FacilitySize
+    base_cost: int
+    description: str
+    capacity: int = 100
+    refill_cost: int = 0
+    health_bonus: float = 0.0
+    happiness_bonus: float = 0.0
+    social_bonus: float = 0.0
+    breeding_bonus: float = 0.0
+    growth_bonus: float = 0.0
+    sale_bonus: float = 0.0
+    food_production: int = 0
+
+    def get(self, key: str, default: object = None) -> object:
+        """Dict-like access for backwards compatibility."""
+        return getattr(self, key, default)
+
+
 # Facility metadata
-FACILITY_INFO: dict[FacilityType, dict] = {
-    FacilityType.FOOD_BOWL: {
-        "name": "Food Bowl",
-        "size": FacilitySize(width=2, height=1),
-        "base_cost": 20,
-        "description": "Provides food to reduce hunger",
-        "capacity": 100,
-        "refill_cost": 5,
-    },
-    FacilityType.WATER_BOTTLE: {
-        "name": "Water Bottle",
-        "size": FacilitySize(width=1, height=2),
-        "base_cost": 20,
-        "description": "Provides water for hydration",
-        "capacity": 100,
-        "refill_cost": 2,
-    },
-    FacilityType.HAY_RACK: {
-        "name": "Hay Rack",
-        "size": FacilitySize(width=2, height=1),
-        "base_cost": 40,
-        "description": "Fiber source, +5% health bonus",
-        "capacity": 100,
-        "health_bonus": 0.05,
-    },
-    FacilityType.HIDEOUT: {
-        "name": "Hideout",
-        "size": FacilitySize(width=3, height=2),
-        "base_cost": 60,
-        "description": "Sleep and shelter, +10% happiness",
-        "capacity": 2,
-        "happiness_bonus": 0.10,
-    },
-    FacilityType.EXERCISE_WHEEL: {
-        "name": "Exercise Wheel",
-        "size": FacilitySize(width=2, height=2),
-        "base_cost": 80,
-        "description": "Entertainment and fitness, +5% health",
-        "health_bonus": 0.05,
-    },
-    FacilityType.TUNNEL: {
-        "name": "Tunnel System",
-        "size": FacilitySize(width=3, height=1),
-        "base_cost": 100,
-        "description": "Exploration and play, +15% happiness",
-        "happiness_bonus": 0.15,
-    },
-    FacilityType.PLAY_AREA: {
-        "name": "Play Area",
-        "size": FacilitySize(width=3, height=2),
-        "base_cost": 150,
-        "description": "Social activities, +social chance",
-        "social_bonus": 0.20,
-    },
-    FacilityType.BREEDING_DEN: {
-        "name": "Breeding Den",
-        "size": FacilitySize(width=2, height=2),
-        "base_cost": 200,
-        "description": "Private space for mating",
-        "breeding_bonus": 0.15,
-    },
-    FacilityType.NURSERY: {
-        "name": "Nursery",
-        "size": FacilitySize(width=3, height=2),
-        "base_cost": 250,
-        "description": "Baby care, faster growth",
-        "growth_bonus": 0.20,
-        "capacity": 4,
-    },
-    FacilityType.VEGGIE_GARDEN: {
-        "name": "Veggie Garden",
-        "size": FacilitySize(width=2, height=2),
-        "base_cost": 300,
-        "description": "Grows fresh vegetables",
-        "food_production": 10,  # Units per day
-    },
-    FacilityType.GROOMING_STATION: {
-        "name": "Grooming Station",
-        "size": FacilitySize(width=2, height=1),
-        "base_cost": 150,
-        "description": "Health and appearance, +15% sale value",
-        "sale_bonus": 0.15,
-    },
-    FacilityType.GENETICS_LAB: {
-        "name": "Genetics Lab",
-        "size": FacilitySize(width=3, height=2),
-        "base_cost": 350,
-        "description": "Reveals carrier alleles and boosts mutation rate",
-    },
+FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
+    FacilityType.FOOD_BOWL: FacilityInfo(
+        name="Food Bowl",
+        size=FacilitySize(width=2, height=1),
+        base_cost=20,
+        description="Provides food to reduce hunger",
+        capacity=100,
+        refill_cost=5,
+    ),
+    FacilityType.WATER_BOTTLE: FacilityInfo(
+        name="Water Bottle",
+        size=FacilitySize(width=1, height=2),
+        base_cost=20,
+        description="Provides water for hydration",
+        capacity=100,
+        refill_cost=2,
+    ),
+    FacilityType.HAY_RACK: FacilityInfo(
+        name="Hay Rack",
+        size=FacilitySize(width=2, height=1),
+        base_cost=40,
+        description="Fiber source, +5% health bonus",
+        capacity=100,
+        health_bonus=0.05,
+    ),
+    FacilityType.HIDEOUT: FacilityInfo(
+        name="Hideout",
+        size=FacilitySize(width=3, height=2),
+        base_cost=60,
+        description="Sleep and shelter, +10% happiness",
+        capacity=2,
+        happiness_bonus=0.10,
+    ),
+    FacilityType.EXERCISE_WHEEL: FacilityInfo(
+        name="Exercise Wheel",
+        size=FacilitySize(width=2, height=2),
+        base_cost=80,
+        description="Entertainment and fitness, +5% health",
+        health_bonus=0.05,
+    ),
+    FacilityType.TUNNEL: FacilityInfo(
+        name="Tunnel System",
+        size=FacilitySize(width=3, height=1),
+        base_cost=100,
+        description="Exploration and play, +15% happiness",
+        happiness_bonus=0.15,
+    ),
+    FacilityType.PLAY_AREA: FacilityInfo(
+        name="Play Area",
+        size=FacilitySize(width=3, height=2),
+        base_cost=150,
+        description="Social activities, +social chance",
+        social_bonus=0.20,
+    ),
+    FacilityType.BREEDING_DEN: FacilityInfo(
+        name="Breeding Den",
+        size=FacilitySize(width=2, height=2),
+        base_cost=200,
+        description="Private space for mating",
+        breeding_bonus=0.15,
+    ),
+    FacilityType.NURSERY: FacilityInfo(
+        name="Nursery",
+        size=FacilitySize(width=3, height=2),
+        base_cost=250,
+        description="Baby care, faster growth",
+        growth_bonus=0.20,
+        capacity=4,
+    ),
+    FacilityType.VEGGIE_GARDEN: FacilityInfo(
+        name="Veggie Garden",
+        size=FacilitySize(width=2, height=2),
+        base_cost=300,
+        description="Grows fresh vegetables",
+        food_production=10,
+    ),
+    FacilityType.GROOMING_STATION: FacilityInfo(
+        name="Grooming Station",
+        size=FacilitySize(width=2, height=1),
+        base_cost=150,
+        description="Health and appearance, +15% sale value",
+        sale_bonus=0.15,
+    ),
+    FacilityType.GENETICS_LAB: FacilityInfo(
+        name="Genetics Lab",
+        size=FacilitySize(width=3, height=2),
+        base_cost=350,
+        description="Reveals carrier alleles and boosts mutation rate",
+    ),
 }
 
 
@@ -139,19 +167,19 @@ class Facility(BaseModel):
     auto_refill: bool = False
 
     @property
-    def info(self) -> dict:
+    def info(self) -> FacilityInfo:
         """Get facility metadata."""
         return FACILITY_INFO[self.facility_type]
 
     @property
     def name(self) -> str:
         """Get facility display name."""
-        return self.info["name"]
+        return self.info.name
 
     @property
     def size(self) -> FacilitySize:
         """Get facility size."""
-        return self.info["size"]
+        return self.info.size
 
     @property
     def width(self) -> int:
@@ -224,7 +252,7 @@ class Facility(BaseModel):
     def refill(self, amount: Optional[float] = None) -> None:
         """Refill the facility."""
         # Always sync max_amount with configured capacity
-        configured_capacity = self.info.get("capacity", 100)
+        configured_capacity = self.info.capacity
         if self.max_amount != configured_capacity:
             self.max_amount = configured_capacity
 
@@ -246,7 +274,7 @@ class Facility(BaseModel):
         """Calculate cost to upgrade to next level."""
         if self.level >= self.max_level:
             return 0
-        base = self.info["base_cost"]
+        base = self.info.base_cost
         return int(base * (self.level + 1) * 0.75)
 
     @classmethod
@@ -258,7 +286,7 @@ class Facility(BaseModel):
     ) -> "Facility":
         """Create a new facility at the given position."""
         info = FACILITY_INFO[facility_type]
-        capacity = info.get("capacity", 100)
+        capacity = info.capacity
 
         return cls(
             facility_type=facility_type,
