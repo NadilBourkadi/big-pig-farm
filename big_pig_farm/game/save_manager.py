@@ -92,6 +92,8 @@ class SaveManager:
                 ("mother_name", "TEXT"),
                 ("father_name", "TEXT"),
                 ("last_birth_age", "REAL"),
+                ("partner_genotype_json", "TEXT"),
+                ("partner_name", "TEXT"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE guinea_pigs ADD COLUMN {col} {typedef}")
@@ -227,8 +229,9 @@ class SaveManager:
                         personality_json, needs_json, behavior_state,
                         position_x, position_y, is_pregnant, pregnancy_days,
                         partner_id, last_birth_age, mother_id, father_id,
-                        origin_tag, breeding_locked, mother_name, father_name
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        origin_tag, breeding_locked, mother_name, father_name,
+                        partner_genotype_json, partner_name
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(pig.id),
                     pig.name,
@@ -251,6 +254,8 @@ class SaveManager:
                     1 if pig.breeding_locked else 0,
                     pig.mother_name,
                     pig.father_name,
+                    pig.partner_genotype.model_dump_json() if pig.partner_genotype else None,
+                    pig.partner_name,
                 ))
 
             # Save facilities
@@ -385,6 +390,15 @@ class SaveManager:
                 father_name = row["father_name"] if "father_name" in row_keys else None
                 last_birth_age = row["last_birth_age"] if "last_birth_age" in row_keys else None
 
+                # Load partner genotype stored at conception (for pregnancy survival)
+                partner_genotype = None
+                if "partner_genotype_json" in row_keys and row["partner_genotype_json"]:
+                    try:
+                        partner_genotype = Genotype.model_validate_json(row["partner_genotype_json"])
+                    except Exception:
+                        pass
+                partner_name_stored = row["partner_name"] if "partner_name" in row_keys else None
+
                 pig = GuineaPig(
                     id=UUID(row["id"]),
                     name=row["name"],
@@ -400,6 +414,8 @@ class SaveManager:
                     is_pregnant=bool(row["is_pregnant"]),
                     pregnancy_days=row["pregnancy_days"],
                     partner_id=UUID(row["partner_id"]) if row["partner_id"] else None,
+                    partner_genotype=partner_genotype,
+                    partner_name=partner_name_stored,
                     last_birth_age=last_birth_age,
                     mother_id=UUID(row["mother_id"]) if row["mother_id"] else None,
                     father_id=UUID(row["father_id"]) if row["father_id"] else None,

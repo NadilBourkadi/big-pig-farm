@@ -46,23 +46,30 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         mother.is_pregnant = False
         mother.pregnancy_days = 0.0
         mother.partner_id = None
+        mother.partner_genotype = None
+        mother.partner_name = None
         game_state.log_event(
             f"{mother.name}'s pregnancy ended - farm is at capacity.",
             event_type="birth",
         )
         return False
 
-    # Find father
-    father = None
-    if mother.partner_id:
-        father = game_state.get_guinea_pig(mother.partner_id)
+    # Find father — use stored genotype/name from conception so the birth
+    # proceeds even if the father was sold after conception
+    father = game_state.get_guinea_pig(mother.partner_id) if mother.partner_id else None
+    father_genotype = mother.partner_genotype or (father.genotype if father else None)
+    father_name = mother.partner_name or (father.name if father else "Unknown")
+    father_id = mother.partner_id
 
-    if father is None:
+    if father_genotype is None:
+        # Legacy save without stored genotype and father gone — can't breed
         mother.is_pregnant = False
         mother.pregnancy_days = 0.0
         mother.partner_id = None
+        mother.partner_genotype = None
+        mother.partner_name = None
         game_state.log_event(
-            f"{mother.name}'s pregnancy ended - father is no longer on the farm.",
+            f"{mother.name}'s pregnancy ended - father's genetics unavailable.",
             event_type="birth",
         )
         return False
@@ -78,6 +85,8 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         mother.is_pregnant = False
         mother.pregnancy_days = 0.0
         mother.partner_id = None
+        mother.partner_genotype = None
+        mother.partner_name = None
         game_state.log_event(
             f"{mother.name}'s pregnancy ended - farm is at capacity.",
             event_type="birth",
@@ -96,7 +105,7 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     babies_born = []
     for _ in range(litter_size):
         # Generate genetics with mutations
-        breed_result = breed_genetics(mother.genotype, father.genotype, mutation_rate=mutation_rate)
+        breed_result = breed_genetics(mother.genotype, father_genotype, mutation_rate=mutation_rate)
         baby_genotype = breed_result.genotype
         baby_phenotype = calculate_phenotype(baby_genotype)
 
@@ -104,7 +113,7 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         gender = random.choice([Gender.MALE, Gender.FEMALE])
 
         # Generate unique name
-        name = generate_unique_name(existing_names)
+        name = generate_unique_name(existing_names, gender=gender.value)
         existing_names.add(name)
 
         # Position near mother
@@ -121,9 +130,9 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
             position=baby_pos,
             age_days=0,
             mother_id=mother.id,
-            father_id=father.id,
+            father_id=father_id,
             mother_name=mother.name,
-            father_name=father.name,
+            father_name=father_name,
         )
 
         game_state.add_guinea_pig(baby)
@@ -146,6 +155,8 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     mother.pregnancy_days = 0.0
     mother.last_birth_age = mother.age_days
     mother.partner_id = None
+    mother.partner_genotype = None
+    mother.partner_name = None
 
     # Log event
     baby_names = ", ".join(b.name for b in babies_born)
@@ -234,10 +245,13 @@ def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state) -> bool:
     if random.random() > base_chance:
         return False
 
-    # Start pregnancy
+    # Start pregnancy — store father's genotype and name at conception
+    # so the birth can proceed even if the father is later sold
     female.is_pregnant = True
     female.pregnancy_days = 0.0
     female.partner_id = male.id
+    female.partner_genotype = male.genotype
+    female.partner_name = male.name
 
     # Set courting behavior
     male.behavior_state = BehaviorState.COURTING

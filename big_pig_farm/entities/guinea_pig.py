@@ -128,6 +128,8 @@ class GuineaPig(BaseModel):
     is_pregnant: bool = False
     pregnancy_days: float = 0.0
     partner_id: Optional[UUID] = None
+    partner_genotype: Optional[Genotype] = None  # Stored at conception for birth
+    partner_name: Optional[str] = None  # Stored at conception in case father is sold
     last_birth_age: Optional[float] = None
 
     # Family
