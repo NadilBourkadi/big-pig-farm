@@ -52,7 +52,7 @@ def generate_adoption_pig(existing_names: set[str], farm_tier: int = 1) -> Guine
     About 50% of generated pigs are bloodline carriers (filtered by farm tier).
     """
     gender = random.choice([Gender.MALE, Gender.FEMALE])
-    name = generate_unique_name(existing_names)
+    name = generate_unique_name(existing_names, gender=gender.value)
 
     # Chance to generate a bloodline carrier pig
     origin_tag = None

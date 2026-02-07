@@ -66,7 +66,7 @@ class BigPigFarmApp(App):
 
         # Create starting guinea pigs
         for gender in [Gender.MALE, Gender.FEMALE]:
-            name = generate_unique_name(existing_names)
+            name = generate_unique_name(existing_names, gender=gender.value)
             existing_names.add(name)
 
             # Random starting position

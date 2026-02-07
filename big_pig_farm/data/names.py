@@ -1,11 +1,17 @@
 """Name generation data for guinea pigs."""
 
 import random
+from typing import Optional
 
-# First name components
-PREFIXES = [
-    "Sir", "Lady", "Mr.", "Ms.", "Professor", "Captain", "Duke", "Princess",
-    "Lord", "Baron", "Count", "Dr.", "Chief", "King", "Queen", "Prince",
+# First name components (gender-specific)
+MALE_PREFIXES = [
+    "Sir", "Mr.", "Duke", "Lord", "Baron", "Count", "King", "Prince",
+]
+FEMALE_PREFIXES = [
+    "Lady", "Ms.", "Princess", "Queen", "Duchess", "Baroness", "Countess",
+]
+NEUTRAL_PREFIXES = [
+    "Professor", "Captain", "Dr.", "Chief",
 ]
 
 # Cute guinea pig names
@@ -60,12 +66,13 @@ SUFFIXES = [
 ALL_NAMES = CUTE_NAMES + FOOD_NAMES + COLOR_NAMES + PERSONALITY_NAMES + FAMOUS_NAMES
 
 
-def generate_name(include_title: bool = False, include_suffix: bool = False) -> str:
+def generate_name(include_title: bool = False, include_suffix: bool = False, gender: Optional[str] = None) -> str:
     """Generate a random guinea pig name.
 
     Args:
         include_title: Whether to potentially include a title prefix
         include_suffix: Whether to potentially include a suffix
+        gender: "male", "female", or None for gender-appropriate prefixes
 
     Returns:
         A randomly generated name
@@ -73,7 +80,13 @@ def generate_name(include_title: bool = False, include_suffix: bool = False) -> 
     name = random.choice(ALL_NAMES)
 
     if include_title and random.random() < 0.15:
-        prefix = random.choice(PREFIXES)
+        if gender == "male":
+            prefixes = MALE_PREFIXES + NEUTRAL_PREFIXES
+        elif gender == "female":
+            prefixes = FEMALE_PREFIXES + NEUTRAL_PREFIXES
+        else:
+            prefixes = MALE_PREFIXES + FEMALE_PREFIXES + NEUTRAL_PREFIXES
+        prefix = random.choice(prefixes)
         name = f"{prefix} {name}"
 
     if include_suffix and random.random() < 0.1:
@@ -83,18 +96,19 @@ def generate_name(include_title: bool = False, include_suffix: bool = False) -> 
     return name
 
 
-def generate_unique_name(existing_names: set[str], max_attempts: int = 100) -> str:
+def generate_unique_name(existing_names: set[str], gender: Optional[str] = None, max_attempts: int = 100) -> str:
     """Generate a unique name not in the existing set.
 
     Args:
         existing_names: Set of names already in use
+        gender: "male", "female", or None for gender-appropriate prefixes
         max_attempts: Maximum attempts before adding a number suffix
 
     Returns:
         A unique name
     """
     for _ in range(max_attempts):
-        name = generate_name(include_title=True, include_suffix=True)
+        name = generate_name(include_title=True, include_suffix=True, gender=gender)
         if name not in existing_names:
             return name
 
