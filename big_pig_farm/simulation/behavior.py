@@ -620,11 +620,21 @@ class BehaviorController:
 
     def _try_alternative_facility(self, pig: GuineaPig, blocked_target: Position) -> bool:
         """Try to find an alternative facility when blocked. Returns True if found."""
-        # Add current target facility to failed list
+        # Only blame the facility if the pig is actually near it (blocked AT the
+        # facility). If the pig is far away, it's blocked by traffic en route —
+        # adding the facility to failed_facilities causes a death spiral when
+        # multiple pigs all try to reach the same distant facility.
         if pig.id not in self._failed_facilities:
             self._failed_facilities[pig.id] = set()
         if pig.target_facility_id:
-            self._failed_facilities[pig.id].add(pig.target_facility_id)
+            target_facility = self.game_state.get_facility(pig.target_facility_id)
+            if target_facility:
+                near_facility = any(
+                    abs(pig.position.x - p[0]) <= 3 and abs(pig.position.y - p[1]) <= 3
+                    for p in target_facility.interaction_points
+                )
+                if near_facility:
+                    self._failed_facilities[pig.id].add(pig.target_facility_id)
 
         # Infer what type of facility we need from target_description
         desc = pig.target_description or ""
@@ -763,8 +773,19 @@ class BehaviorController:
         pig.target_facility_id = None
         pig.target_description = None
         self._blocked_timers[pig.id] = 0
-        # Keep failed facilities for 3 decision cycles (~6 seconds) before retrying
-        self._failed_cooldowns[pig.id] = BEHAVIOR.FAILED_COOLDOWN_CYCLES
+
+        # If hunger or thirst is critical, clear failed list so the pig
+        # immediately retries on next decision — don't let cooldowns kill it
+        has_critical_need = (
+            pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+            or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD
+        )
+        if has_critical_need:
+            self._failed_facilities[pig.id] = set()
+            self._failed_cooldowns.pop(pig.id, None)
+        else:
+            # Keep failed facilities for 3 decision cycles (~6 seconds) before retrying
+            self._failed_cooldowns[pig.id] = BEHAVIOR.FAILED_COOLDOWN_CYCLES
 
         if "Hideout" in desc or "sleep" in desc:
             # Sleep where standing — the hideouts are all occupied
