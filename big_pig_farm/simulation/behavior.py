@@ -729,11 +729,14 @@ class BehaviorController:
                     new_bx = pig_b.position.x + nx * separation
                     new_by = pig_b.position.y + ny * separation
 
-                    # Only move if new position is walkable
-                    if farm.is_walkable(int(new_ax), int(new_ay)):
+                    # Only apply if BOTH new positions are walkable.
+                    # Asymmetric separation (one moves, one can't) causes
+                    # ratcheting near walls that pins pigs in place.
+                    a_ok = farm.is_walkable(int(new_ax), int(new_ay))
+                    b_ok = farm.is_walkable(int(new_bx), int(new_by))
+                    if a_ok and b_ok:
                         pig_a.position.x = new_ax
                         pig_a.position.y = new_ay
-                    if farm.is_walkable(int(new_bx), int(new_by)):
                         pig_b.position.x = new_bx
                         pig_b.position.y = new_by
 
