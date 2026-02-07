@@ -283,9 +283,10 @@ class BehaviorController:
         farm = self.game_state.farm
         start = pig.position.grid_pos()
 
-        # Use a smaller distance threshold for interaction point occupancy
-        # This is less than MIN_PIG_DISTANCE since pigs can squeeze past each other
-        occupancy_radius = BEHAVIOR.OCCUPANCY_RADIUS
+        # Use the facility-use blocking radius for occupancy checks so that
+        # points marked "open" are genuinely reachable (consistent with the
+        # actual blocking distance used against facility-using pigs)
+        occupancy_radius = BEHAVIOR.BLOCKING_FACILITY_USE
 
         # Get all interaction points and filter to walkable/valid ones
         candidates = []
@@ -583,6 +584,13 @@ class BehaviorController:
             # can squeeze past each other without visually overlapping
             if exclude_pig.path and other_pig.path:
                 effective_distance = BEHAVIOR.BLOCKING_BOTH_MOVING
+            elif other_pig.behavior_state in (
+                BehaviorState.EATING, BehaviorState.DRINKING,
+                BehaviorState.SLEEPING, BehaviorState.PLAYING,
+            ):
+                # Pigs actively using a facility are stationary and "tucked in"
+                # — they shouldn't block as much space as an idle pig
+                effective_distance = BEHAVIOR.BLOCKING_FACILITY_USE
             else:
                 effective_distance = min_distance
             # Check distance to other pig
@@ -678,14 +686,25 @@ class BehaviorController:
 
         for i, pig_a in enumerate(pigs):
             for pig_b in pigs[i + 1:]:
-                # Three-tier separation: must stay below corresponding
+                # Tiered separation: must stay below corresponding
                 # blocking threshold to avoid separation vs pathfinding deadlock.
-                # Both moving: 1.0 (blocking = 1.5)
-                # One moving:  2.0 (blocking = 2.5)
-                # Both idle:   3.0 (MIN_PIG_DISTANCE)
+                # Both moving:          1.0 (blocking = 1.5)
+                # Both using facility:  1.0 (allow co-sleeping/co-eating)
+                # One moving:           2.0 (blocking = 2.5)
+                # Both idle:            3.0 (MIN_PIG_DISTANCE)
                 both_moving = pig_a.path and pig_b.path
+                facility_use_states = (
+                    BehaviorState.EATING, BehaviorState.DRINKING,
+                    BehaviorState.SLEEPING, BehaviorState.PLAYING,
+                )
+                both_using_facility = (
+                    pig_a.behavior_state in facility_use_states
+                    and pig_b.behavior_state in facility_use_states
+                )
                 if both_moving:
                     threshold = BEHAVIOR.SEPARATION_BOTH_MOVING
+                elif both_using_facility:
+                    threshold = BEHAVIOR.SEPARATION_FACILITY_USE
                 elif pig_a.path or pig_b.path:
                     threshold = BEHAVIOR.SEPARATION_ONE_MOVING
                 else:
