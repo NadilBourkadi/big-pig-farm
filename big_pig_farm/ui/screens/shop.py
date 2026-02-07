@@ -310,9 +310,8 @@ class ShopScreen(Screen):
             return None
 
         info = FACILITY_INFO[item.facility_type]
-        size = info["size"]
-        width = size.width
-        height = size.height
+        width = info.size.width
+        height = info.size.height
 
         farm = self.state.farm
 
