@@ -577,6 +577,11 @@ class BehaviorController:
         actively moving, so pigs can pass each other on their way to
         facilities instead of forming traffic jams.
         """
+        # Emergency override: pigs with critical health ignore blocking
+        # entirely so they can push through traffic to reach food/water
+        if exclude_pig.needs.health < NEEDS.CRITICAL_THRESHOLD:
+            return False
+
         for other_pig in self.game_state.get_pigs_list():
             if other_pig.id == exclude_pig.id:
                 continue
