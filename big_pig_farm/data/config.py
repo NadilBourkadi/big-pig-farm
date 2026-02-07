@@ -32,9 +32,9 @@ _init_speed_display()
 class NeedsConfig:
     """Configuration for guinea pig needs decay and thresholds."""
     # Decay rates per game hour
-    HUNGER_DECAY: float = 5.0
-    THIRST_DECAY: float = 6.0
-    ENERGY_DECAY: float = 3.0
+    HUNGER_DECAY: float = 3.5
+    THIRST_DECAY: float = 4.5
+    ENERGY_DECAY: float = 2.0
     HAPPINESS_BASE_DECAY: float = 2.0
 
     # Thresholds
@@ -258,6 +258,10 @@ class BehaviorConfig:
     # Movement blocking distances
     BLOCKING_DEFAULT: float = 2.5         # Default (stationary blocks moving)
     BLOCKING_BOTH_MOVING: float = 1.5     # Both pigs have active paths
+    BLOCKING_FACILITY_USE: float = 1.5    # Reduced blocking for pigs actively using a facility
+
+    # Facility co-use separation
+    SEPARATION_FACILITY_USE: float = 1.0  # Reduced separation for co-located facility users
 
     # Facility interaction
     OCCUPANCY_RADIUS: float = 2.0         # Distance to check facility occupancy
