@@ -57,7 +57,7 @@ class NeedsConfig:
     SOCIAL_HAPPINESS_BOOST: float = 10.0
 
     # Boredom
-    BOREDOM_DECAY: float = 3.0                # per game hour
+    BOREDOM_DECAY: float = 2.0                # per game hour
     BOREDOM_EXTRA_HAPPINESS_THRESHOLD: int = 70
     BOREDOM_EXTRA_HAPPINESS_DRAIN: float = 1.0
     BOREDOM_PLAY_RECOVERY: float = 15.0
@@ -280,7 +280,7 @@ class BehaviorConfig:
     ENERGY_SLEEP_THRESHOLD: int = 30       # Energy level to seek sleep
     EMERGENCY_WAKE_ENERGY: int = 15        # Min energy to wake from sleep for critical need
     BOREDOM_PLAY_THRESHOLD: int = 30       # Boredom level to seek play
-    BOREDOM_KEEP_PLAYING: int = 10         # Boredom level to keep playing
+    BOREDOM_KEEP_PLAYING: int = 20         # Boredom level to keep playing
 
     # Resource consumption
     RESOURCE_CONSUME_RATE: float = 0.15    # Rate of consuming facility resources
