@@ -53,15 +53,10 @@ class BreedingProgramPanel(Static, can_focus=True):
     DEFAULT_CSS = """
     BreedingProgramPanel {
         height: auto;
-        max-height: 20;
         border: solid $accent;
         padding: 0 1;
         background: $surface;
         margin: 0 1;
-    }
-
-    BreedingProgramPanel.hidden {
-        display: none;
     }
     """
 
@@ -158,7 +153,7 @@ class BreedingProgramPanel(Static, can_focus=True):
 
     def refresh_content(self) -> None:
         """Redraw the panel."""
-        lines = ["Breeding Program Target  (arrows + space to toggle, T to close)"]
+        lines = ["Breeding Program Target  (arrows + space to toggle)"]
         lines.append("")
 
         for axis_idx, (axis_name, values, labels) in enumerate(_AXES):

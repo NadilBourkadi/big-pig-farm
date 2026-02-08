@@ -5,8 +5,8 @@ from uuid import UUID
 
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Static, ListView, ListItem, Label, Footer
+from textual.containers import Container, Horizontal, Vertical, VerticalScroll
+from textual.widgets import Static, ListView, ListItem, Label, Footer, TabbedContent, TabPane
 from textual.reactive import reactive
 
 from big_pig_farm.data.config import BREEDING, NEEDS
@@ -48,8 +48,7 @@ class BreedingScreen(Screen):
         ("m", "focus_males", "Males"),
         ("f", "focus_females", "Females"),
         ("p", "set_pair", "Pair"),
-        ("c", "cancel_pair", "Cancel Pair"),
-        ("t", "toggle_program", "Target"),
+        ("c", "cancel_pair", "Cancel"),
     ]
 
     DEFAULT_CSS = """
@@ -65,9 +64,15 @@ class BreedingScreen(Screen):
         text-align: center;
     }
 
-    #breeding-content {
+    #breeding-status {
+        height: auto;
+        max-height: 2;
+        padding: 0 1;
+        color: $warning;
+    }
+
+    #breeding-tabs {
         height: 1fr;
-        padding: 1;
     }
 
     #parent-selection {
@@ -114,25 +119,6 @@ class BreedingScreen(Screen):
         margin: 1;
         padding: 1;
     }
-
-    .help-text {
-        text-style: italic;
-        color: $text-muted;
-    }
-
-    #pair-status {
-        height: auto;
-        max-height: 3;
-        padding: 0 1;
-        color: $warning;
-    }
-
-    #program-status {
-        height: auto;
-        max-height: 2;
-        padding: 0 1;
-        color: $accent;
-    }
     """
 
     selected_male: reactive[Optional[GuineaPig]] = reactive(None)
@@ -145,43 +131,51 @@ class BreedingScreen(Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the breeding screen."""
-        yield Static("Breeding Planner - Select parents to predict offspring", id="breeding-header")
-        yield Static("", id="pair-status")
-        yield Static("", id="program-status")
+        yield Static("Breeding Planner", id="breeding-header")
+        yield Static("", id="breeding-status")
 
-        with Container(id="breeding-content"):
-            with Horizontal(id="parent-selection"):
-                with Vertical(classes="parent-panel"):
-                    yield Static("Males [M]", classes="panel-title")
-                    yield ListView(id="male-list", classes="parent-list")
+        with TabbedContent(id="breeding-tabs"):
+            with TabPane("Pair"):
+                with Horizontal(id="parent-selection"):
+                    with Vertical(classes="parent-panel"):
+                        yield Static("Males [M]", classes="panel-title")
+                        yield ListView(id="male-list", classes="parent-list")
 
-                with Vertical(classes="parent-panel"):
-                    yield Static("Females [F]", classes="panel-title")
-                    yield ListView(id="female-list", classes="parent-list")
+                    with Vertical(classes="parent-panel"):
+                        yield Static("Females [F]", classes="panel-title")
+                        yield ListView(id="female-list", classes="parent-list")
 
-            with Horizontal(id="selected-info"):
-                yield Static("No male selected", id="male-info", classes="info-panel")
-                yield Static("No female selected", id="female-info", classes="info-panel")
+                with Horizontal(id="selected-info"):
+                    yield Static("No male selected", id="male-info", classes="info-panel")
+                    yield Static("No female selected", id="female-info", classes="info-panel")
 
-            yield Static(
-                "Select a male and female to see offspring predictions\n\n"
-                "Use Tab to switch between lists, or M/F to jump directly",
-                id="prediction-panel"
-            )
+                yield Static(
+                    "Select a male and female to see offspring predictions\n\n"
+                    "Use Tab to switch between lists, or M/F to jump directly",
+                    id="prediction-panel"
+                )
 
-        yield BreedingProgramPanel(
-            self.state.breeding_program,
-            has_genetics_lab=self._has_genetics_lab(),
-            id="program-panel",
-            classes="hidden",
-        )
+            with TabPane("Program"):
+                with VerticalScroll(id="program-scroll"):
+                    yield BreedingProgramPanel(
+                        self.state.breeding_program,
+                        has_genetics_lab=self._has_genetics_lab(),
+                        id="program-panel",
+                    )
+
         yield Footer()
 
     def on_mount(self) -> None:
         """Handle mount event."""
+        # Set VerticalScroll height (Textual pattern from almanac.py)
+        for vs in self.query(VerticalScroll):
+            vs.styles.height = "1fr"
+
         self._populate_lists()
-        self._update_pair_status()
-        self._update_program_status()
+        self._update_status()
+        # Refresh program panel content
+        panel = self.query_one("#program-panel", BreedingProgramPanel)
+        panel.refresh_content()
         # Focus the male list by default
         male_list = self.query_one("#male-list", ListView)
         male_list.focus()
@@ -254,19 +248,6 @@ class BreedingScreen(Screen):
 
         self._update_predictions()
 
-    def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Handle enter press - switch to other panel after selection."""
-        if not isinstance(event.item, PigListItem):
-            return
-
-        list_id = event.list_view.id
-
-        # After selecting in one list, switch to the other
-        if list_id == "male-list":
-            self.action_focus_females()
-        elif list_id == "female-list":
-            self.action_focus_males()
-
     def _has_genetics_lab(self) -> bool:
         """Check if player has a Genetics Lab."""
         return bool(self.state.get_facilities_by_type(FacilityType.GENETICS_LAB))
@@ -309,65 +290,34 @@ class BreedingScreen(Screen):
         else:
             info.update("No female selected")
 
-    def _update_pair_status(self) -> None:
-        """Update the pair status banner."""
-        banner = self.query_one("#pair-status", Static)
+    def _update_status(self) -> None:
+        """Update the compact status banner combining pair and program info."""
+        banner = self.query_one("#breeding-status", Static)
+        parts = []
+
+        # Pair info
         pair = self.state.breeding_pair
-        if pair is None:
-            banner.update("")
-            return
+        if pair is not None:
+            male = self.state.get_guinea_pig(pair.male_id)
+            female = self.state.get_guinea_pig(pair.female_id)
+            if male and female:
+                both_ready = male.can_breed and female.can_breed
+                ready_str = "Ready" if both_ready else "Waiting"
+                auto_tag = " [AUTO]" if self._is_auto_paired() else ""
+                parts.append(f"Pair{auto_tag}: {male.name} x {female.name} ({ready_str})")
 
-        male = self.state.get_guinea_pig(pair.male_id)
-        female = self.state.get_guinea_pig(pair.female_id)
-        if male is None or female is None:
-            banner.update("")
-            return
-
-        male_ready = "Ready" if male.can_breed else "Not ready"
-        female_ready = "Ready" if female.can_breed else "Not ready"
-        auto_tag = " [AUTO]" if self._is_auto_paired() else ""
-        banner.update(
-            f"Active Pair{auto_tag}: {male.name} ({male_ready}) x {female.name} ({female_ready})"
-            f" - Waiting... [C to cancel]"
-        )
-
-    def _update_program_status(self) -> None:
-        """Update the breeding program progress banner."""
-        banner = self.query_one("#program-status", Static)
+        # Program info
         program = self.state.breeding_program
-        if not program.enabled:
-            banner.update("")
-            return
-
-        parts = ["Program: ON"]
-
-        # Target description
-        if program.has_target:
+        if program.enabled:
             panel = self.query_one("#program-panel", BreedingProgramPanel)
             summary = panel.get_summary()
             if summary:
-                parts.append(summary)
-        else:
-            parts.append("No target set")
+                parts.append(f"Program: ON -- {summary}")
+            else:
+                parts.append("Program: ON")
 
-        # Current stock count
-        adults = [p for p in self.state.get_pigs_list() if not p.is_baby]
-        parts.append(f"Stock: {len(adults)}/{program.stock_limit}")
-
-        # Best pair probability
-        if program.has_target:
-            best_prob = self._find_best_pair_probability()
-            if best_prob is not None:
-                parts.append(f"Best pair: {best_prob * 100:.1f}%")
-
-        # Population warnings
-        if len(adults) <= BREEDING.MIN_BREEDING_POPULATION:
-            parts.append("LOW POP — culling paused")
-
-        # Breeding blocked warnings
-        blocked_reasons = self._get_breeding_blocked_reasons()
-        if blocked_reasons:
-            parts.append(f"Breeding blocked: {', '.join(blocked_reasons)}")
+            adults = [p for p in self.state.get_pigs_list() if not p.is_baby]
+            parts.append(f"Stock: {len(adults)}/{program.stock_limit}")
 
         banner.update(" | ".join(parts))
 
@@ -562,7 +512,7 @@ class BreedingScreen(Screen):
         else:
             self.notify(f"Pair set: {male.name} x {female.name}")
 
-        self._update_pair_status()
+        self._update_status()
         self._populate_lists()
         self._update_predictions()
 
@@ -574,23 +524,6 @@ class BreedingScreen(Screen):
 
         self.state.clear_breeding_pair()
         self.notify("Breeding pair cancelled")
-        self._update_pair_status()
+        self._update_status()
         self._populate_lists()
         self._update_predictions()
-
-    def action_toggle_program(self) -> None:
-        """Toggle the breeding program panel visibility."""
-        panel = self.query_one("#program-panel", BreedingProgramPanel)
-        if panel.has_class("hidden"):
-            panel.has_genetics_lab = self._has_genetics_lab()
-            panel.remove_class("hidden")
-            panel.refresh_content()
-            panel.focus()
-        else:
-            panel.add_class("hidden")
-            self._update_program_status()
-            # Return focus to last active pig list
-            if self._active_panel == "female":
-                self.action_focus_females()
-            else:
-                self.action_focus_males()
