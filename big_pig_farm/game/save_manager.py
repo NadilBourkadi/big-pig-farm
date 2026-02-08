@@ -11,6 +11,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
+from big_pig_farm.simulation.breeding_filter import BreedingFilter
 from big_pig_farm.game.state import GameState, GameTime, EventLog, BreedingPair
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Personality, Needs, Position
 from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype, BaseColor, Pattern, ColorIntensity, RoanType
@@ -174,6 +175,19 @@ class SaveManager:
                 )
             """)
 
+            # Breeding filter table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS breeding_filter (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    keep_colors_json TEXT NOT NULL,
+                    keep_patterns_json TEXT NOT NULL,
+                    keep_intensities_json TEXT NOT NULL,
+                    keep_roan_json TEXT NOT NULL,
+                    carrier_aware INTEGER NOT NULL,
+                    enabled INTEGER NOT NULL
+                )
+            """)
+
             conn.commit()
 
     def _backup_save(self) -> None:
@@ -209,6 +223,7 @@ class SaveManager:
             cursor.execute("DELETE FROM contracts")
             cursor.execute("DELETE FROM contract_meta")
             cursor.execute("DELETE FROM breeding_pair")
+            cursor.execute("DELETE FROM breeding_filter")
 
             # Save game state
             cursor.execute("""
@@ -338,6 +353,20 @@ class SaveManager:
                     "INSERT INTO breeding_pair VALUES (1, ?, ?)",
                     (str(state.breeding_pair.male_id), str(state.breeding_pair.female_id)),
                 )
+
+            # Save breeding filter
+            bf = state.breeding_filter
+            cursor.execute(
+                "INSERT INTO breeding_filter VALUES (1, ?, ?, ?, ?, ?, ?)",
+                (
+                    json.dumps([c.value for c in bf.keep_colors]),
+                    json.dumps([p.value for p in bf.keep_patterns]),
+                    json.dumps([i.value for i in bf.keep_intensities]),
+                    json.dumps([r.value for r in bf.keep_roan]),
+                    1 if bf.carrier_aware else 0,
+                    1 if bf.enabled else 0,
+                ),
+            )
 
             conn.commit()
         except Exception:
@@ -531,6 +560,22 @@ class SaveManager:
                         state.breeding_pair = BreedingPair(male_id=male_id, female_id=female_id)
             except sqlite3.OperationalError:
                 pass  # Table doesn't exist in old saves
+
+            # Load breeding filter
+            try:
+                cursor.execute("SELECT * FROM breeding_filter WHERE id = 1")
+                bf_row = cursor.fetchone()
+                if bf_row:
+                    state.breeding_filter = BreedingFilter(
+                        keep_colors={BaseColor(v) for v in json.loads(bf_row["keep_colors_json"])},
+                        keep_patterns={Pattern(v) for v in json.loads(bf_row["keep_patterns_json"])},
+                        keep_intensities={ColorIntensity(v) for v in json.loads(bf_row["keep_intensities_json"])},
+                        keep_roan={RoanType(v) for v in json.loads(bf_row["keep_roan_json"])},
+                        carrier_aware=bool(bf_row["carrier_aware"]),
+                        enabled=bool(bf_row["enabled"]),
+                    )
+            except (sqlite3.OperationalError, Exception):
+                pass  # Table doesn't exist in old saves or bad data
 
             conn.close()
 

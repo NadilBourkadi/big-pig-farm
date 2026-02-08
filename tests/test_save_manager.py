@@ -10,6 +10,8 @@ from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.config import GameSpeed
+from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
+from big_pig_farm.simulation.breeding_filter import BreedingFilter
 
 
 @pytest.fixture
@@ -225,6 +227,60 @@ class TestPigdexPersistence:
         loaded = save_manager.load()
         assert loaded.pigdex.is_discovered(key)
         assert loaded.pigdex.discovered_count == 1
+
+
+class TestBreedingFilterPersistence:
+    """Tests for breeding filter save/load."""
+
+    def test_breeding_filter_roundtrip(self, save_manager):
+        state = GameState()
+        state.breeding_filter = BreedingFilter(
+            keep_colors={BaseColor.CHOCOLATE, BaseColor.GOLDEN},
+            keep_patterns={Pattern.DALMATIAN},
+            keep_intensities=set(),
+            keep_roan={RoanType.ROAN},
+            carrier_aware=True,
+            enabled=True,
+        )
+        save_manager.save(state)
+
+        loaded = save_manager.load()
+        bf = loaded.breeding_filter
+        assert bf.enabled is True
+        assert bf.carrier_aware is True
+        assert bf.keep_colors == {BaseColor.CHOCOLATE, BaseColor.GOLDEN}
+        assert bf.keep_patterns == {Pattern.DALMATIAN}
+        assert bf.keep_intensities == set()
+        assert bf.keep_roan == {RoanType.ROAN}
+
+    def test_default_filter_roundtrip(self, save_manager):
+        state = GameState()
+        save_manager.save(state)
+
+        loaded = save_manager.load()
+        bf = loaded.breeding_filter
+        assert bf.enabled is False
+        assert bf.keep_colors == set()
+        assert bf.keep_patterns == set()
+
+    def test_old_save_without_filter_table(self, tmp_path):
+        """Loading a save from before the filter feature should not crash."""
+        import sqlite3
+        save_path = tmp_path / "old_save.db"
+        # Create a minimal save without the breeding_filter table
+        sm = SaveManager(save_path=save_path)
+        state = GameState()
+        sm.save(state)
+
+        # Drop the breeding_filter table to simulate old save
+        conn = sqlite3.connect(save_path)
+        conn.execute("DROP TABLE breeding_filter")
+        conn.commit()
+        conn.close()
+
+        loaded = sm.load()
+        assert loaded is not None
+        assert loaded.breeding_filter.enabled is False
 
 
 class TestBackup:
