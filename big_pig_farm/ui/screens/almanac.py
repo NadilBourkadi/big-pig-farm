@@ -198,6 +198,10 @@ class JournalScreen(Screen):
     BINDINGS = [
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
+        ("up", "scroll_up", None),
+        ("down", "scroll_down", None),
+        ("pageup", "page_up", None),
+        ("pagedown", "page_down", None),
     ]
 
     DEFAULT_CSS = """
@@ -247,6 +251,35 @@ class JournalScreen(Screen):
         """Set VerticalScroll heights inline to ensure scrolling works."""
         for vs in self.query(VerticalScroll):
             vs.styles.height = "1fr"
+
+    def _get_active_scroll(self) -> VerticalScroll | None:
+        """Get the VerticalScroll in the currently active tab."""
+        tabs = self.query_one("#journal-tabs", TabbedContent)
+        active_pane = tabs.get_pane(tabs.active)
+        try:
+            return active_pane.query_one(VerticalScroll)
+        except Exception:
+            return None
+
+    def action_scroll_up(self) -> None:
+        vs = self._get_active_scroll()
+        if vs:
+            vs.scroll_up(animate=False)
+
+    def action_scroll_down(self) -> None:
+        vs = self._get_active_scroll()
+        if vs:
+            vs.scroll_down(animate=False)
+
+    def action_page_up(self) -> None:
+        vs = self._get_active_scroll()
+        if vs:
+            vs.scroll_page_up(animate=False)
+
+    def action_page_down(self) -> None:
+        vs = self._get_active_scroll()
+        if vs:
+            vs.scroll_page_down(animate=False)
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
