@@ -45,6 +45,7 @@ class BreedingScreen(Screen):
     BINDINGS = [
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
+        ("t", "switch_tab", "Tab"),
         ("tab", "switch_panel", "Switch"),
         ("m", "focus_males", "Males"),
         ("f", "focus_females", "Females"),
@@ -457,6 +458,19 @@ class BreedingScreen(Screen):
     def action_go_back(self) -> None:
         """Go back to main screen."""
         self.app.pop_screen()
+
+    def action_switch_tab(self) -> None:
+        """Switch between Pair and Program tabs."""
+        tabs = self.query_one("#breeding-tabs", TabbedContent)
+        pane_ids = [pane.id for pane in tabs.query(TabPane)]
+        if not pane_ids:
+            return
+        current = tabs.active
+        if current in pane_ids:
+            idx = pane_ids.index(current)
+            tabs.active = pane_ids[(idx + 1) % len(pane_ids)]
+        else:
+            tabs.active = pane_ids[0]
 
     def action_switch_panel(self) -> None:
         """Switch focus between male and female lists."""
