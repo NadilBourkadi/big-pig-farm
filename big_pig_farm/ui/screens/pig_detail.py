@@ -23,9 +23,6 @@ class PigDetailPanel(Static):
 
     DEFAULT_CSS = """
     PigDetailPanel {
-        width: 1fr;
-        height: 100%;
-        overflow-y: auto;
         padding: 0 1;
     }
 

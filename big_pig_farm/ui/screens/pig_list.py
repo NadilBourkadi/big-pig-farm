@@ -41,16 +41,20 @@ class PigListScreen(Screen):
 
     #pig-split {
         height: 1fr;
+        width: 100%;
     }
 
     #pig-table {
         width: 1fr;
+        height: 100%;
         margin: 1;
     }
 
     #pig-detail-panel {
-        width: 40;
+        width: 42;
+        height: 100%;
         border-left: solid $secondary;
+        overflow-y: auto;
     }
     """
 
