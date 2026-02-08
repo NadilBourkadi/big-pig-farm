@@ -30,6 +30,7 @@ class MainGameScreen(Screen):
     """The main game screen showing the farm view."""
 
     BINDINGS = [
+        # Normal mode bindings (hidden in edit mode via check_action)
         ("f", "feed", "Feed"),
         ("s", "open_shop", "Shop"),
         ("a", "open_adoption", "Adopt"),
@@ -37,24 +38,44 @@ class MainGameScreen(Screen):
         ("b", "open_breeding", "Breed"),
         ("j", "open_almanac", "Almanac"),
         ("e", "toggle_edit", "Edit"),
-        ("n", "new_game", "New"),
         ("space", "toggle_pause", "Pause"),
         ("plus", "speed_up", "+Spd"),
         ("minus", "slow_down", "-Spd"),
-        ("equal", "speed_up", None),  # Hidden duplicate
-        ("tab", "next_pig", "Next"),
-        ("up", "handle_up", None),  # Hidden - arrow keys are intuitive
+        ("equal", "speed_up", None),
+        ("tab", "next_pig", None),
+        ("n", "new_game", None),
+        # Edit mode bindings (shown only in edit mode via check_action)
+        ("m", "start_move", "Move"),
+        ("r", "remove_facility", "Remove"),
+        ("delete", "remove_facility", None),
+        ("enter", "handle_enter", "Place"),
+        # Always available (hidden from footer)
+        ("up", "handle_up", None),
         ("down", "handle_down", None),
         ("left", "handle_left", None),
         ("right", "handle_right", None),
-        ("enter", "handle_enter", None),
-        ("m", "start_move", None),
-        ("r", "remove_facility", None),
-        ("delete", "remove_facility", None),
         ("escape", "handle_escape", "Esc"),
-        ("d", "dump_debug", None),  # Hidden debug dump
+        ("d", "dump_debug", None),
         ("q", "quit_game", "Quit"),
     ]
+
+    # Actions that should only appear in the footer when in edit mode
+    _EDIT_ONLY_ACTIONS = {"start_move", "remove_facility", "handle_enter"}
+    # Actions that should only appear in the footer when NOT in edit mode
+    _NORMAL_ONLY_ACTIONS = {
+        "feed", "open_shop", "open_adoption", "open_pigs",
+        "open_breeding", "open_almanac", "toggle_pause",
+        "speed_up", "slow_down", "next_pig", "new_game",
+    }
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Control which bindings appear in footer based on edit mode."""
+        is_edit = self._farm_view and self._farm_view.edit_mode
+        if action in self._EDIT_ONLY_ACTIONS and not is_edit:
+            return False
+        if action in self._NORMAL_ONLY_ACTIONS and is_edit:
+            return False
+        return True
 
     DEFAULT_CSS = """
     MainGameScreen {
@@ -107,6 +128,14 @@ class MainGameScreen(Screen):
             yield self._notification_bar
 
         yield Footer()
+
+    def _refresh_footer(self) -> None:
+        """Refresh the footer to update visible bindings."""
+        try:
+            footer = self.query_one(Footer)
+            footer.refresh()
+        except Exception:
+            pass
 
     def on_mount(self) -> None:
         """Handle screen mount."""
@@ -227,6 +256,7 @@ class MainGameScreen(Screen):
             is_edit = self._farm_view.toggle_edit_mode()
             if self._status_bar:
                 self._status_bar.edit_mode = is_edit
+            self._refresh_footer()
             if is_edit:
                 self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
             else:
@@ -242,6 +272,7 @@ class MainGameScreen(Screen):
                 self._farm_view.toggle_edit_mode()
                 if self._status_bar:
                     self._status_bar.edit_mode = False
+                self._refresh_footer()
                 self.notify("Edit mode off")
         else:
             self._selected_pig_index = -1
