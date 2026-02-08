@@ -11,7 +11,8 @@ from textual.reactive import reactive
 
 from big_pig_farm.data.config import BREEDING, NEEDS
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
-from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype, carrier_summary, calculate_target_probability
+from big_pig_farm.entities.genetics import predict_offspring_phenotypes, Genotype, carrier_summary, calculate_target_probability
+from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
 from big_pig_farm.ui.widgets.breeding_program_panel import BreedingProgramPanel
@@ -387,16 +388,13 @@ class BreedingScreen(Screen):
 
         # Calculate predictions
         try:
-            probs = predict_offspring_probabilities(
+            pheno_probs = predict_offspring_phenotypes(
                 self.selected_male.genotype,
                 self.selected_female.genotype,
             )
         except Exception:
             panel.update("Unable to calculate predictions")
             return
-
-        # Sort by probability
-        sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
 
         # Build status warnings
         warnings = []
@@ -422,14 +420,16 @@ class BreedingScreen(Screen):
 
         lines.append("")  # Blank line before predictions
 
-        for phenotype, prob in sorted_probs[:8]:  # Show top 8
+        pigdex = self.state.pigdex
+        for phenotype, prob in pheno_probs[:8]:  # Show top 8
             percentage = prob * 100
             bar_len = int(prob * 20)
             bar = "\u2588" * bar_len + "\u2591" * (20 - bar_len)
-            lines.append(f"{bar} {percentage:5.1f}% - {phenotype}")
+            new_tag = "  [NEW]" if not pigdex.is_discovered(phenotype_key(phenotype)) else ""
+            lines.append(f"{bar} {percentage:5.1f}% - {phenotype.display_name}{new_tag}")
 
-        if len(sorted_probs) > 8:
-            lines.append(f"\n... and {len(sorted_probs) - 8} more possibilities")
+        if len(pheno_probs) > 8:
+            lines.append(f"\n... and {len(pheno_probs) - 8} more possibilities")
 
         # Target probability if program has target
         program = self.state.breeding_program
