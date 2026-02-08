@@ -384,22 +384,6 @@ def carrier_summary(genotype: Genotype) -> str:
     return ", ".join(carriers) if carriers else "None"
 
 
-def predict_offspring_probabilities(
-    parent1: Genotype, parent2: Genotype
-) -> dict[str, float]:
-    """Predict probability of offspring phenotypes using Punnett squares."""
-    phenotype_counts: dict[str, int] = {}
-    total = 1000
-
-    for _ in range(total):
-        result = breed(parent1, parent2)
-        phenotype = calculate_phenotype(result.genotype)
-        name = phenotype.display_name
-        phenotype_counts[name] = phenotype_counts.get(name, 0) + 1
-
-    return {name: count / total for name, count in phenotype_counts.items()}
-
-
 def predict_offspring_phenotypes(
     parent1: Genotype, parent2: Genotype
 ) -> list[tuple[Phenotype, float]]:

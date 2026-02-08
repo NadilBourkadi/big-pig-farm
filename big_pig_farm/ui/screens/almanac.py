@@ -283,7 +283,3 @@ class JournalScreen(Screen):
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
-
-
-# Backwards compat alias
-AlmanacScreen = JournalScreen
