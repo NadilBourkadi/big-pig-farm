@@ -16,7 +16,6 @@ from big_pig_farm.economy.currency import add_money
 from big_pig_farm.economy.shop import get_facility_cost
 from big_pig_farm.ui.widgets.status_bar import StatusBar
 from big_pig_farm.ui.widgets.farm_view import FarmView
-from big_pig_farm.ui.widgets.notification import NotificationBar
 from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
 from big_pig_farm.ui.screens.shop import ShopScreen
 from big_pig_farm.ui.screens.pig_list import PigListScreen
@@ -84,10 +83,6 @@ class MainGameScreen(Screen):
         margin: 0 1;
     }
 
-    #notification-container {
-        height: 1;
-        margin: 0 1;
-    }
     """
 
     def __init__(self, state: GameState, **kwargs):
@@ -95,7 +90,6 @@ class MainGameScreen(Screen):
         self.state = state
         self._status_bar: StatusBar | None = None
         self._farm_view: FarmView | None = None
-        self._notification_bar: NotificationBar | None = None
         self._pig_sidebar: PigSidebar | None = None
         self._selected_pig_index = -1
 
@@ -112,10 +106,6 @@ class MainGameScreen(Screen):
             self._pig_sidebar = PigSidebar(self.state)
             self._pig_sidebar.add_class("hidden")
             yield self._pig_sidebar
-
-        with Container(id="notification-container"):
-            self._notification_bar = NotificationBar()
-            yield self._notification_bar
 
         yield Footer()
 
@@ -152,14 +142,6 @@ class MainGameScreen(Screen):
         if self._pig_sidebar:
             self._pig_sidebar.refresh_content()
 
-        if self._notification_bar and self.state.events:
-            last_event = self.state.events[-1]
-            if not self._notification_bar.messages or \
-               self._notification_bar.messages[-1] != f"🔔 {last_event.message}":
-                self._notification_bar.add_message(
-                    last_event.message,
-                    last_event.event_type,
-                )
 
     def action_toggle_pause(self) -> None:
         """Toggle game pause."""
