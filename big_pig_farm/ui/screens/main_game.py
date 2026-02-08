@@ -128,14 +128,11 @@ class MainGameScreen(Screen):
 
     def _refresh_footer(self) -> None:
         """Refresh the footer to update visible bindings."""
-        try:
-            footer = self.query_one(Footer)
-            footer.refresh()
-        except Exception:
-            pass
+        self.refresh_bindings()
 
     def on_mount(self) -> None:
         """Handle screen mount."""
+        self.refresh_bindings()
         self.update_display()
         self.set_interval(0.1, self.update_display)
 
