@@ -53,7 +53,7 @@ class BreedingContract(BaseModel):
     def breeding_hint(self) -> str:
         """Hint about which bloodlines help produce the required traits."""
         hints = []
-        if self.required_color == BaseColor.LIGHT_GOLDEN:
+        if self.required_color == BaseColor.CREAM:
             hints.append("Golden + Chocolate bloodlines")
         elif self.required_color == BaseColor.GOLDEN:
             hints.append("Golden bloodline (Tier 2)")
@@ -86,7 +86,7 @@ class BreedingContract(BaseModel):
                 BaseColor.BLACK: "Black",
                 BaseColor.CHOCOLATE: "Chocolate",
                 BaseColor.GOLDEN: "Golden",
-                BaseColor.LIGHT_GOLDEN: "Cream",
+                BaseColor.CREAM: "Cream",
             }
             parts.append(color_names.get(self.required_color, self.required_color.value))
         if not parts:
@@ -160,7 +160,7 @@ COLOR_TIER_REQUIREMENTS: dict[BaseColor, int] = {
     BaseColor.BLACK: 1,
     BaseColor.CHOCOLATE: 1,
     BaseColor.GOLDEN: 1,
-    BaseColor.LIGHT_GOLDEN: 2,
+    BaseColor.CREAM: 2,
 }
 
 PATTERN_TIER_REQUIREMENTS: dict[Pattern, int] = {

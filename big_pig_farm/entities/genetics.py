@@ -36,7 +36,7 @@ class BaseColor(str, Enum):
     BLACK = "black"
     CHOCOLATE = "chocolate"
     GOLDEN = "golden"
-    LIGHT_GOLDEN = "light_golden"
+    CREAM = "cream"
 
 
 class Pattern(str, Enum):
@@ -143,7 +143,7 @@ class Phenotype(BaseModel):
             BaseColor.BLACK: "Black",
             BaseColor.CHOCOLATE: "Chocolate",
             BaseColor.GOLDEN: "Golden",
-            BaseColor.LIGHT_GOLDEN: "Cream",
+            BaseColor.CREAM: "Cream",
         }
         parts.append(color_names[self.base_color])
 
@@ -156,7 +156,7 @@ class Phenotype(BaseModel):
             BaseColor.BLACK: "grey23",
             BaseColor.CHOCOLATE: "orange4",
             BaseColor.GOLDEN: "gold1",
-            BaseColor.LIGHT_GOLDEN: "wheat1",
+            BaseColor.CREAM: "wheat1",
         }
         return color_map.get(self.base_color, "white")
 
@@ -174,7 +174,7 @@ def calculate_phenotype(genotype: Genotype) -> Phenotype:
     elif not has_E and has_B:
         base_color = BaseColor.GOLDEN
     else:
-        base_color = BaseColor.LIGHT_GOLDEN
+        base_color = BaseColor.CREAM
 
     # Pattern from S locus
     if genotype.is_homozygous_dominant(genotype.s_locus, "S"):
@@ -236,7 +236,7 @@ def calculate_rarity(
         rare_count += 2
 
     # Chocolate and golden are slightly less common
-    if base_color in (BaseColor.CHOCOLATE, BaseColor.LIGHT_GOLDEN):
+    if base_color in (BaseColor.CHOCOLATE, BaseColor.CREAM):
         rare_count += 1
 
     # Determine tier

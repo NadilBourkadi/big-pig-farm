@@ -83,7 +83,7 @@ def _matches_color(
             return True
         if color == BaseColor.GOLDEN and "e" in genotype.e_locus:
             return True
-        if color == BaseColor.LIGHT_GOLDEN and "e" in genotype.e_locus and "b" in genotype.b_locus:
+        if color == BaseColor.CREAM and "e" in genotype.e_locus and "b" in genotype.b_locus:
             return True
         # BLACK has no carrier state (dominant on both loci)
 
