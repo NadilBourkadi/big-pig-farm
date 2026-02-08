@@ -5,7 +5,7 @@ from textual.screen import Screen
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, Footer
 
-from big_pig_farm.economy.market import calculate_pig_value
+from big_pig_farm.economy.market import calculate_pig_value, calculate_pig_value_breakdown
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.genetics import carrier_summary
@@ -72,8 +72,18 @@ class PigDetailPanel(Static):
         lines.append(f"  Rarity: {pig.phenotype.rarity.value.title()}")
         if pig.origin_tag:
             lines.append(f"  Origin: {pig.origin_tag}")
-        value = calculate_pig_value(pig, self.state)
-        lines.append(f"  Sale Value: ${value}")
+        breakdown = calculate_pig_value_breakdown(pig, self.state)
+        lines.append(f"  Sale Value: ${breakdown['total']}")
+        # Show multiplier breakdown
+        mults = []
+        if breakdown["rarity_mult"] != 1.0:
+            lines.append(f"    Rarity: x{breakdown['rarity_mult']:.1f}")
+        if breakdown["age_mult"] != 1.0:
+            lines.append(f"    Age: x{breakdown['age_mult']:.1f}")
+        if breakdown["health_mult"] != 1.0:
+            lines.append(f"    Health: x{breakdown['health_mult']:.2f}")
+        if breakdown["grooming_mult"] != 1.0:
+            lines.append(f"    Grooming: x{breakdown['grooming_mult']:.2f}")
         lines.append("")
 
         # Personality
