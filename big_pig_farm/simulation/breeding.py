@@ -11,7 +11,8 @@ from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, P
 from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.pigdex import phenotype_key, get_discovery_reward, key_to_rarity, get_milestone_reward
-from big_pig_farm.simulation.breeding_filter import should_keep_pig
+from big_pig_farm.simulation.breeding_program import should_keep_pig, breeding_value
+from big_pig_farm.entities.genetics import calculate_target_probability
 
 
 def check_breeding_opportunities(game_state) -> int:
@@ -26,6 +27,9 @@ def check_breeding_opportunities(game_state) -> int:
 
     # Process manual breeding pair before auto-breeding
     _check_manual_breeding(game_state)
+
+    # Auto-pair from breeding program if slot is empty
+    _auto_pair_from_program(game_state)
 
     # Check for new breeding pairs
     if not game_state.is_at_capacity:
@@ -355,21 +359,21 @@ def _register_pigdex(game_state, pig: GuineaPig) -> None:
 
 
 def _apply_breeding_filter(game_state, babies: list[GuineaPig]) -> None:
-    """Mark newborns that don't match the breeding filter for auto-sell."""
-    bf = game_state.breeding_filter
-    if not bf.enabled:
+    """Mark newborns that don't match the breeding program target for auto-sell."""
+    program = game_state.breeding_program
+    if not program.enabled:
         return
 
     has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))
     marked = []
     for baby in babies:
-        if not should_keep_pig(bf, baby, has_genetics_lab=has_lab):
+        if not should_keep_pig(program, baby, has_genetics_lab=has_lab):
             baby.marked_for_sale = True
             marked.append(baby.name)
 
     if marked:
         game_state.log_event(
-            f"Breeding filter: {len(marked)} of {len(babies)} marked for sale ({', '.join(marked)})",
+            f"Breeding program: {len(marked)} of {len(babies)} marked for sale ({', '.join(marked)})",
             event_type="filter",
         )
 
@@ -416,3 +420,113 @@ def sell_marked_adults(game_state) -> list[tuple[str, int, UUID]]:
             total = sell_pig(game_state, pig)
             sold.append((name, total, pig_id))
     return sold
+
+
+def _auto_pair_from_program(game_state) -> None:
+    """Auto-pair the best breeding pair based on the breeding program target."""
+    if game_state.breeding_pair is not None:
+        return  # Manual pair or previous auto-pair still active
+
+    program = game_state.breeding_program
+    if not program.should_auto_pair():
+        return
+    if not program.has_target:
+        return
+
+    males = [
+        p for p in game_state.get_pigs_list()
+        if p.gender == Gender.MALE and p.can_breed and not p.breeding_locked
+    ]
+    females = [
+        p for p in game_state.get_pigs_list()
+        if p.gender == Gender.FEMALE and p.can_breed
+        and not p.is_pregnant and not p.breeding_locked
+    ]
+
+    if not males or not females:
+        return
+
+    best_pair = None
+    best_prob = -1.0
+    for male in males:
+        for female in females:
+            prob = calculate_target_probability(
+                male.genotype, female.genotype,
+                program.target_colors, program.target_patterns,
+                program.target_intensities, program.target_roan,
+            )
+            if prob > best_prob:
+                best_prob = prob
+                best_pair = (male, female)
+
+    if best_pair and best_prob > 0:
+        male, female = best_pair
+        game_state.set_breeding_pair(male.id, female.id)
+        game_state.log_event(
+            f"Breeding program paired {male.name} x {female.name} ({best_prob * 100:.1f}% target chance)",
+            event_type="breeding",
+        )
+
+
+def cull_surplus_breeders(game_state) -> None:
+    """Mark surplus pigs for sale when over the program's stock limit."""
+    program = game_state.breeding_program
+    if not program.enabled:
+        return
+
+    has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))
+
+    # Get all adult pigs not already marked for sale
+    adults = [
+        p for p in game_state.get_pigs_list()
+        if not p.marked_for_sale and not p.is_baby
+    ]
+
+    if len(adults) <= program.stock_limit:
+        return  # Under limit, nothing to cull
+
+    # Score each pig by breeding value (target allele count)
+    scored = [(p, breeding_value(p, program, has_lab)) for p in adults]
+    scored.sort(key=lambda x: x[1], reverse=True)  # Best first
+
+    # Ensure gender balance: keep at least 1 male + 1 female in top N
+    kept = []
+    has_male = False
+    has_female = False
+    surplus = []
+
+    for pig, score in scored:
+        if len(kept) < program.stock_limit:
+            kept.append(pig)
+            if pig.gender == Gender.MALE:
+                has_male = True
+            else:
+                has_female = True
+        else:
+            surplus.append(pig)
+
+    # If missing a gender in kept, swap the worst kept with best surplus of needed gender
+    if not has_male or not has_female:
+        needed_gender = Gender.MALE if not has_male else Gender.FEMALE
+        for pig in surplus:
+            if pig.gender == needed_gender:
+                # Swap: remove worst from kept, add this pig
+                worst_kept = kept[-1]
+                kept[-1] = pig
+                surplus.remove(pig)
+                surplus.append(worst_kept)
+                break
+
+    # Mark surplus for sale (skip pregnant pigs)
+    marked_count = 0
+    for pig in surplus:
+        if pig.is_pregnant:
+            continue
+        pig.marked_for_sale = True
+        marked_count += 1
+
+    if marked_count:
+        game_state.log_event(
+            f"Breeding program: {marked_count} surplus pig(s) marked for sale",
+            event_type="filter",
+        )
