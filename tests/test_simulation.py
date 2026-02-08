@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch
-from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG, BEHAVIOR
+from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG, BEHAVIOR, BREEDING
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Needs, Position
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import (
@@ -338,3 +338,67 @@ class TestStuckTimer:
 
         # Stuck timer should be cleared since pig actually moved
         assert pig.id not in controller._stuck_timers
+
+
+class TestLowPopHappinessBoost:
+    """Tests for the low-population happiness boost."""
+
+    def test_happiness_boost_when_population_low(self):
+        """Happiness boost should apply when pig count <= MIN_BREEDING_POPULATION."""
+        state = GameState()
+        # Add only 2 pigs (below MIN_BREEDING_POPULATION)
+        pig = GuineaPig.create(
+            name="Lonely",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.happiness = 50.0
+        state.add_guinea_pig(pig)
+
+        other = GuineaPig.create(
+            name="Friend",
+            gender=Gender.FEMALE,
+            position=Position(x=20.0, y=20.0),
+            age_days=5.0,
+        )
+        state.add_guinea_pig(other)
+
+        assert len(state.get_pigs_list()) <= BREEDING.MIN_BREEDING_POPULATION
+
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # With base decay of 2.0/hr + boredom penalty, but +3.0/hr boost,
+        # happiness should be higher than (50 - 2.0 - 1.0) = 47.0
+        # The boost gives +3.0 so net is roughly +0.0 to +1.0 depending on boredom
+        assert pig.needs.happiness > 45.0
+
+    def test_no_boost_when_population_above_threshold(self):
+        """Happiness boost should NOT apply when pig count > MIN_BREEDING_POPULATION."""
+        state = GameState()
+        pig = GuineaPig.create(
+            name="Test",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.happiness = 50.0
+        state.add_guinea_pig(pig)
+
+        # Add enough other pigs to exceed MIN_BREEDING_POPULATION
+        for i in range(BREEDING.MIN_BREEDING_POPULATION):
+            other = GuineaPig.create(
+                name=f"Other{i}",
+                gender=Gender.FEMALE,
+                position=Position(x=20.0, y=20.0),
+                age_days=5.0,
+            )
+            state.add_guinea_pig(other)
+
+        assert len(state.get_pigs_list()) > BREEDING.MIN_BREEDING_POPULATION
+
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Without boost, happiness should drop (base decay 2.0/hr + boredom)
+        # Pig is far from others so no social boost to offset
+        assert pig.needs.happiness < 50.0

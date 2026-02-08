@@ -1,6 +1,6 @@
 """Hunger, energy, happiness calculations for guinea pigs."""
 
-from big_pig_farm.data.config import NEEDS
+from big_pig_farm.data.config import NEEDS, BREEDING
 from big_pig_farm.entities.guinea_pig import GuineaPig, Personality, BehaviorState
 from big_pig_farm.entities.facilities import FacilityType
 
@@ -37,6 +37,11 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
     pig.needs.boredom += NEEDS.BOREDOM_DECAY * hours * boredom_modifier
     if pig.needs.boredom > NEEDS.BOREDOM_EXTRA_HAPPINESS_THRESHOLD:
         pig.needs.happiness -= NEEDS.BOREDOM_EXTRA_HAPPINESS_DRAIN * hours
+
+    # Low-population happiness boost — keeps colony breedable when tiny
+    pig_count = len(game_state.get_pigs_list())
+    if pig_count <= BREEDING.MIN_BREEDING_POPULATION:
+        pig.needs.happiness += NEEDS.LOW_POP_HAPPINESS_BOOST * hours
 
     # Social need decay - reduced if near other pigs
     nearby_pigs = _count_nearby_pigs(pig, game_state, radius=NEEDS.SOCIAL_RADIUS)

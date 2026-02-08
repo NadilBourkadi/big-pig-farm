@@ -4,7 +4,7 @@ from textual.app import ComposeResult
 from textual.widgets import Static
 from textual.reactive import reactive
 
-from big_pig_farm.data.config import SPEED_DISPLAY, GameSpeed
+from big_pig_farm.data.config import SPEED_DISPLAY, GameSpeed, BREEDING
 from big_pig_farm.economy.currency import format_money
 from big_pig_farm.entities.facilities import FacilityType
 
@@ -22,6 +22,7 @@ class StatusBar(Static):
     water_level: reactive[int] = reactive(100)
     is_paused: reactive[bool] = reactive(False)
     speed: reactive[int] = reactive(1)
+    warning: reactive[str] = reactive("")
 
     DEFAULT_CSS = """
     StatusBar {
@@ -56,6 +57,9 @@ class StatusBar(Static):
             speed_str,
         ]
 
+        if self.warning:
+            parts.append(f"⚠ {self.warning}")
+
         return " │ ".join(parts)
 
     def update_from_state(self, state) -> None:
@@ -87,3 +91,13 @@ class StatusBar(Static):
             self.water_level = int(avg_water)
         else:
             self.water_level = 0
+
+        # Population warning when breeding program is active
+        if state.breeding_program.enabled:
+            adults = [p for p in state.get_pigs_list() if not p.is_baby]
+            if len(adults) <= BREEDING.MIN_BREEDING_POPULATION:
+                self.warning = "LOW POP"
+            else:
+                self.warning = ""
+        else:
+            self.warning = ""

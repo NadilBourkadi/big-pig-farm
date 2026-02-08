@@ -10,6 +10,7 @@ from big_pig_farm.entities.genetics import (
     Genotype,
     Phenotype,
 )
+from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.guinea_pig import GuineaPig
 
 
@@ -84,11 +85,13 @@ def should_keep_pig(
     return True
 
 
-def breeding_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool) -> int:
-    """Score how useful a pig's genotype is for the breeding program.
+def breeding_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool) -> float:
+    """Score how useful a pig is for the breeding program.
 
-    Counts target alleles the pig carries (0-10 across 5 loci).
-    Higher = more useful for breeding toward the target.
+    Base score is target allele count (0-10 across 5 loci).
+    An age bonus (0-5) is added so younger pigs within breeding age
+    score higher than older ones with equal genetics, and seniors
+    (who can no longer breed) get no age bonus at all.
     """
     score = 0
     g = pig.genotype
@@ -132,7 +135,10 @@ def breeding_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool) -> i
         elif roan == RoanType.NONE:
             score += g.r_locus.count("r")
 
-    return score
+    # Age tiebreaker: younger breeding-age pigs score higher
+    remaining = max(0, BREEDING.MAX_AGE_DAYS - pig.age_days)
+    age_bonus = (remaining / BREEDING.MAX_AGE_DAYS) * 5.0
+    return score + age_bonus
 
 
 def _matches_color(

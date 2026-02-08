@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import UUID
 
 from big_pig_farm.data.config import SPEED_DISPLAY
+from big_pig_farm.entities.guinea_pig import Gender
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.behavior import BehaviorController
 
@@ -21,6 +22,7 @@ class DebugLogger:
         self._tick_counter = 0
         self._total_ticks = 0
         self._last_logs: dict[UUID, int] = {}  # pig_id -> log length at last snapshot
+        self._last_event_count: int = 0
         # Start fresh each session
         self.path.write_text(
             f"=== Debug session started {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n\n"
@@ -39,7 +41,34 @@ class DebugLogger:
         now = datetime.now().strftime("%H:%M:%S")
         lines = [f"--- TICK {self._total_ticks} | {now} | speed={SPEED_DISPLAY[state.speed]} ---"]
 
-        for pig in state.get_pigs_list():
+        # Population summary
+        pigs = state.get_pigs_list()
+        adults = [p for p in pigs if not p.is_baby]
+        babies = [p for p in pigs if p.is_baby]
+        males = sum(1 for p in pigs if p.gender == Gender.MALE)
+        females = sum(1 for p in pigs if p.gender == Gender.FEMALE)
+        pregnant = sum(1 for p in pigs if p.is_pregnant)
+        breedable = sum(1 for p in pigs if p.can_breed)
+        lines.append(
+            f"  POP: {len(pigs)} total ({len(adults)} adult, {len(babies)} baby)"
+            f" | {males}M/{females}F | {pregnant} pregnant | {breedable} breedable"
+        )
+
+        # Breeding program summary
+        if state.breeding_program.enabled:
+            prog = state.breeding_program
+            marked = sum(1 for p in pigs if p.marked_for_sale)
+            lines.append(f"  PROGRAM: stock_limit={prog.stock_limit} | marked_for_sale={marked}")
+
+        # Recent game events since last snapshot
+        all_events = state.events
+        new_events = all_events[self._last_event_count:]
+        self._last_event_count = len(all_events)
+        if new_events:
+            for ev in new_events[-10:]:  # Cap at 10 most recent
+                lines.append(f"  EVENT: {ev}")
+
+        for pig in pigs:
             n = pig.needs
             target = pig.target_description or "None"
             fac_id = pig.target_facility_id.hex[:8] if pig.target_facility_id else "-"

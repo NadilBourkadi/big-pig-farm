@@ -9,6 +9,7 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Static, ListView, ListItem, Label, Footer
 from textual.reactive import reactive
 
+from big_pig_farm.data.config import BREEDING, NEEDS
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype, carrier_summary, calculate_target_probability
 from big_pig_farm.entities.facilities import FacilityType
@@ -359,6 +360,15 @@ class BreedingScreen(Screen):
             if best_prob is not None:
                 parts.append(f"Best pair: {best_prob * 100:.1f}%")
 
+        # Population warnings
+        if len(adults) <= BREEDING.MIN_BREEDING_POPULATION:
+            parts.append("LOW POP — culling paused")
+
+        # Breeding blocked warnings
+        blocked_reasons = self._get_breeding_blocked_reasons()
+        if blocked_reasons:
+            parts.append(f"Breeding blocked: {', '.join(blocked_reasons)}")
+
         banner.update(" | ".join(parts))
 
     def _find_best_pair_probability(self) -> Optional[float]:
@@ -385,6 +395,34 @@ class BreedingScreen(Screen):
                     best = prob
 
         return best if best > 0 else None
+
+    def _get_breeding_blocked_reasons(self) -> list[str]:
+        """Return reasons why auto-pairing is currently blocked, if any."""
+        pigs = self.state.get_pigs_list()
+        reasons = []
+
+        all_males = [p for p in pigs if p.gender == Gender.MALE and p.is_adult and not p.breeding_locked]
+        all_females = [p for p in pigs if p.gender == Gender.FEMALE and p.is_adult
+                       and not p.is_pregnant and not p.breeding_locked]
+
+        eligible_males = [p for p in all_males if p.can_breed]
+        eligible_females = [p for p in all_females if p.can_breed]
+
+        if not all_males:
+            reasons.append("no males")
+        elif not eligible_males:
+            unhappy = sum(1 for p in all_males if p.needs.happiness < NEEDS.HIGH_THRESHOLD)
+            if unhappy:
+                reasons.append(f"{unhappy} male(s) too unhappy")
+
+        if not all_females:
+            reasons.append("no females")
+        elif not eligible_females:
+            unhappy = sum(1 for p in all_females if p.needs.happiness < NEEDS.HIGH_THRESHOLD)
+            if unhappy:
+                reasons.append(f"{unhappy} female(s) too unhappy")
+
+        return reasons
 
     def _update_predictions(self) -> None:
         """Update offspring predictions."""
