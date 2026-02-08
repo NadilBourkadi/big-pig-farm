@@ -16,6 +16,7 @@ class ShopCategory(str, Enum):
     UPGRADES = "upgrades"
     FOOD = "food"
     DECORATIONS = "decorations"
+    ADOPTION = "adoption"
 
 
 @dataclass
