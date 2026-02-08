@@ -11,6 +11,7 @@ from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, P
 from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.pigdex import phenotype_key, get_discovery_reward, key_to_rarity, get_milestone_reward
+from big_pig_farm.simulation.breeding_filter import should_keep_pig
 
 
 def check_breeding_opportunities(game_state) -> int:
@@ -199,6 +200,9 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         # Register in pigdex
         _register_pigdex(game_state, baby)
 
+    # Apply breeding filter to newborns
+    _apply_breeding_filter(game_state, babies_born)
+
     # Reset mother's pregnancy state
     mother.is_pregnant = False
     mother.pregnancy_days = 0.0
@@ -348,6 +352,26 @@ def _register_pigdex(game_state, pig: GuineaPig) -> None:
                 f"Pigdex Milestone: {threshold}% complete! +{milestone_reward} Squeaks",
                 event_type="pigdex",
             )
+
+
+def _apply_breeding_filter(game_state, babies: list[GuineaPig]) -> None:
+    """Mark newborns that don't match the breeding filter for auto-sell."""
+    bf = game_state.breeding_filter
+    if not bf.enabled:
+        return
+
+    has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))
+    marked = []
+    for baby in babies:
+        if not should_keep_pig(bf, baby, has_genetics_lab=has_lab):
+            baby.marked_for_sale = True
+            marked.append(baby.name)
+
+    if marked:
+        game_state.log_event(
+            f"Breeding filter: {len(marked)} of {len(babies)} marked for sale ({', '.join(marked)})",
+            event_type="filter",
+        )
 
 
 def register_pig_in_pigdex(game_state, pig: GuineaPig) -> None:

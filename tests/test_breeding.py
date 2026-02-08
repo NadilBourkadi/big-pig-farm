@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 
 from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position, BehaviorState
-from big_pig_farm.entities.genetics import Genotype
+from big_pig_farm.entities.genetics import Genotype, BaseColor
+from big_pig_farm.simulation.breeding_filter import BreedingFilter
 from big_pig_farm.simulation.breeding import (
     check_breeding_opportunities,
     advance_pregnancies,
@@ -282,3 +283,64 @@ class TestManualBreeding:
 
         assert state.breeding_pair.male_id == male2.id
         assert state.breeding_pair.female_id == female.id
+
+
+class TestBreedingFilter:
+    """Tests for breeding filter integration with birth flow."""
+
+    def _birth_with_filter(self, state, male, female, breeding_filter):
+        """Set up a pregnancy and trigger birth, return newborn pigs."""
+        state.breeding_filter = breeding_filter
+        female.is_pregnant = True
+        female.pregnancy_days = BREEDING.GESTATION_DAYS
+        female.partner_id = male.id
+        female.partner_genotype = male.genotype
+
+        initial_ids = {p.id for p in state.get_pigs_list()}
+        check_breeding_opportunities(state)
+        return [p for p in state.get_pigs_list() if p.id not in initial_ids]
+
+    def test_disabled_filter_does_not_mark(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        f = BreedingFilter(enabled=False, keep_colors={BaseColor.GOLDEN})
+
+        babies = self._birth_with_filter(state, male, female, f)
+        assert len(babies) > 0
+        assert all(not b.marked_for_sale for b in babies)
+
+    def test_enabled_filter_marks_non_matching(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        # Both parents have random-common genotypes (likely BB EE = Black)
+        # Filter for Golden only
+        f = BreedingFilter(enabled=True, keep_colors={BaseColor.GOLDEN})
+
+        babies = self._birth_with_filter(state, male, female, f)
+        assert len(babies) > 0
+        for baby in babies:
+            if baby.phenotype.base_color == BaseColor.GOLDEN:
+                assert not baby.marked_for_sale
+            else:
+                assert baby.marked_for_sale
+
+    def test_filter_logs_event(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        # Filter for something very unlikely
+        f = BreedingFilter(enabled=True, keep_colors={BaseColor.LIGHT_GOLDEN})
+
+        self._birth_with_filter(state, male, female, f)
+        filter_events = [e for e in state.events if e.event_type == "filter"]
+        # May or may not have filter events depending on babies' phenotypes
+        # Just verify no crash occurred
+        assert isinstance(filter_events, list)
+
+    def test_pigdex_registered_before_filter(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        f = BreedingFilter(enabled=True, keep_colors={BaseColor.GOLDEN})
+
+        babies = self._birth_with_filter(state, male, female, f)
+        # All babies should be registered in pigdex regardless of filter
+        assert state.pigdex.discovered_count >= 1

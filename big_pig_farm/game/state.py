@@ -11,6 +11,7 @@ from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.facilities import Facility
 from big_pig_farm.entities.pigdex import Pigdex
 from big_pig_farm.economy.contracts import ContractBoard
+from big_pig_farm.simulation.breeding_filter import BreedingFilter
 from big_pig_farm.game.world import FarmGrid
 
 
@@ -104,6 +105,9 @@ class GameState(BaseModel):
     # Collections
     pigdex: Pigdex = Field(default_factory=Pigdex)
     contract_board: ContractBoard = Field(default_factory=ContractBoard)
+
+    # Breeding filter
+    breeding_filter: BreedingFilter = Field(default_factory=BreedingFilter)
 
     # Manual breeding
     breeding_pair: Optional[BreedingPair] = None
