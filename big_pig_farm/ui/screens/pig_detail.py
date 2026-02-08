@@ -32,27 +32,20 @@ class PigDetailPanel(Static):
     """
 
     def __init__(self, state: GameState, pig: GuineaPig | None = None, **kwargs):
-        super().__init__(**kwargs)
         self.state = state
         self._pig = pig
-
-    def on_mount(self) -> None:
-        """Render initial content."""
-        self._render_content()
+        super().__init__(self._build_content(), **kwargs)
 
     def refresh_pig(self, pig: GuineaPig | None) -> None:
         """Update the panel for a different pig."""
         self._pig = pig
-        self._render_content()
+        self.update(self._build_content())
 
-    def _render_content(self) -> None:
-        """Render all pig detail content as text."""
+    def _build_content(self) -> str:
+        """Build all pig detail content as a markup string."""
         if not self._pig:
-            self.update("[dim]Select a pig to see details[/]")
-            self.add_class("no-pig")
-            return
+            return "[dim]Select a pig to see details[/]"
 
-        self.remove_class("no-pig")
         pig = self._pig
         gender_str = "Male" if pig.gender == Gender.MALE else "Female"
         gender_icon = "\u2642" if pig.gender == Gender.MALE else "\u2640"
@@ -71,8 +64,6 @@ class PigDetailPanel(Static):
             lines.append(f"  Origin: {pig.origin_tag}")
         breakdown = calculate_pig_value_breakdown(pig, self.state)
         lines.append(f"  Sale Value: ${breakdown['total']}")
-        # Show multiplier breakdown
-        mults = []
         if breakdown["rarity_mult"] != 1.0:
             lines.append(f"    Rarity: x{breakdown['rarity_mult']:.1f}")
         if breakdown["age_mult"] != 1.0:
@@ -144,7 +135,7 @@ class PigDetailPanel(Static):
         if pig.path:
             lines.append(f"  {len(pig.path)} steps away")
 
-        self.update("\n".join(lines))
+        return "\n".join(lines)
 
     def _get_parent_name(self, parent_id, stored_name: str = None) -> str:
         """Get parent name or 'Unknown'."""

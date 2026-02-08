@@ -51,13 +51,10 @@ class PigdexPanel(Static):
     """Panel showing Pigdex collection progress."""
 
     def __init__(self, state: GameState, **kwargs):
-        super().__init__(**kwargs)
         self.state = state
+        super().__init__(self._build_content(), **kwargs)
 
-    def on_mount(self) -> None:
-        self._render_content()
-
-    def _render_content(self) -> None:
+    def _build_content(self) -> str:
         pigdex = self.state.pigdex
         pct = pigdex.completion_percent
         lines = []
@@ -97,20 +94,17 @@ class PigdexPanel(Static):
             milestones.append(f"{t}%: {status}")
         lines.append(f"Milestones: {' | '.join(milestones)}")
 
-        self.update("\n".join(lines))
+        return "\n".join(lines)
 
 
 class ContractsPanel(Static):
     """Panel showing active breeding contracts."""
 
     def __init__(self, state: GameState, **kwargs):
-        super().__init__(**kwargs)
         self.state = state
+        super().__init__(self._build_content(), **kwargs)
 
-    def on_mount(self) -> None:
-        self._render_content()
-
-    def _render_content(self) -> None:
+    def _build_content(self) -> str:
         board = self.state.contract_board
         lines = []
         lines.append(f"[bold]{len(board.active_contracts)} Active Contracts[/]")
@@ -127,7 +121,7 @@ class ContractsPanel(Static):
                      f"Total Bonus: {board.total_contract_earnings} Squeaks | "
                      f"Day {self.state.game_time.day}[/]")
 
-        self.update("\n".join(lines))
+        return "\n".join(lines)
 
     def _format_contract(self, contract: BreedingContract) -> str:
         difficulty = DIFFICULTY_LABELS.get(contract.difficulty, "?")
@@ -146,13 +140,10 @@ class EventLogPanel(Static):
     """Panel showing scrollable event history."""
 
     def __init__(self, state: GameState, **kwargs):
-        super().__init__(**kwargs)
         self.state = state
+        super().__init__(self._build_content(), **kwargs)
 
-    def on_mount(self) -> None:
-        self._render_content()
-
-    def _render_content(self) -> None:
+    def _build_content(self) -> str:
         events = self.state.events
         lines = []
         lines.append(f"[bold]{len(events)} Events[/]")
@@ -165,7 +156,7 @@ class EventLogPanel(Static):
                 icon = EVENT_ICONS.get(event.event_type, "\U0001f514")
                 lines.append(f"{icon} Day {event.game_day} | {event.message}")
 
-        self.update("\n".join(lines))
+        return "\n".join(lines)
 
 
 class JournalScreen(Screen):
