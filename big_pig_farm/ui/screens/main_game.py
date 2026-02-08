@@ -22,7 +22,7 @@ from big_pig_farm.ui.screens.pig_list import PigListScreen
 from big_pig_farm.ui.screens.breeding import BreedingScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.adoption import AdoptionScreen
-from big_pig_farm.ui.screens.almanac import AlmanacScreen
+from big_pig_farm.ui.screens.almanac import JournalScreen
 
 
 class MainGameScreen(Screen):
@@ -35,7 +35,7 @@ class MainGameScreen(Screen):
         ("a", "open_adoption", "Adopt"),
         ("p", "open_pigs", "Pigs"),
         ("b", "open_breeding", "Breed"),
-        ("j", "open_almanac", "Almanac"),
+        ("j", "open_journal", "Journal"),
         ("e", "toggle_edit", "Edit"),
         ("space", "toggle_pause", "Pause"),
         ("plus", "speed_up", "+Spd"),
@@ -63,7 +63,7 @@ class MainGameScreen(Screen):
     # Actions that should only appear in the footer when NOT in edit mode
     _NORMAL_ONLY_ACTIONS = {
         "feed", "open_shop", "open_adoption", "open_pigs",
-        "open_breeding", "open_almanac", "toggle_pause",
+        "open_breeding", "open_journal", "toggle_pause",
         "speed_up", "slow_down", "next_pig", "new_game",
     }
 
@@ -368,9 +368,9 @@ class MainGameScreen(Screen):
         """Open the breeding screen."""
         self.app.push_screen(BreedingScreen(self.state))
 
-    def action_open_almanac(self) -> None:
-        """Open the almanac (Pigdex, Contracts, Event Log)."""
-        self.app.push_screen(AlmanacScreen(self.state))
+    def action_open_journal(self) -> None:
+        """Open the journal (Pigdex, Contracts, Event Log)."""
+        self.app.push_screen(JournalScreen(self.state))
 
     def action_new_game(self) -> None:
         """Start a new game (with confirmation)."""

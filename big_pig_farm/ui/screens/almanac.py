@@ -1,4 +1,4 @@
-"""Almanac screen - tabbed view combining Pigdex, Contracts, and Event Log."""
+"""Journal screen - tabbed view combining Pigdex, Contracts, and Event Log."""
 
 from textual.app import ComposeResult
 from textual.screen import Screen
@@ -168,7 +168,7 @@ class EventLogPanel(Static):
         self.update("\n".join(lines))
 
 
-class AlmanacScreen(Screen):
+class JournalScreen(Screen):
     """Tabbed screen combining Pigdex, Contracts, and Event Log."""
 
     BINDINGS = [
@@ -177,23 +177,23 @@ class AlmanacScreen(Screen):
     ]
 
     DEFAULT_CSS = """
-    AlmanacScreen {
+    JournalScreen {
         layout: vertical;
         background: $surface;
     }
 
-    #almanac-header {
+    #journal-header {
         height: 3;
         background: $primary;
         padding: 1;
         text-align: center;
     }
 
-    #almanac-tabs {
+    #journal-tabs {
         height: 1fr;
     }
 
-    .almanac-panel {
+    .journal-panel {
         padding: 1;
         height: auto;
     }
@@ -204,20 +204,24 @@ class AlmanacScreen(Screen):
         self.state = state
 
     def compose(self) -> ComposeResult:
-        yield Static("ALMANAC", id="almanac-header")
+        yield Static("JOURNAL", id="journal-header")
 
-        with TabbedContent("Pigdex", "Contracts", "Log", id="almanac-tabs"):
+        with TabbedContent(id="journal-tabs"):
             with TabPane("Pigdex"):
                 with VerticalScroll():
-                    yield PigdexPanel(self.state, classes="almanac-panel")
+                    yield PigdexPanel(self.state, classes="journal-panel")
             with TabPane("Contracts"):
                 with VerticalScroll():
-                    yield ContractsPanel(self.state, classes="almanac-panel")
+                    yield ContractsPanel(self.state, classes="journal-panel")
             with TabPane("Log"):
                 with VerticalScroll():
-                    yield EventLogPanel(self.state, classes="almanac-panel")
+                    yield EventLogPanel(self.state, classes="journal-panel")
 
         yield Footer()
 
     def action_go_back(self) -> None:
         self.app.pop_screen()
+
+
+# Backwards compat alias
+AlmanacScreen = JournalScreen
