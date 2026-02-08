@@ -46,6 +46,12 @@ _AXES = [
     ("Roan", _ROAN, _ROAN_LABELS),
 ]
 
+# Fixed column width: longest label across all axes (Chinchilla = 10)
+_ITEM_WIDTH = max(
+    len(l)
+    for labels in (_COLOR_LABELS, _PATTERN_LABELS, _INTENSITY_LABELS, _ROAN_LABELS)
+    for l in labels.values()
+)
 
 
 class BreedingProgramPanel(Static, can_focus=True):
@@ -151,9 +157,9 @@ class BreedingProgramPanel(Static, can_focus=True):
             self.breeding_program.enabled = not self.breeding_program.enabled
 
     def _fmt_check(self, checked: bool, label: str, is_cursor: bool) -> str:
-        """Format a checkbox item with Rich markup."""
+        """Format a checkbox item with Rich markup at fixed column width."""
         icon = "\u25cf" if checked else "\u25cb"
-        inner = f"{icon} {label}"
+        inner = f"{icon} {label:<{_ITEM_WIDTH}}"
         if is_cursor:
             style = "reverse green" if checked else "reverse"
             return f" [{style}]{inner}[/]"
