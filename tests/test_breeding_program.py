@@ -12,8 +12,9 @@ from big_pig_farm.entities.genetics import (
     calculate_phenotype,
     calculate_target_probability,
 )
+from big_pig_farm.data.config import BREEDING
 from big_pig_farm.simulation.breeding_program import BreedingProgram, should_keep_pig, breeding_value
-from big_pig_farm.simulation.breeding import _auto_pair_from_program, cull_surplus_breeders
+from big_pig_farm.simulation.breeding import _auto_pair_from_program, _apply_breeding_filter, cull_surplus_breeders
 from big_pig_farm.game.state import GameState
 
 
@@ -492,25 +493,26 @@ class TestCullSurplus:
     def test_over_limit_marks_lowest_value(self):
         """Over stock limit should mark lowest-value pigs."""
         state = GameState()
-        # Create 5 adults: 3 with golden alleles (higher value), 2 without
-        for i in range(3):
+        # Create 7 adults: 4 with golden alleles (higher value), 3 without
+        # Need > MIN_BREEDING_POPULATION + surplus to test properly
+        for i in range(4):
             gender = Gender.MALE if i == 0 else Gender.FEMALE
             pig = _make_pig(f"Good{i}", gender, e_locus=("e", "e"))
             state.add_guinea_pig(pig)
-        for i in range(2):
+        for i in range(3):
             gender = Gender.MALE if i == 0 else Gender.FEMALE
             pig = _make_pig(f"Bad{i}", gender, e_locus=("E", "E"))
             state.add_guinea_pig(pig)
 
         state.breeding_program = BreedingProgram(
             enabled=True,
-            stock_limit=3,
+            stock_limit=4,
             target_colors={BaseColor.GOLDEN},
         )
 
         cull_surplus_breeders(state)
         marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
-        assert len(marked) == 2
+        assert len(marked) == 3
         # The marked ones should be the "Bad" pigs (no golden alleles)
         assert all("Bad" in p.name for p in marked)
 
@@ -596,3 +598,114 @@ class TestBreedingProgramModel:
         pig_ee = _make_pig_with_genotype(e_locus=("e", "e"))
         pig_EE = _make_pig_with_genotype(e_locus=("E", "E"))
         assert breeding_value(pig_ee, program, False) > breeding_value(pig_EE, program, False)
+
+
+# ─── Age-aware breeding value tests ───
+
+
+class TestBreedingValueAge:
+    """Tests for the age tiebreaker in breeding_value()."""
+
+    def test_younger_pig_scores_higher_than_older(self):
+        """Young adult should score higher than older adult with same genetics."""
+        program = BreedingProgram(target_colors={BaseColor.GOLDEN})
+        young = _make_pig("Young", Gender.MALE, age_days=5.0, e_locus=("e", "e"))
+        old = _make_pig("Old", Gender.MALE, age_days=25.0, e_locus=("e", "e"))
+        assert breeding_value(young, program, False) > breeding_value(old, program, False)
+
+    def test_senior_scores_lower_than_adult(self):
+        """Senior pig should score lower than adult with same genetics."""
+        program = BreedingProgram(target_colors={BaseColor.GOLDEN})
+        adult = _make_pig("Adult", Gender.MALE, age_days=10.0, e_locus=("e", "e"))
+        senior = _make_pig("Senior", Gender.MALE, age_days=35.0, e_locus=("e", "e"))
+        assert breeding_value(adult, program, False) > breeding_value(senior, program, False)
+
+    def test_good_genetics_beats_age_advantage(self):
+        """Pig with much better genetics should still beat a younger pig with no target alleles."""
+        program = BreedingProgram(
+            target_colors={BaseColor.GOLDEN},
+            target_patterns={Pattern.DALMATIAN},
+            target_roan={RoanType.ROAN},
+        )
+        # Score: e(2) + s(2) + R(1) = 5 alleles + small age bonus
+        old_good = _make_pig(
+            "OldGood", Gender.MALE, age_days=25.0,
+            e_locus=("e", "e"), s_locus=("s", "s"), r_locus=("R", "r"),
+        )
+        # Score: 0 alleles + large age bonus (~4.2)
+        young_bad = _make_pig("YoungBad", Gender.MALE, age_days=5.0)
+        assert breeding_value(old_good, program, False) > breeding_value(young_bad, program, False)
+
+
+# ─── Culling with population floor tests ───
+
+
+class TestCullPopulationFloor:
+    """Tests for the MIN_BREEDING_POPULATION floor in culling."""
+
+    def test_cull_respects_min_population(self):
+        """Should not mark adults when doing so drops below MIN_BREEDING_POPULATION."""
+        state = GameState()
+        # Create exactly MIN_BREEDING_POPULATION adults
+        for i in range(BREEDING.MIN_BREEDING_POPULATION):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Pig{i}", gender)
+            state.add_guinea_pig(pig)
+
+        # stock_limit=2 is below MIN_BREEDING_POPULATION
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=2,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        # No pigs should be marked because we're at the floor
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_cull_sells_seniors_first(self):
+        """Should sell seniors before young adults with equal genetics."""
+        state = GameState()
+        # 6 adults: 3 young + 3 senior, all same genetics
+        for i in range(3):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Young{i}", gender, age_days=5.0, e_locus=("e", "e"))
+            state.add_guinea_pig(pig)
+        for i in range(3):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Senior{i}", gender, age_days=35.0, e_locus=("e", "e"))
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 2
+        # Marked pigs should be the seniors (lower breeding value due to age)
+        assert all("Senior" in p.name for p in marked)
+
+    def test_filter_skips_when_population_low(self):
+        """_apply_breeding_filter should skip marking when adults <= MIN_BREEDING_POPULATION."""
+        state = GameState()
+        # Create adults at the floor
+        for i in range(BREEDING.MIN_BREEDING_POPULATION):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Adult{i}", gender)
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        # Create a baby that doesn't match the target
+        baby = _make_pig("Baby", Gender.MALE, age_days=0.0, e_locus=("E", "E"))
+        state.add_guinea_pig(baby)
+
+        _apply_breeding_filter(state, [baby])
+        # Baby should NOT be marked because population is at the floor
+        assert not baby.marked_for_sale
