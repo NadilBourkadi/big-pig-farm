@@ -76,13 +76,23 @@ class PigListScreen(Screen):
 
     def on_mount(self) -> None:
         """Handle mount event."""
-        # Set layout inline — widget DEFAULT_CSS specificity overrides screen CSS
+        # Set styles inline — widget DEFAULT_CSS has higher specificity than
+        # screen DEFAULT_CSS in Textual 0.47, so screen-level CSS doesn't apply.
         split = self.query_one("#pig-split", Container)
         split.styles.layout = "horizontal"
+        split.styles.height = "1fr"
 
         table = self.query_one("#pig-table", DataTable)
+        table.styles.width = "1fr"
+        table.styles.height = "100%"
         table.cursor_type = "row"
         table.add_columns("Name", "Age", "Gender", "Color", "Happiness", "Breed", "Value")
+
+        panel = self.query_one("#pig-detail-panel", PigDetailPanel)
+        panel.styles.width = 42
+        panel.styles.height = "100%"
+        panel.styles.overflow_y = "auto"
+
         self._refresh_table()
         table.focus()
 
