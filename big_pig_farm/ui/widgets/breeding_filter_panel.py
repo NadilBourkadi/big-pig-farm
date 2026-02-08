@@ -154,9 +154,9 @@ class BreedingFilterPanel(Static, can_focus=True):
                 checked = "x" if val in keep_set else " "
                 label = labels[val]
                 if axis_idx == self._cursor_axis and item_idx == self._cursor_item:
-                    items.append(f">[{checked}] {label}")
+                    items.append(f">\[{checked}] {label}")
                 else:
-                    items.append(f" [{checked}] {label}")
+                    items.append(f" \[{checked}] {label}")
             all_empty = len(keep_set) == 0
             suffix = " (any)" if all_empty else ""
             lines.append(f"  {axis_name}:{suffix}  {'  '.join(items)}")
@@ -167,12 +167,12 @@ class BreedingFilterPanel(Static, can_focus=True):
         ca_check = "x" if self.breeding_filter.carrier_aware else " "
         lab_status = " (Lab built)" if self.has_genetics_lab else " (needs Lab)"
         ca_cursor = ">" if self._cursor_axis == 4 else " "
-        lines.append(f"  {ca_cursor}[{ca_check}] Carrier-Aware Mode{lab_status}")
+        lines.append(f"  {ca_cursor}\[{ca_check}] Carrier-Aware Mode{lab_status}")
 
         # Enabled toggle
         en_check = "x" if self.breeding_filter.enabled else " "
         en_cursor = ">" if self._cursor_axis == 5 else " "
-        lines.append(f"  {en_cursor}[{en_check}] Filter Enabled")
+        lines.append(f"  {en_cursor}\[{en_check}] Filter Enabled")
 
         self.update("\n".join(lines))
 
