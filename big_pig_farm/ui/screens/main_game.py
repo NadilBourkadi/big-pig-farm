@@ -20,7 +20,6 @@ from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
 from big_pig_farm.ui.screens.shop import ShopScreen
 from big_pig_farm.ui.screens.pig_list import PigListScreen
 from big_pig_farm.ui.screens.breeding import BreedingScreen
-from big_pig_farm.ui.screens.facilities import FacilitiesScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.adoption import AdoptionScreen
 from big_pig_farm.ui.screens.almanac import AlmanacScreen
@@ -372,10 +371,6 @@ class MainGameScreen(Screen):
     def action_open_almanac(self) -> None:
         """Open the almanac (Pigdex, Contracts, Event Log)."""
         self.app.push_screen(AlmanacScreen(self.state))
-
-    def action_open_facilities(self) -> None:
-        """Open the facilities screen."""
-        self.app.push_screen(FacilitiesScreen(self.state))
 
     def action_new_game(self) -> None:
         """Start a new game (with confirmation)."""
