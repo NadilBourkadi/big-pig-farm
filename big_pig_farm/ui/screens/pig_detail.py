@@ -11,6 +11,7 @@ from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.genetics import carrier_summary
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.needs import get_most_urgent_need
+from big_pig_farm.ui.utils import format_needs_bar
 
 
 class PigDetailScreen(Screen):
@@ -168,19 +169,14 @@ class PigDetailScreen(Screen):
             ("Energy", needs.energy),
             ("Happiness", needs.happiness),
             ("Health", needs.health),
+            ("Social", needs.social),
+            ("Fun", 100 - needs.boredom),
         ]
 
         for name, value in needs_data:
-            bar = self._make_bar(value, 20)
-            lines.append(f"  {name:10} {bar} {int(value):3}%")
+            lines.append(f"  {name:10} {format_needs_bar(value)}")
 
         return "\n".join(lines)
-
-    def _make_bar(self, value: float, width: int = 20) -> str:
-        """Create a bar visualization."""
-        filled = int((value / 100) * width)
-        empty = width - filled
-        return "[" + "#" * filled + "-" * empty + "]"
 
     def _format_ai_state(self) -> str:
         """Format AI/behavior debug info."""

@@ -11,6 +11,7 @@ from textual.widgets import Static, DataTable, Footer
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
 from big_pig_farm.game.state import GameState
 from big_pig_farm.ui.screens.pig_detail import PigDetailScreen
+from big_pig_farm.ui.utils import format_needs_bar
 
 
 class PigListScreen(Screen):
@@ -87,7 +88,7 @@ class PigListScreen(Screen):
 
         for pig in self.state.get_pigs_list():
             age_str = f"{int(pig.age_days)}d ({pig.age_group.value})"
-            happiness_bar = self._make_bar(pig.needs.happiness)
+            happiness_bar = format_needs_bar(pig.needs.happiness)
             value = calculate_pig_value(pig, self.state)
 
             # Breeding status column
@@ -114,12 +115,6 @@ class PigListScreen(Screen):
                 f"${value}",
                 key=str(pig.id),
             )
-
-    def _make_bar(self, value: float, width: int = 10) -> str:
-        """Create a simple bar visualization."""
-        filled = int((value / 100) * width)
-        empty = width - filled
-        return "█" * filled + "░" * empty
 
     def _get_selected_pig(self):
         """Get the currently selected pig."""
