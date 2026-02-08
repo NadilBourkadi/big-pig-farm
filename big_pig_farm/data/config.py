@@ -74,6 +74,9 @@ class NeedsConfig:
     # Happiness boosts during behavior
     EATING_HAPPINESS_BOOST: float = 2.0
 
+    # Low-population happiness boost (per game hour, when colony is tiny)
+    LOW_POP_HAPPINESS_BOOST: float = 3.0
+
     # Happiness multipliers when needs are critical
     HUNGER_CRITICAL_HAPPINESS_MULT: float = 1.5
     THIRST_CRITICAL_HAPPINESS_MULT: float = 1.5
@@ -110,6 +113,7 @@ class BreedingConfig:
     HIGH_HAPPINESS_THRESHOLD: int = 80  # Threshold for happiness breeding bonus
     HIGH_HAPPINESS_BONUS: float = 0.05  # +5% with high happiness
     OLD_AGE_DEATH_RATE: float = 0.1     # Base death rate multiplier per game day past max age
+    MIN_BREEDING_POPULATION: int = 4    # Hard floor — never cull below this many adults
 
 
 @dataclass(frozen=True)
