@@ -13,6 +13,7 @@ from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype, carrier_summary
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
+from big_pig_farm.ui.widgets.breeding_filter_panel import BreedingFilterPanel
 
 
 class PigListItem(ListItem):
@@ -45,6 +46,7 @@ class BreedingScreen(Screen):
         ("f", "focus_females", "Females"),
         ("p", "set_pair", "Pair"),
         ("c", "cancel_pair", "Cancel Pair"),
+        ("g", "toggle_filter", "Filter"),
     ]
 
     DEFAULT_CSS = """
@@ -121,6 +123,13 @@ class BreedingScreen(Screen):
         padding: 0 1;
         color: $warning;
     }
+
+    #filter-summary {
+        height: auto;
+        max-height: 1;
+        padding: 0 1;
+        color: $accent;
+    }
     """
 
     selected_male: reactive[Optional[GuineaPig]] = reactive(None)
@@ -135,6 +144,7 @@ class BreedingScreen(Screen):
         """Compose the breeding screen."""
         yield Static("Breeding Planner - Select parents to predict offspring", id="breeding-header")
         yield Static("", id="pair-status")
+        yield Static("", id="filter-summary")
 
         with Container(id="breeding-content"):
             with Horizontal(id="parent-selection"):
@@ -156,12 +166,19 @@ class BreedingScreen(Screen):
                 id="prediction-panel"
             )
 
+        yield BreedingFilterPanel(
+            self.state.breeding_filter,
+            has_genetics_lab=self._has_genetics_lab(),
+            id="filter-panel",
+            classes="hidden",
+        )
         yield Footer()
 
     def on_mount(self) -> None:
         """Handle mount event."""
         self._populate_lists()
         self._update_pair_status()
+        self._update_filter_summary()
         # Focus the male list by default
         male_list = self.query_one("#male-list", ListView)
         male_list.focus()
@@ -432,3 +449,26 @@ class BreedingScreen(Screen):
         self._update_pair_status()
         self._populate_lists()
         self._update_predictions()
+
+    def action_toggle_filter(self) -> None:
+        """Toggle the breeding filter panel visibility."""
+        panel = self.query_one("#filter-panel", BreedingFilterPanel)
+        if panel.has_class("hidden"):
+            panel.has_genetics_lab = self._has_genetics_lab()
+            panel.remove_class("hidden")
+            panel.refresh_content()
+            panel.focus()
+        else:
+            panel.add_class("hidden")
+            self._update_filter_summary()
+            # Return focus to last active pig list
+            if self._active_panel == "female":
+                self.action_focus_females()
+            else:
+                self.action_focus_males()
+
+    def _update_filter_summary(self) -> None:
+        """Update the filter summary banner."""
+        panel = self.query_one("#filter-panel", BreedingFilterPanel)
+        summary = self.query_one("#filter-summary", Static)
+        summary.update(panel.get_summary())
