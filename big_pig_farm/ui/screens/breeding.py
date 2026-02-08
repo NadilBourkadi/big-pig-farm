@@ -43,8 +43,16 @@ class PigListItem(ListItem):
 class BreedingScreen(Screen):
     """Screen for breeding planning and genetics viewing."""
 
-    # Pair tab bindings (default)
+    # Program tab bindings (default) — arrows/space/enter are NOT bound
+    # here so they fall through to BreedingProgramPanel.on_key
     BINDINGS = [
+        ("escape", "go_back", "Back"),
+        ("q", "go_back", "Back"),
+        ("t", "switch_tab", "Pair"),
+    ]
+
+    # Pair tab bindings
+    _PAIR_BINDINGS = [
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
         ("t", "switch_tab", "Program"),
@@ -53,14 +61,6 @@ class BreedingScreen(Screen):
         ("f", "focus_females", None),
         ("p", "set_pair", "Pair"),
         ("c", "cancel_pair", "Cancel"),
-    ]
-
-    # Program tab bindings — arrows/space/enter are NOT bound here
-    # so they fall through to BreedingProgramPanel.on_key
-    _PROGRAM_BINDINGS = [
-        ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
-        ("t", "switch_tab", "Pair"),
     ]
 
     DEFAULT_CSS = """
@@ -113,9 +113,9 @@ class BreedingScreen(Screen):
     }
 
     #selected-info {
-        height: 5;
+        height: auto;
+        max-height: 8;
         layout: horizontal;
-        margin: 1;
     }
 
     .info-panel {
@@ -140,7 +140,7 @@ class BreedingScreen(Screen):
         super().__init__(**kwargs)
         self.state = state
         self._active_panel = "male"  # Track which panel is active
-        self._on_program_tab = False
+        self._on_program_tab = True  # Program tab is default
 
     def compose(self) -> ComposeResult:
         """Compose the breeding screen."""
@@ -148,6 +148,14 @@ class BreedingScreen(Screen):
         yield Static("", id="breeding-status")
 
         with TabbedContent(id="breeding-tabs"):
+            with TabPane("Program", id="program-tab"):
+                with VerticalScroll(id="program-scroll"):
+                    yield BreedingProgramPanel(
+                        self.state.breeding_program,
+                        has_genetics_lab=self._has_genetics_lab(),
+                        id="program-panel",
+                    )
+
             with TabPane("Pair", id="pair-tab"):
                 with Horizontal(id="parent-selection"):
                     with Vertical(classes="parent-panel"):
@@ -168,14 +176,6 @@ class BreedingScreen(Screen):
                     id="prediction-panel"
                 )
 
-            with TabPane("Program", id="program-tab"):
-                with VerticalScroll(id="program-scroll"):
-                    yield BreedingProgramPanel(
-                        self.state.breeding_program,
-                        has_genetics_lab=self._has_genetics_lab(),
-                        id="program-panel",
-                    )
-
         yield Footer()
 
     def on_mount(self) -> None:
@@ -186,12 +186,11 @@ class BreedingScreen(Screen):
 
         self._populate_lists()
         self._update_status()
-        # Refresh program panel content
+        # Start on Program tab (default)
+        self._on_program_tab = True
         panel = self.query_one("#program-panel", BreedingProgramPanel)
         panel.refresh_content()
-        # Focus the male list by default
-        male_list = self.query_one("#male-list", ListView)
-        male_list.focus()
+        panel.focus()
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Handle tab switch (from T key or clicking tab header)."""
@@ -215,7 +214,7 @@ class BreedingScreen(Screen):
 
     def _refresh_footer(self) -> None:
         """Rebuild bindings based on active tab and refresh footer."""
-        bindings = self._PROGRAM_BINDINGS if self._on_program_tab else self.BINDINGS
+        bindings = self.BINDINGS if self._on_program_tab else self._PAIR_BINDINGS
         self._bindings = _Bindings(bindings)
         try:
             footer = self.query_one(Footer)
