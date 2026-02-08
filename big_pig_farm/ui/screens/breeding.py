@@ -18,9 +18,11 @@ from big_pig_farm.game.state import GameState
 class PigListItem(ListItem):
     """List item for a guinea pig."""
 
-    def __init__(self, pig: GuineaPig):
+    def __init__(self, pig: GuineaPig, is_paired: bool = False):
         status = ""
-        if pig.breeding_locked:
+        if is_paired:
+            status = " [PAIRED]"
+        elif pig.breeding_locked:
             status = " [LOCKED]"
         elif pig.is_pregnant:
             status = " [Pregnant]"
@@ -41,6 +43,8 @@ class BreedingScreen(Screen):
         ("tab", "switch_panel", "Switch"),
         ("m", "focus_males", "Males"),
         ("f", "focus_females", "Females"),
+        ("p", "set_pair", "Pair"),
+        ("c", "cancel_pair", "Cancel Pair"),
     ]
 
     DEFAULT_CSS = """
@@ -110,6 +114,13 @@ class BreedingScreen(Screen):
         text-style: italic;
         color: $text-muted;
     }
+
+    #pair-status {
+        height: auto;
+        max-height: 3;
+        padding: 0 1;
+        color: $warning;
+    }
     """
 
     selected_male: reactive[Optional[GuineaPig]] = reactive(None)
@@ -123,6 +134,7 @@ class BreedingScreen(Screen):
     def compose(self) -> ComposeResult:
         """Compose the breeding screen."""
         yield Static("Breeding Planner - Select parents to predict offspring", id="breeding-header")
+        yield Static("", id="pair-status")
 
         with Container(id="breeding-content"):
             with Horizontal(id="parent-selection"):
@@ -149,9 +161,16 @@ class BreedingScreen(Screen):
     def on_mount(self) -> None:
         """Handle mount event."""
         self._populate_lists()
+        self._update_pair_status()
         # Focus the male list by default
         male_list = self.query_one("#male-list", ListView)
         male_list.focus()
+
+    def _get_paired_ids(self) -> set[UUID]:
+        """Get the set of pig IDs currently in the active breeding pair."""
+        if self.state.breeding_pair is None:
+            return set()
+        return {self.state.breeding_pair.male_id, self.state.breeding_pair.female_id}
 
     def _populate_lists(self) -> None:
         """Populate the male and female lists."""
@@ -162,16 +181,17 @@ class BreedingScreen(Screen):
         female_list.clear()
 
         pigs = self.state.get_pigs_list()
+        paired_ids = self._get_paired_ids()
 
         # Add adult males
         males = [p for p in pigs if p.gender == Gender.MALE and p.is_adult]
         for pig in males:
-            male_list.append(PigListItem(pig))
+            male_list.append(PigListItem(pig, is_paired=pig.id in paired_ids))
 
         # Add adult females (including pregnant ones, but marked)
         females = [p for p in pigs if p.gender == Gender.FEMALE and p.is_adult]
         for pig in females:
-            female_list.append(PigListItem(pig))
+            female_list.append(PigListItem(pig, is_paired=pig.id in paired_ids))
 
         # Show message if no pigs available
         if not males:
@@ -251,6 +271,27 @@ class BreedingScreen(Screen):
         else:
             info.update("No female selected")
 
+    def _update_pair_status(self) -> None:
+        """Update the pair status banner."""
+        banner = self.query_one("#pair-status", Static)
+        pair = self.state.breeding_pair
+        if pair is None:
+            banner.update("")
+            return
+
+        male = self.state.get_guinea_pig(pair.male_id)
+        female = self.state.get_guinea_pig(pair.female_id)
+        if male is None or female is None:
+            banner.update("")
+            return
+
+        male_ready = "Ready" if male.can_breed else "Not ready"
+        female_ready = "Ready" if female.can_breed else "Not ready"
+        banner.update(
+            f"Active Pair: {male.name} ({male_ready}) x {female.name} ({female_ready})"
+            f" - Waiting... [C to cancel]"
+        )
+
     def _update_predictions(self) -> None:
         """Update offspring predictions."""
         panel = self.query_one("#prediction-panel", Static)
@@ -308,6 +349,14 @@ class BreedingScreen(Screen):
         if len(sorted_probs) > 8:
             lines.append(f"\n... and {len(sorted_probs) - 8} more possibilities")
 
+        # Pair hint
+        pair = self.state.breeding_pair
+        if (pair and pair.male_id == self.selected_male.id
+                and pair.female_id == self.selected_female.id):
+            lines.append("\nThis pair is currently active")
+        else:
+            lines.append("\nPress P to set this breeding pair")
+
         panel.update("\n".join(lines))
 
     def action_go_back(self) -> None:
@@ -332,3 +381,54 @@ class BreedingScreen(Screen):
         self._active_panel = "female"
         female_list = self.query_one("#female-list", ListView)
         female_list.focus()
+
+    def action_set_pair(self) -> None:
+        """Set the selected pigs as a manual breeding pair."""
+        if not self.selected_male or not self.selected_female:
+            self.notify("Select both a male and a female first", severity="error")
+            return
+
+        male = self.selected_male
+        female = self.selected_female
+
+        # Hard blocks
+        if female.is_pregnant:
+            self.notify(f"{female.name} is already pregnant", severity="error")
+            return
+        if male.breeding_locked:
+            self.notify(f"{male.name} is breeding-locked", severity="error")
+            return
+        if female.breeding_locked:
+            self.notify(f"{female.name} is breeding-locked", severity="error")
+            return
+
+        # Set the pair
+        self.state.set_breeding_pair(male.id, female.id)
+
+        # Soft warnings
+        warnings = []
+        if not male.can_breed:
+            warnings.append(f"{male.name} not ready yet")
+        if not female.can_breed:
+            warnings.append(f"{female.name} not ready yet")
+
+        if warnings:
+            self.notify(f"Pair set — waiting: {', '.join(warnings)}")
+        else:
+            self.notify(f"Pair set: {male.name} x {female.name}")
+
+        self._update_pair_status()
+        self._populate_lists()
+        self._update_predictions()
+
+    def action_cancel_pair(self) -> None:
+        """Cancel the active breeding pair."""
+        if self.state.breeding_pair is None:
+            self.notify("No active breeding pair", severity="warning")
+            return
+
+        self.state.clear_breeding_pair()
+        self.notify("Breeding pair cancelled")
+        self._update_pair_status()
+        self._populate_lists()
+        self._update_predictions()

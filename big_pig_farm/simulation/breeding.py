@@ -23,11 +23,59 @@ def check_breeding_opportunities(game_state) -> int:
             if _check_birth(pig, game_state):
                 births += 1
 
+    # Process manual breeding pair before auto-breeding
+    _check_manual_breeding(game_state)
+
     # Check for new breeding pairs
     if not game_state.is_at_capacity:
         _check_for_new_breeding(game_state)
 
     return births
+
+
+def _check_manual_breeding(game_state) -> None:
+    """Process the manually set breeding pair if conditions are met."""
+    if game_state.breeding_pair is None:
+        return
+
+    pair = game_state.breeding_pair
+    male = game_state.get_guinea_pig(pair.male_id)
+    female = game_state.get_guinea_pig(pair.female_id)
+
+    # Either pig no longer exists (sold/died)
+    if male is None or female is None:
+        gone = "male" if male is None else "female"
+        game_state.log_event(
+            f"Breeding pair cancelled — {gone} no longer on the farm.",
+            event_type="breeding",
+        )
+        game_state.clear_breeding_pair()
+        return
+
+    # Female got pregnant by auto-breeding between ticks
+    if female.is_pregnant:
+        game_state.clear_breeding_pair()
+        return
+
+    # Wait if either can't breed yet (happiness, recovery, age)
+    if not male.can_breed or not female.can_breed:
+        return
+
+    # 100% success, no distance check — start pregnancy immediately
+    female.is_pregnant = True
+    female.pregnancy_days = 0.0
+    female.partner_id = male.id
+    female.partner_genotype = male.genotype
+    female.partner_name = male.name
+
+    male.behavior_state = BehaviorState.COURTING
+    female.behavior_state = BehaviorState.COURTING
+
+    game_state.log_event(
+        f"Breeding pair matched! {male.name} and {female.name} are expecting!",
+        event_type="breeding",
+    )
+    game_state.clear_breeding_pair()
 
 
 def _check_birth(mother: GuineaPig, game_state) -> bool:
