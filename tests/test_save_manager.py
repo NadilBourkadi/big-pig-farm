@@ -11,7 +11,7 @@ from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
-from big_pig_farm.simulation.breeding_filter import BreedingFilter
+from big_pig_farm.simulation.breeding_program import BreedingProgram
 
 
 @pytest.fixture
@@ -229,58 +229,63 @@ class TestPigdexPersistence:
         assert loaded.pigdex.discovered_count == 1
 
 
-class TestBreedingFilterPersistence:
-    """Tests for breeding filter save/load."""
+class TestBreedingProgramPersistence:
+    """Tests for breeding program save/load."""
 
-    def test_breeding_filter_roundtrip(self, save_manager):
+    def test_breeding_program_roundtrip(self, save_manager):
         state = GameState()
-        state.breeding_filter = BreedingFilter(
-            keep_colors={BaseColor.CHOCOLATE, BaseColor.GOLDEN},
-            keep_patterns={Pattern.DALMATIAN},
-            keep_intensities=set(),
-            keep_roan={RoanType.ROAN},
-            carrier_aware=True,
+        state.breeding_program = BreedingProgram(
+            target_colors={BaseColor.CHOCOLATE, BaseColor.GOLDEN},
+            target_patterns={Pattern.DALMATIAN},
+            target_intensities=set(),
+            target_roan={RoanType.ROAN},
+            keep_carriers=True,
+            auto_pair=True,
+            stock_limit=8,
             enabled=True,
         )
         save_manager.save(state)
 
         loaded = save_manager.load()
-        bf = loaded.breeding_filter
-        assert bf.enabled is True
-        assert bf.carrier_aware is True
-        assert bf.keep_colors == {BaseColor.CHOCOLATE, BaseColor.GOLDEN}
-        assert bf.keep_patterns == {Pattern.DALMATIAN}
-        assert bf.keep_intensities == set()
-        assert bf.keep_roan == {RoanType.ROAN}
+        bp = loaded.breeding_program
+        assert bp.enabled is True
+        assert bp.keep_carriers is True
+        assert bp.auto_pair is True
+        assert bp.stock_limit == 8
+        assert bp.target_colors == {BaseColor.CHOCOLATE, BaseColor.GOLDEN}
+        assert bp.target_patterns == {Pattern.DALMATIAN}
+        assert bp.target_intensities == set()
+        assert bp.target_roan == {RoanType.ROAN}
 
-    def test_default_filter_roundtrip(self, save_manager):
+    def test_default_program_roundtrip(self, save_manager):
         state = GameState()
         save_manager.save(state)
 
         loaded = save_manager.load()
-        bf = loaded.breeding_filter
-        assert bf.enabled is False
-        assert bf.keep_colors == set()
-        assert bf.keep_patterns == set()
+        bp = loaded.breeding_program
+        assert bp.enabled is False
+        assert bp.target_colors == set()
+        assert bp.target_patterns == set()
+        assert bp.auto_pair is True
+        assert bp.stock_limit == 6
 
-    def test_old_save_without_filter_table(self, tmp_path):
-        """Loading a save from before the filter feature should not crash."""
+    def test_old_save_without_program_table(self, tmp_path):
+        """Loading a save from before the program feature should not crash."""
         import sqlite3
         save_path = tmp_path / "old_save.db"
-        # Create a minimal save without the breeding_filter table
         sm = SaveManager(save_path=save_path)
         state = GameState()
         sm.save(state)
 
-        # Drop the breeding_filter table to simulate old save
+        # Drop the breeding_program table to simulate old save
         conn = sqlite3.connect(save_path)
-        conn.execute("DROP TABLE breeding_filter")
+        conn.execute("DROP TABLE breeding_program")
         conn.commit()
         conn.close()
 
         loaded = sm.load()
         assert loaded is not None
-        assert loaded.breeding_filter.enabled is False
+        assert loaded.breeding_program.enabled is False
 
 
 class TestLightGoldenMigration:
@@ -340,24 +345,35 @@ class TestLightGoldenMigration:
         assert len(contracts) == 1
         assert contracts[0].required_color == BaseColor.CREAM
 
-    def test_breeding_filter_color_migrated(self, save_manager, tmp_save_path):
+    def test_old_breeding_filter_migrated_to_program(self, save_manager, tmp_save_path):
         import json
         import sqlite3
 
         state = GameState()
         save_manager.save(state)
 
-        # Overwrite breeding_filter with old-style color value
+        # Drop new table and create old breeding_filter table to simulate old save
         conn = sqlite3.connect(tmp_save_path)
-        conn.execute("DELETE FROM breeding_filter")
+        conn.execute("DROP TABLE breeding_program")
+        conn.execute("""
+            CREATE TABLE breeding_filter (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                keep_colors_json TEXT NOT NULL,
+                keep_patterns_json TEXT NOT NULL,
+                keep_intensities_json TEXT NOT NULL,
+                keep_roan_json TEXT NOT NULL,
+                carrier_aware INTEGER NOT NULL,
+                enabled INTEGER NOT NULL
+            )
+        """)
         conn.execute(
             "INSERT INTO breeding_filter VALUES (1, ?, ?, ?, ?, ?, ?)",
             (
                 json.dumps(["light_golden"]),
+                json.dumps(["dalmatian"]),
                 json.dumps([]),
                 json.dumps([]),
-                json.dumps([]),
-                0,
+                1,
                 1,
             ),
         )
@@ -365,7 +381,13 @@ class TestLightGoldenMigration:
         conn.close()
 
         loaded = save_manager.load()
-        assert BaseColor.CREAM in loaded.breeding_filter.keep_colors
+        bp = loaded.breeding_program
+        assert bp.enabled is True
+        assert BaseColor.CREAM in bp.target_colors
+        assert Pattern.DALMATIAN in bp.target_patterns
+        assert bp.keep_carriers is True
+        assert bp.auto_pair is True
+        assert bp.stock_limit == 6
 
 
 class TestBackup:
