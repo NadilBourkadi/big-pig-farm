@@ -134,6 +134,15 @@ class PigDetailPanel(Static):
         lines.append(f"  Need: {urgent}")
         if pig.path:
             lines.append(f"  {len(pig.path)} steps away")
+        lines.append("")
+
+        # Behavior Log
+        lines.append("[bold]RECENT ACTIVITY[/]")
+        if pig.behavior_log:
+            for entry in reversed(pig.behavior_log[-5:]):
+                lines.append(f"  \u2022 {entry}")
+        else:
+            lines.append("  (no activity)")
 
         return "\n".join(lines)
 
