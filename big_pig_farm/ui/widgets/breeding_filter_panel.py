@@ -18,7 +18,7 @@ _COLOR_LABELS = {
     BaseColor.BLACK: "Black",
     BaseColor.CHOCOLATE: "Chocolate",
     BaseColor.GOLDEN: "Golden",
-    BaseColor.LIGHT_GOLDEN: "Light Golden",
+    BaseColor.LIGHT_GOLDEN: "Cream",
 }
 
 _PATTERN_LABELS = {
