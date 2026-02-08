@@ -27,7 +27,7 @@ class StatusBar(Static):
     DEFAULT_CSS = """
     StatusBar {
         dock: top;
-        height: 2;
+        height: 1;
         background: $surface;
         color: $text;
         padding: 0 1;
@@ -35,10 +35,7 @@ class StatusBar(Static):
     """
 
     def render(self) -> str:
-        """Render the two-line status bar."""
-        # Time icon based on time of day
-        time_icon = "\u2600" if self.time_of_day in ("Morning", "Afternoon") else "\u263d"
-
+        """Render the single-line status bar."""
         # Pause/speed indicator
         if self.is_paused:
             speed_str = "\u23f8 PAUSED"
@@ -47,31 +44,22 @@ class StatusBar(Static):
         else:
             speed_str = "\u25b6"
 
-        # Line 1: Day, Time, Money, Pigs, Speed
-        top_parts = [
+        parts = [
             f"Day {self.day}",
-            f"{time_icon} {self.time_of_day}",
             f"${format_money(self.money)}",
-            f"\U0001f439 {self.pig_count}/{self.capacity}",
-            speed_str,
-        ]
-        top_line = " \u2502 ".join(top_parts)
-
-        # Line 2: Food, Water, Warnings, Edit mode
-        bottom_parts = [
+            f"\U0001f439{self.pig_count}/{self.capacity}",
             f"\U0001f957{self.food_level}%",
             f"\U0001f4a7{self.water_level}%",
+            speed_str,
         ]
 
         if self.warning:
-            bottom_parts.append(f"\u26a0 {self.warning}")
+            parts.append(f"\u26a0 {self.warning}")
 
         if self.edit_mode:
-            bottom_parts.append("[bold reverse] EDIT [/]")
+            parts.append("[bold reverse] EDIT [/]")
 
-        bottom_line = " \u2502 ".join(bottom_parts)
-
-        return f"{top_line}\n{bottom_line}"
+        return " \u2502 ".join(parts)
 
     def update_from_state(self, state) -> None:
         """Update all values from game state."""
