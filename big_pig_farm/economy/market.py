@@ -24,33 +24,7 @@ def get_rarity_multiplier(rarity: Rarity) -> float:
 
 def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> int:
     """Calculate the sale value of a guinea pig."""
-    base_value = ECONOMY.COMMON_PIG_VALUE
-
-    # Rarity multiplier
-    rarity_mult = get_rarity_multiplier(pig.phenotype.rarity)
-
-    # Age modifier (babies worth less, adults full value, seniors slightly less)
-    if pig.is_baby:
-        age_mult = 0.5
-    elif pig.is_senior:
-        age_mult = 0.8
-    else:
-        age_mult = 1.0
-
-    # Health modifier
-    health_mult = pig.needs.health / 100.0
-    if health_mult < 0.5:
-        health_mult = 0.5  # Minimum 50% value
-
-    # Grooming station bonus
-    grooming_mult = 1.0
-    if state:
-        grooming_stations = state.get_facilities_by_type(FacilityType.GROOMING_STATION)
-        if grooming_stations:
-            grooming_mult = 1.15  # +15% from grooming
-
-    total = base_value * rarity_mult * age_mult * health_mult * grooming_mult
-    return max(1, int(total))
+    return calculate_pig_value_breakdown(pig, state)["total"]
 
 
 def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[GameState] = None) -> dict:
