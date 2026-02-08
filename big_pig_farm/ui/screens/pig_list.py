@@ -135,15 +135,18 @@ class PigListScreen(Screen):
             return self.state.get_guinea_pig(pig_id)
         return None
 
-    def _update_detail_panel(self) -> None:
+    def _update_detail_panel(self, pig=None) -> None:
         """Update the detail panel for the currently highlighted pig."""
-        pig = self._get_selected_pig()
+        if pig is None:
+            pig = self._get_selected_pig()
         panel = self.query_one("#pig-detail-panel", PigDetailPanel)
         panel.refresh_pig(pig)
 
-    def on_data_table_cursor_moved(self, event: DataTable.CursorMoved) -> None:
-        """Update detail panel when cursor moves."""
-        self._update_detail_panel()
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Update detail panel when cursor moves to a new row."""
+        pig_id = UUID(str(event.row_key.value))
+        pig = self.state.get_guinea_pig(pig_id)
+        self._update_detail_panel(pig)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle Enter key on a row - follow pig."""
