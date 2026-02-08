@@ -11,7 +11,7 @@ from textual.widgets import Static, DataTable, Footer
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
 from big_pig_farm.game.state import GameState
 from big_pig_farm.ui.screens.pig_detail import PigDetailScreen
-from big_pig_farm.ui.utils import format_needs_bar
+from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
 
 
 class PigListScreen(Screen):
@@ -91,19 +91,7 @@ class PigListScreen(Screen):
             happiness_bar = format_needs_bar(pig.needs.happiness)
             value = calculate_pig_value(pig, self.state)
 
-            # Breeding status column
-            if pig.is_baby and pig.marked_for_sale:
-                breed_status = "Sell@Adult"
-            elif pig.breeding_locked:
-                breed_status = "LOCKED"
-            elif pig.is_pregnant:
-                breed_status = "Pregnant"
-            elif not pig.is_adult:
-                breed_status = "Baby"
-            elif pig.can_breed:
-                breed_status = "Ready"
-            else:
-                breed_status = "Not ready"
+            breed_status = format_breeding_status(pig)
 
             self._table.add_row(
                 pig.name,

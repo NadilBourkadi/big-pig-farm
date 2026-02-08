@@ -11,7 +11,7 @@ from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.genetics import carrier_summary
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.needs import get_most_urgent_need
-from big_pig_farm.ui.utils import format_needs_bar
+from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
 
 
 class PigDetailScreen(Screen):
@@ -91,20 +91,12 @@ class PigDetailScreen(Screen):
                 yield Static("BREEDING", classes="section-title")
                 lock_status = "LOCKED" if pig.breeding_locked else "Unlocked"
                 yield Static(f"  Breeding Lock: {lock_status} (press L to toggle)")
-
-                if pig.is_pregnant:
-                    days_left = 3 - pig.pregnancy_days
-                    yield Static(f"  Status: Pregnant ({days_left:.1f} days until birth)")
-                elif pig.can_breed:
-                    yield Static(f"  Status: Ready to breed")
-                elif not pig.is_adult:
-                    yield Static(f"  Status: Too young (must be 3+ days)")
+                yield Static(f"  Status: {format_breeding_status(pig, verbose=True)}")
+                if pig.is_baby:
                     if pig.marked_for_sale:
                         yield Static(f"  Auto-sell: Will be sold at adulthood (press M to cancel)")
                     else:
                         yield Static(f"  Auto-sell: Off (press M to mark)")
-                else:
-                    yield Static(f"  Status: Not ready (needs higher happiness)")
 
             # Family Section
             with Vertical(classes="info-section"):

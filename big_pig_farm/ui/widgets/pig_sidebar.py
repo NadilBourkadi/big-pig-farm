@@ -5,7 +5,7 @@ from textual.reactive import reactive
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.simulation.needs import get_most_urgent_need
-from big_pig_farm.ui.utils import format_needs_bar
+from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
 
 
 class PigSidebar(Static):
@@ -65,6 +65,10 @@ class PigSidebar(Static):
         lines.append(f" Health  {format_needs_bar(pig.needs.health)}")
         lines.append(f" Social  {format_needs_bar(pig.needs.social)}")
         lines.append(f" Fun     {format_needs_bar(100 - pig.needs.boredom)}")
+        lines.append("")
+
+        # Breeding status
+        lines.append(f"[dim]Breed:[/] {format_breeding_status(pig)}")
         lines.append("")
 
         # AI State
