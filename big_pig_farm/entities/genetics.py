@@ -398,3 +398,166 @@ def predict_offspring_probabilities(
         phenotype_counts[name] = phenotype_counts.get(name, 0) + 1
 
     return {name: count / total for name, count in phenotype_counts.items()}
+
+
+def calculate_target_probability(
+    parent1: Genotype,
+    parent2: Genotype,
+    target_colors: set[BaseColor],
+    target_patterns: set[Pattern],
+    target_intensities: set[ColorIntensity],
+    target_roan: set[RoanType],
+) -> float:
+    """Compute exact P(offspring matches target) via analytical Punnett squares.
+
+    Per-locus probabilities are multiplied across independent loci.
+    Empty target set on any axis means probability 1.0 (any value OK).
+    """
+    p_color = _color_probability(parent1, parent2, target_colors) if target_colors else 1.0
+    p_pattern = _pattern_probability(parent1, parent2, target_patterns) if target_patterns else 1.0
+    p_intensity = _intensity_probability(parent1, parent2, target_intensities) if target_intensities else 1.0
+    p_roan = _roan_probability(parent1, parent2, target_roan) if target_roan else 1.0
+
+    return p_color * p_pattern * p_intensity * p_roan
+
+
+def _locus_outcome_probs(
+    p1_locus: tuple[str, str],
+    p2_locus: tuple[str, str],
+) -> dict[tuple[str, str], float]:
+    """Compute all possible offspring genotype combinations for a single locus.
+
+    Returns dict mapping (allele1, allele2) -> probability.
+    Each parent passes one allele with 50% chance, giving 4 equally likely combos.
+    """
+    outcomes: dict[tuple[str, str], float] = {}
+    for a1 in p1_locus:
+        for a2 in p2_locus:
+            key = (a1, a2)
+            outcomes[key] = outcomes.get(key, 0.0) + 0.25
+    return outcomes
+
+
+def _has_dominant_allele(locus: tuple[str, str], dominant: str) -> bool:
+    """Check if a locus pair contains at least one dominant allele."""
+    return dominant in locus
+
+
+def _is_homozygous(locus: tuple[str, str], allele: str) -> bool:
+    """Check if a locus pair is homozygous for a given allele."""
+    return locus[0] == allele and locus[1] == allele
+
+
+def _color_probability(
+    p1: Genotype,
+    p2: Genotype,
+    targets: set[BaseColor],
+) -> float:
+    """P(offspring color in targets). Color depends on E+B loci jointly."""
+    e_outcomes = _locus_outcome_probs(p1.e_locus, p2.e_locus)
+    b_outcomes = _locus_outcome_probs(p1.b_locus, p2.b_locus)
+
+    prob = 0.0
+    for e_alleles, e_prob in e_outcomes.items():
+        has_E = _has_dominant_allele(e_alleles, "E")
+        for b_alleles, b_prob in b_outcomes.items():
+            has_B = _has_dominant_allele(b_alleles, "B")
+
+            if has_E and has_B:
+                color = BaseColor.BLACK
+            elif has_E and not has_B:
+                color = BaseColor.CHOCOLATE
+            elif not has_E and has_B:
+                color = BaseColor.GOLDEN
+            else:
+                color = BaseColor.CREAM
+
+            if color in targets:
+                prob += e_prob * b_prob
+
+    return prob
+
+
+def _pattern_probability(
+    p1: Genotype,
+    p2: Genotype,
+    targets: set[Pattern],
+) -> float:
+    """P(offspring pattern in targets). Pattern depends on S locus."""
+    outcomes = _locus_outcome_probs(p1.s_locus, p2.s_locus)
+
+    prob = 0.0
+    for alleles, p in outcomes.items():
+        if _is_homozygous(alleles, "S"):
+            pattern = Pattern.SOLID
+        elif _is_homozygous(alleles, "s"):
+            pattern = Pattern.DALMATIAN
+        else:
+            pattern = Pattern.DUTCH
+
+        if pattern in targets:
+            prob += p
+
+    return prob
+
+
+def _intensity_probability(
+    p1: Genotype,
+    p2: Genotype,
+    targets: set[ColorIntensity],
+) -> float:
+    """P(offspring intensity in targets). Intensity depends on C locus."""
+    outcomes = _locus_outcome_probs(p1.c_locus, p2.c_locus)
+
+    prob = 0.0
+    for alleles, p in outcomes.items():
+        if _has_dominant_allele(alleles, "C"):
+            intensity = ColorIntensity.FULL
+        elif _is_homozygous(alleles, "ch"):
+            intensity = ColorIntensity.HIMALAYAN
+        else:
+            intensity = ColorIntensity.CHINCHILLA
+
+        if intensity in targets:
+            prob += p
+
+    return prob
+
+
+def _roan_probability(
+    p1: Genotype,
+    p2: Genotype,
+    targets: set[RoanType],
+) -> float:
+    """P(offspring roan in targets). Roan depends on R locus.
+
+    RR is lethal and gets rerolled, so the game re-inherits until non-RR.
+    This effectively redistributes RR probability proportionally across
+    surviving outcomes: each non-RR outcome gets p / (1 - p_RR).
+    """
+    outcomes = _locus_outcome_probs(p1.r_locus, p2.r_locus)
+
+    # Find probability of lethal RR
+    rr_lethal_prob = sum(
+        p for alleles, p in outcomes.items()
+        if alleles[0] == "R" and alleles[1] == "R"
+    )
+
+    if rr_lethal_prob >= 1.0:
+        # Both parents RR — impossible in practice (lethal), but handle gracefully
+        # Reroll always produces Rr per game code
+        return 1.0 if RoanType.ROAN in targets else 0.0
+
+    prob = 0.0
+    for alleles, p in outcomes.items():
+        if alleles[0] == "R" and alleles[1] == "R":
+            continue
+
+        # Rescale probability to account for RR elimination
+        adjusted_p = p / (1.0 - rr_lethal_prob)
+        roan = RoanType.ROAN if _has_dominant_allele(alleles, "R") else RoanType.NONE
+
+        if roan in targets:
+            prob += adjusted_p
+
+    return prob

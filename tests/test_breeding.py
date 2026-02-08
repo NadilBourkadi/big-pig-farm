@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position, BehaviorState
 from big_pig_farm.entities.genetics import Genotype, BaseColor
-from big_pig_farm.simulation.breeding_filter import BreedingFilter
+from big_pig_farm.simulation.breeding_program import BreedingProgram
 from big_pig_farm.simulation.breeding import (
     check_breeding_opportunities,
     advance_pregnancies,
@@ -285,12 +285,12 @@ class TestManualBreeding:
         assert state.breeding_pair.female_id == female.id
 
 
-class TestBreedingFilter:
+class TestBreedingProgram:
     """Tests for breeding filter integration with birth flow."""
 
-    def _birth_with_filter(self, state, male, female, breeding_filter):
+    def _birth_with_filter(self, state, male, female, breeding_program):
         """Set up a pregnancy and trigger birth, return newborn pigs."""
-        state.breeding_filter = breeding_filter
+        state.breeding_program = breeding_program
         female.is_pregnant = True
         female.pregnancy_days = BREEDING.GESTATION_DAYS
         female.partner_id = male.id
@@ -303,7 +303,7 @@ class TestBreedingFilter:
     def test_disabled_filter_does_not_mark(self):
         state = GameState()
         male, female = _make_breeding_pair(state)
-        f = BreedingFilter(enabled=False, keep_colors={BaseColor.GOLDEN})
+        f = BreedingProgram(enabled=False, target_colors={BaseColor.GOLDEN})
 
         babies = self._birth_with_filter(state, male, female, f)
         assert len(babies) > 0
@@ -314,7 +314,7 @@ class TestBreedingFilter:
         male, female = _make_breeding_pair(state)
         # Both parents have random-common genotypes (likely BB EE = Black)
         # Filter for Golden only
-        f = BreedingFilter(enabled=True, keep_colors={BaseColor.GOLDEN})
+        f = BreedingProgram(enabled=True, target_colors={BaseColor.GOLDEN})
 
         babies = self._birth_with_filter(state, male, female, f)
         assert len(babies) > 0
@@ -328,7 +328,7 @@ class TestBreedingFilter:
         state = GameState()
         male, female = _make_breeding_pair(state)
         # Filter for something very unlikely
-        f = BreedingFilter(enabled=True, keep_colors={BaseColor.CREAM})
+        f = BreedingProgram(enabled=True, target_colors={BaseColor.CREAM})
 
         self._birth_with_filter(state, male, female, f)
         filter_events = [e for e in state.events if e.event_type == "filter"]
@@ -339,7 +339,7 @@ class TestBreedingFilter:
     def test_pigdex_registered_before_filter(self):
         state = GameState()
         male, female = _make_breeding_pair(state)
-        f = BreedingFilter(enabled=True, keep_colors={BaseColor.GOLDEN})
+        f = BreedingProgram(enabled=True, target_colors={BaseColor.GOLDEN})
 
         babies = self._birth_with_filter(state, male, female, f)
         # All babies should be registered in pigdex regardless of filter

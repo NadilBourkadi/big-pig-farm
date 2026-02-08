@@ -11,7 +11,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
-from big_pig_farm.simulation.breeding_filter import BreedingFilter
+from big_pig_farm.simulation.breeding_program import BreedingProgram
 from big_pig_farm.game.state import GameState, GameTime, EventLog, BreedingPair
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Personality, Needs, Position
 from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype, BaseColor, Pattern, ColorIntensity, RoanType
@@ -175,15 +175,17 @@ class SaveManager:
                 )
             """)
 
-            # Breeding filter table
+            # Breeding program table
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS breeding_filter (
+                CREATE TABLE IF NOT EXISTS breeding_program (
                     id INTEGER PRIMARY KEY CHECK (id = 1),
-                    keep_colors_json TEXT NOT NULL,
-                    keep_patterns_json TEXT NOT NULL,
-                    keep_intensities_json TEXT NOT NULL,
-                    keep_roan_json TEXT NOT NULL,
-                    carrier_aware INTEGER NOT NULL,
+                    target_colors_json TEXT NOT NULL,
+                    target_patterns_json TEXT NOT NULL,
+                    target_intensities_json TEXT NOT NULL,
+                    target_roan_json TEXT NOT NULL,
+                    keep_carriers INTEGER NOT NULL,
+                    auto_pair INTEGER NOT NULL,
+                    stock_limit INTEGER NOT NULL,
                     enabled INTEGER NOT NULL
                 )
             """)
@@ -223,7 +225,7 @@ class SaveManager:
             cursor.execute("DELETE FROM contracts")
             cursor.execute("DELETE FROM contract_meta")
             cursor.execute("DELETE FROM breeding_pair")
-            cursor.execute("DELETE FROM breeding_filter")
+            cursor.execute("DELETE FROM breeding_program")
 
             # Save game state
             cursor.execute("""
@@ -354,17 +356,19 @@ class SaveManager:
                     (str(state.breeding_pair.male_id), str(state.breeding_pair.female_id)),
                 )
 
-            # Save breeding filter
-            bf = state.breeding_filter
+            # Save breeding program
+            bp = state.breeding_program
             cursor.execute(
-                "INSERT INTO breeding_filter VALUES (1, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO breeding_program VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    json.dumps([c.value for c in bf.keep_colors]),
-                    json.dumps([p.value for p in bf.keep_patterns]),
-                    json.dumps([i.value for i in bf.keep_intensities]),
-                    json.dumps([r.value for r in bf.keep_roan]),
-                    1 if bf.carrier_aware else 0,
-                    1 if bf.enabled else 0,
+                    json.dumps([c.value for c in bp.target_colors]),
+                    json.dumps([p.value for p in bp.target_patterns]),
+                    json.dumps([i.value for i in bp.target_intensities]),
+                    json.dumps([r.value for r in bp.target_roan]),
+                    1 if bp.keep_carriers else 0,
+                    1 if bp.auto_pair else 0,
+                    bp.stock_limit,
+                    1 if bp.enabled else 0,
                 ),
             )
 
@@ -568,21 +572,39 @@ class SaveManager:
             except sqlite3.OperationalError:
                 pass  # Table doesn't exist in old saves
 
-            # Load breeding filter
+            # Load breeding program (try new table first, fall back to old breeding_filter)
             try:
-                cursor.execute("SELECT * FROM breeding_filter WHERE id = 1")
-                bf_row = cursor.fetchone()
-                if bf_row:
-                    state.breeding_filter = BreedingFilter(
-                        keep_colors={BaseColor("cream" if v == "light_golden" else v) for v in json.loads(bf_row["keep_colors_json"])},
-                        keep_patterns={Pattern(v) for v in json.loads(bf_row["keep_patterns_json"])},
-                        keep_intensities={ColorIntensity(v) for v in json.loads(bf_row["keep_intensities_json"])},
-                        keep_roan={RoanType(v) for v in json.loads(bf_row["keep_roan_json"])},
-                        carrier_aware=bool(bf_row["carrier_aware"]),
-                        enabled=bool(bf_row["enabled"]),
+                cursor.execute("SELECT * FROM breeding_program WHERE id = 1")
+                bp_row = cursor.fetchone()
+                if bp_row:
+                    state.breeding_program = BreedingProgram(
+                        target_colors={BaseColor("cream" if v == "light_golden" else v) for v in json.loads(bp_row["target_colors_json"])},
+                        target_patterns={Pattern(v) for v in json.loads(bp_row["target_patterns_json"])},
+                        target_intensities={ColorIntensity(v) for v in json.loads(bp_row["target_intensities_json"])},
+                        target_roan={RoanType(v) for v in json.loads(bp_row["target_roan_json"])},
+                        keep_carriers=bool(bp_row["keep_carriers"]),
+                        auto_pair=bool(bp_row["auto_pair"]),
+                        stock_limit=bp_row["stock_limit"],
+                        enabled=bool(bp_row["enabled"]),
                     )
             except (sqlite3.OperationalError, Exception):
-                pass  # Table doesn't exist in old saves or bad data
+                # Fall back to old breeding_filter table for migration
+                try:
+                    cursor.execute("SELECT * FROM breeding_filter WHERE id = 1")
+                    bf_row = cursor.fetchone()
+                    if bf_row:
+                        state.breeding_program = BreedingProgram(
+                            target_colors={BaseColor("cream" if v == "light_golden" else v) for v in json.loads(bf_row["keep_colors_json"])},
+                            target_patterns={Pattern(v) for v in json.loads(bf_row["keep_patterns_json"])},
+                            target_intensities={ColorIntensity(v) for v in json.loads(bf_row["keep_intensities_json"])},
+                            target_roan={RoanType(v) for v in json.loads(bf_row["keep_roan_json"])},
+                            keep_carriers=bool(bf_row["carrier_aware"]),
+                            auto_pair=True,
+                            stock_limit=6,
+                            enabled=bool(bf_row["enabled"]),
+                        )
+                except (sqlite3.OperationalError, Exception):
+                    pass  # Neither table exists
 
             conn.close()
 
