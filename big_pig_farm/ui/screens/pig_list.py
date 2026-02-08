@@ -76,6 +76,10 @@ class PigListScreen(Screen):
 
     def on_mount(self) -> None:
         """Handle mount event."""
+        # Set layout inline — widget DEFAULT_CSS specificity overrides screen CSS
+        split = self.query_one("#pig-split", Container)
+        split.styles.layout = "horizontal"
+
         table = self.query_one("#pig-table", DataTable)
         table.cursor_type = "row"
         table.add_columns("Name", "Age", "Gender", "Color", "Happiness", "Breed", "Value")
