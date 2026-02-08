@@ -153,13 +153,13 @@ class BreedingProgramPanel(Static, can_focus=True):
     def _fmt_check(self, checked: bool, label: str, is_cursor: bool) -> str:
         """Format a checkbox item with Rich markup."""
         icon = "\u25cf" if checked else "\u25cb"
-        text = f" {icon} {label} "
+        inner = f"{icon} {label}"
         if is_cursor:
             style = "reverse green" if checked else "reverse"
-            return f"[{style}]{text}[/]"
+            return f" [{style}]{inner}[/]"
         if checked:
-            return f"[green]{text}[/]"
-        return text
+            return f" [green]{inner}[/]"
+        return f" {inner}"
 
     def refresh_content(self) -> None:
         """Redraw the panel."""
