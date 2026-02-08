@@ -144,6 +144,9 @@ class PigListScreen(Screen):
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Update detail panel when cursor moves to a new row."""
+        if event.row_key.value is None:
+            self._update_detail_panel(None)
+            return
         pig_id = UUID(str(event.row_key.value))
         pig = self.state.get_guinea_pig(pig_id)
         self._update_detail_panel(pig)
