@@ -47,9 +47,9 @@ class StatusBar(Static):
         parts = [
             f"Day {self.day}",
             f"${format_money(self.money)}",
-            f"\U0001f439{self.pig_count}/{self.capacity}",
-            f"\U0001f957{self.food_level}%",
-            f"\U0001f4a7{self.water_level}%",
+            f"\U0001f439 {self.pig_count}/{self.capacity}",
+            f"\U0001f957 {self.food_level}%",
+            f"\U0001f4a7 {self.water_level}%",
             speed_str,
         ]
 
