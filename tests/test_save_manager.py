@@ -283,6 +283,91 @@ class TestBreedingFilterPersistence:
         assert loaded.breeding_filter.enabled is False
 
 
+class TestLightGoldenMigration:
+    """Old saves with 'light_golden' should load as 'cream'."""
+
+    def test_pigdex_key_migrated(self, save_manager, tmp_save_path):
+        import sqlite3
+
+        state = GameState()
+        save_manager.save(state)
+
+        # Manually insert an old-style pigdex key
+        conn = sqlite3.connect(tmp_save_path)
+        conn.execute(
+            "INSERT INTO pigdex (phenotype_key, discovered_day) VALUES (?, ?)",
+            ("light_golden:solid:full:none", 5),
+        )
+        conn.commit()
+        conn.close()
+
+        loaded = save_manager.load()
+        assert "cream:solid:full:none" in loaded.pigdex.discovered
+        assert "light_golden:solid:full:none" not in loaded.pigdex.discovered
+
+    def test_contract_color_migrated(self, save_manager, tmp_save_path):
+        import sqlite3
+
+        state = GameState()
+        save_manager.save(state)
+
+        # Manually insert an old-style contract
+        conn = sqlite3.connect(tmp_save_path)
+        conn.execute(
+            "INSERT INTO contracts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "00000000-0000-0000-0000-000000000001",
+                "Deliver a Cream pig",
+                "light_golden",  # old enum value
+                None,
+                None,
+                None,
+                "easy",
+                100,
+                30,
+                10,
+                0,
+            ),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO contract_meta VALUES (1, 0, 0, 0)",
+        )
+        conn.commit()
+        conn.close()
+
+        loaded = save_manager.load()
+        contracts = loaded.contract_board.active_contracts
+        assert len(contracts) == 1
+        assert contracts[0].required_color == BaseColor.CREAM
+
+    def test_breeding_filter_color_migrated(self, save_manager, tmp_save_path):
+        import json
+        import sqlite3
+
+        state = GameState()
+        save_manager.save(state)
+
+        # Overwrite breeding_filter with old-style color value
+        conn = sqlite3.connect(tmp_save_path)
+        conn.execute("DELETE FROM breeding_filter")
+        conn.execute(
+            "INSERT INTO breeding_filter VALUES (1, ?, ?, ?, ?, ?, ?)",
+            (
+                json.dumps(["light_golden"]),
+                json.dumps([]),
+                json.dumps([]),
+                json.dumps([]),
+                0,
+                1,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+        loaded = save_manager.load()
+        assert BaseColor.CREAM in loaded.breeding_filter.keep_colors
+
+
 class TestBackup:
     """Tests for backup functionality."""
 

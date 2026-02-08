@@ -328,7 +328,7 @@ class TestBreedingFilter:
         state = GameState()
         male, female = _make_breeding_pair(state)
         # Filter for something very unlikely
-        f = BreedingFilter(enabled=True, keep_colors={BaseColor.LIGHT_GOLDEN})
+        f = BreedingFilter(enabled=True, keep_colors={BaseColor.CREAM})
 
         self._birth_with_filter(state, male, female, f)
         filter_events = [e for e in state.events if e.event_type == "filter"]

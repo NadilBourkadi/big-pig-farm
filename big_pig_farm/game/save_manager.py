@@ -509,7 +509,10 @@ class SaveManager:
             try:
                 cursor.execute("SELECT phenotype_key, discovered_day FROM pigdex")
                 for row in cursor.fetchall():
-                    state.pigdex.discovered[row["phenotype_key"]] = row["discovered_day"]
+                    key = row["phenotype_key"]
+                    # Migrate old "light_golden" keys to "cream"
+                    key = key.replace("light_golden", "cream")
+                    state.pigdex.discovered[key] = row["discovered_day"]
 
                 cursor.execute("SELECT milestones_json FROM pigdex_meta WHERE id = 1")
                 meta_row = cursor.fetchone()
@@ -523,10 +526,14 @@ class SaveManager:
                 cursor.execute("SELECT * FROM contracts WHERE fulfilled = 0")
                 contracts = []
                 for row in cursor.fetchall():
+                    # Migrate old "light_golden" color to "cream"
+                    raw_color = row["required_color"]
+                    if raw_color == "light_golden":
+                        raw_color = "cream"
                     contract = BreedingContract(
                         id=UUID(row["id"]),
                         description=row["description"],
-                        required_color=BaseColor(row["required_color"]) if row["required_color"] else None,
+                        required_color=BaseColor(raw_color) if raw_color else None,
                         required_pattern=Pattern(row["required_pattern"]) if row["required_pattern"] else None,
                         required_intensity=ColorIntensity(row["required_intensity"]) if row["required_intensity"] else None,
                         required_roan=RoanType(row["required_roan"]) if row["required_roan"] else None,
@@ -567,7 +574,7 @@ class SaveManager:
                 bf_row = cursor.fetchone()
                 if bf_row:
                     state.breeding_filter = BreedingFilter(
-                        keep_colors={BaseColor(v) for v in json.loads(bf_row["keep_colors_json"])},
+                        keep_colors={BaseColor("cream" if v == "light_golden" else v) for v in json.loads(bf_row["keep_colors_json"])},
                         keep_patterns={Pattern(v) for v in json.loads(bf_row["keep_patterns_json"])},
                         keep_intensities={ColorIntensity(v) for v in json.loads(bf_row["keep_intensities_json"])},
                         keep_roan={RoanType(v) for v in json.loads(bf_row["keep_roan_json"])},

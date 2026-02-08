@@ -193,20 +193,20 @@ class TestCarrierAware:
         pig = _make_pig_with_genotype(e_locus=("E", "e"))
         assert should_keep_pig(f, pig, has_genetics_lab=True)
 
-    def test_carrier_aware_light_golden(self):
+    def test_carrier_aware_cream(self):
         f = BreedingFilter(
             enabled=True,
-            keep_colors={BaseColor.LIGHT_GOLDEN},
+            keep_colors={BaseColor.CREAM},
             carrier_aware=True,
         )
         # Black pig carrying both e and b
         pig = _make_pig_with_genotype(e_locus=("E", "e"), b_locus=("B", "b"))
         assert should_keep_pig(f, pig, has_genetics_lab=True)
 
-    def test_carrier_aware_light_golden_needs_both_alleles(self):
+    def test_carrier_aware_cream_needs_both_alleles(self):
         f = BreedingFilter(
             enabled=True,
-            keep_colors={BaseColor.LIGHT_GOLDEN},
+            keep_colors={BaseColor.CREAM},
             carrier_aware=True,
         )
         # Only carries e, not b → not rescued for light golden
