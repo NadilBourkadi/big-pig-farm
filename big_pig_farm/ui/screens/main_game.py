@@ -4,6 +4,7 @@ import datetime
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.binding import Binding, _Bindings
 from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer
@@ -27,8 +28,8 @@ from big_pig_farm.ui.screens.almanac import JournalScreen
 class MainGameScreen(Screen):
     """The main game screen showing the farm view."""
 
+    # Normal mode bindings (default)
     BINDINGS = [
-        # Normal mode bindings (hidden in edit mode via check_action)
         ("f", "feed", "Feed"),
         ("s", "open_shop", "Shop"),
         ("p", "open_pigs", "Pigs"),
@@ -41,12 +42,6 @@ class MainGameScreen(Screen):
         ("equal", "speed_up", None),
         ("tab", "next_pig", None),
         ("n", "new_game", None),
-        # Edit mode bindings (shown only in edit mode via check_action)
-        ("m", "start_move", "Move"),
-        ("r", "remove_facility", "Remove"),
-        ("delete", "remove_facility", None),
-        ("enter", "handle_enter", "Place"),
-        # Always available (hidden from footer)
         ("up", "handle_up", None),
         ("down", "handle_down", None),
         ("left", "handle_left", None),
@@ -56,23 +51,21 @@ class MainGameScreen(Screen):
         ("q", "quit_game", "Quit"),
     ]
 
-    # Actions that should only appear in the footer when in edit mode
-    _EDIT_ONLY_ACTIONS = {"start_move", "remove_facility", "handle_enter"}
-    # Actions that should only appear in the footer when NOT in edit mode
-    _NORMAL_ONLY_ACTIONS = {
-        "feed", "open_shop", "open_pigs",
-        "open_breeding", "open_journal", "toggle_pause",
-        "speed_up", "slow_down", "next_pig", "new_game",
-    }
-
-    def check_action(self, action: str, parameters: tuple) -> bool | None:
-        """Control which bindings appear in footer based on edit mode."""
-        is_edit = self._farm_view and self._farm_view.edit_mode
-        if action in self._EDIT_ONLY_ACTIONS and not is_edit:
-            return False
-        if action in self._NORMAL_ONLY_ACTIONS and is_edit:
-            return False
-        return True
+    # Edit mode replaces normal-mode footer with edit-specific bindings
+    _EDIT_BINDINGS = [
+        ("m", "start_move", "Move"),
+        ("r", "remove_facility", "Remove"),
+        ("delete", "remove_facility", None),
+        ("enter", "handle_enter", "Place"),
+        ("e", "toggle_edit", "Edit"),
+        ("up", "handle_up", None),
+        ("down", "handle_down", None),
+        ("left", "handle_left", None),
+        ("right", "handle_right", None),
+        ("escape", "handle_escape", "Esc"),
+        ("d", "dump_debug", None),
+        ("q", "quit_game", "Quit"),
+    ]
 
     DEFAULT_CSS = """
     MainGameScreen {
@@ -127,12 +120,18 @@ class MainGameScreen(Screen):
         yield Footer()
 
     def _refresh_footer(self) -> None:
-        """Refresh the footer to update visible bindings."""
-        self.refresh_bindings()
+        """Rebuild bindings based on edit mode and refresh footer."""
+        is_edit = self._farm_view and self._farm_view.edit_mode
+        bindings = self._EDIT_BINDINGS if is_edit else self.BINDINGS
+        self._bindings = _Bindings(bindings)
+        try:
+            footer = self.query_one(Footer)
+            footer._bindings_changed(None)
+        except Exception:
+            pass
 
     def on_mount(self) -> None:
         """Handle screen mount."""
-        self.refresh_bindings()
         self.update_display()
         self.set_interval(0.1, self.update_display)
 
