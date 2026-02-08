@@ -1,8 +1,10 @@
 """Tests for the simulation systems."""
 
 import pytest
-from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Needs, Position
+from unittest.mock import patch
+from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG, BEHAVIOR
+from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Needs, Position
+from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import (
     update_all_needs,
     get_most_urgent_need,
@@ -223,3 +225,116 @@ class TestGuineaPig:
 
         distance = pos1.distance_to(pos2)
         assert distance == 5.0  # 3-4-5 triangle
+
+
+class TestStuckTimer:
+    """Tests for the stuck-position timer in BehaviorController."""
+
+    def test_stuck_pig_triggers_fallback_despite_alternatives(self):
+        """Pig stuck at the same grid cell for >5s triggers give-up even when
+        _try_alternative_facility succeeds (would normally reset _blocked_timers)."""
+        state = GameState()
+        controller = BehaviorController(state)
+
+        # Create the stuck pig with a path and a waypoint it can't reach
+        pig = GuineaPig.create(
+            name="Stuck Pig",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.behavior_state = BehaviorState.WANDERING
+        pig.path = [(12, 10)]  # Waypoint far enough to hit the mid-path branch
+        pig.target_position = Position(x=12.0, y=10.0)
+        pig.target_description = "going to Food Bowl"
+        state.guinea_pigs[pig.id] = pig
+
+        # Create a blocking pig directly in the path
+        blocker = GuineaPig.create(
+            name="Blocker",
+            gender=Gender.FEMALE,
+            position=Position(x=11.0, y=10.0),
+            age_days=5.0,
+        )
+        blocker.behavior_state = BehaviorState.IDLE
+        state.guinea_pigs[blocker.id] = blocker
+
+        fallback_called = False
+        original_fallback = controller._give_up_and_fallback
+
+        def tracking_fallback(p):
+            nonlocal fallback_called
+            fallback_called = True
+            original_fallback(p)
+
+        # Patch _try_dodge to always fail (simulating a narrow corridor)
+        # and _try_alternative_facility to always "succeed" (resets _blocked_timers)
+        with patch.object(controller, '_try_dodge', return_value=False), \
+             patch.object(controller, '_try_alternative_facility', return_value=True), \
+             patch.object(controller, '_give_up_and_fallback', side_effect=tracking_fallback):
+
+            # Simulate 6 seconds of being blocked at the same position (in 0.1s steps)
+            for _ in range(60):
+                if fallback_called:
+                    break
+                controller._update_movement(pig, 0.1)
+                # _try_alternative_facility resets _blocked_timers but doesn't
+                # actually move the pig, so re-give a path for next iteration
+                if not pig.path:
+                    pig.path = [(12, 10)]
+                    pig.target_position = Position(x=12.0, y=10.0)
+
+            # _give_up_and_fallback should have been called because the stuck
+            # timer (tracking position, not blocked_timers) exceeded 5s
+            assert fallback_called
+
+    def test_stuck_timer_resets_on_movement(self):
+        """Stuck timer resets when the pig actually moves to a new grid cell."""
+        state = GameState()
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="Moving Pig",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.behavior_state = BehaviorState.WANDERING
+        pig.path = [(12, 10)]
+        pig.target_position = Position(x=12.0, y=10.0)
+        state.guinea_pigs[pig.id] = pig
+
+        # Create a blocking pig directly in the path
+        blocker = GuineaPig.create(
+            name="Blocker",
+            gender=Gender.FEMALE,
+            position=Position(x=11.0, y=10.0),
+            age_days=5.0,
+        )
+        blocker.behavior_state = BehaviorState.IDLE
+        state.guinea_pigs[blocker.id] = blocker
+
+        # Simulate being blocked for 4 seconds (just under threshold)
+        with patch.object(controller, '_try_dodge', return_value=False), \
+             patch.object(controller, '_try_alternative_facility', return_value=True):
+            for _ in range(40):
+                controller._update_movement(pig, 0.1)
+                if not pig.path:
+                    pig.path = [(12, 10)]
+                    pig.target_position = Position(x=12.0, y=10.0)
+
+        # Stuck timer should be ~4.0s
+        assert controller._stuck_timers.get(pig.id, 0) > 3.5
+
+        # Remove the blocker so the pig can move
+        del state.guinea_pigs[blocker.id]
+
+        # Give the pig a new path from its current position
+        pig.path = [(11, 10), (12, 10)]
+        pig.target_position = Position(x=12.0, y=10.0)
+
+        # Simulate movement succeeding (no blocker now)
+        controller._update_movement(pig, 0.1)
+
+        # Stuck timer should be cleared since pig actually moved
+        assert pig.id not in controller._stuck_timers
