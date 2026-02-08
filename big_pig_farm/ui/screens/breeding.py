@@ -10,18 +10,20 @@ from textual.widgets import Static, ListView, ListItem, Label, Footer
 from textual.reactive import reactive
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
-from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype, carrier_summary
+from big_pig_farm.entities.genetics import predict_offspring_probabilities, Genotype, carrier_summary, calculate_target_probability
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
-from big_pig_farm.ui.widgets.breeding_filter_panel import BreedingFilterPanel
+from big_pig_farm.ui.widgets.breeding_program_panel import BreedingProgramPanel
 
 
 class PigListItem(ListItem):
     """List item for a guinea pig."""
 
-    def __init__(self, pig: GuineaPig, is_paired: bool = False):
+    def __init__(self, pig: GuineaPig, is_paired: bool = False, is_auto_paired: bool = False):
         status = ""
-        if is_paired:
+        if is_auto_paired:
+            status = " [AUTO]"
+        elif is_paired:
             status = " [PAIRED]"
         elif pig.breeding_locked:
             status = " [LOCKED]"
@@ -46,7 +48,7 @@ class BreedingScreen(Screen):
         ("f", "focus_females", "Females"),
         ("p", "set_pair", "Pair"),
         ("c", "cancel_pair", "Cancel Pair"),
-        ("g", "toggle_filter", "Filter"),
+        ("t", "toggle_program", "Target"),
     ]
 
     DEFAULT_CSS = """
@@ -124,9 +126,9 @@ class BreedingScreen(Screen):
         color: $warning;
     }
 
-    #filter-summary {
+    #program-status {
         height: auto;
-        max-height: 1;
+        max-height: 2;
         padding: 0 1;
         color: $accent;
     }
@@ -144,7 +146,7 @@ class BreedingScreen(Screen):
         """Compose the breeding screen."""
         yield Static("Breeding Planner - Select parents to predict offspring", id="breeding-header")
         yield Static("", id="pair-status")
-        yield Static("", id="filter-summary")
+        yield Static("", id="program-status")
 
         with Container(id="breeding-content"):
             with Horizontal(id="parent-selection"):
@@ -166,10 +168,10 @@ class BreedingScreen(Screen):
                 id="prediction-panel"
             )
 
-        yield BreedingFilterPanel(
-            self.state.breeding_filter,
+        yield BreedingProgramPanel(
+            self.state.breeding_program,
             has_genetics_lab=self._has_genetics_lab(),
-            id="filter-panel",
+            id="program-panel",
             classes="hidden",
         )
         yield Footer()
@@ -178,7 +180,7 @@ class BreedingScreen(Screen):
         """Handle mount event."""
         self._populate_lists()
         self._update_pair_status()
-        self._update_filter_summary()
+        self._update_program_status()
         # Focus the male list by default
         male_list = self.query_one("#male-list", ListView)
         male_list.focus()
@@ -188,6 +190,13 @@ class BreedingScreen(Screen):
         if self.state.breeding_pair is None:
             return set()
         return {self.state.breeding_pair.male_id, self.state.breeding_pair.female_id}
+
+    def _is_auto_paired(self) -> bool:
+        """Check if the current breeding pair was set by auto-pair."""
+        return (
+            self.state.breeding_pair is not None
+            and self.state.breeding_program.should_auto_pair()
+        )
 
     def _populate_lists(self) -> None:
         """Populate the male and female lists."""
@@ -199,16 +208,27 @@ class BreedingScreen(Screen):
 
         pigs = self.state.get_pigs_list()
         paired_ids = self._get_paired_ids()
+        auto_paired = self._is_auto_paired()
 
         # Add adult males
         males = [p for p in pigs if p.gender == Gender.MALE and p.is_adult]
         for pig in males:
-            male_list.append(PigListItem(pig, is_paired=pig.id in paired_ids))
+            is_paired = pig.id in paired_ids
+            male_list.append(PigListItem(
+                pig,
+                is_paired=is_paired and not auto_paired,
+                is_auto_paired=is_paired and auto_paired,
+            ))
 
         # Add adult females (including pregnant ones, but marked)
         females = [p for p in pigs if p.gender == Gender.FEMALE and p.is_adult]
         for pig in females:
-            female_list.append(PigListItem(pig, is_paired=pig.id in paired_ids))
+            is_paired = pig.id in paired_ids
+            female_list.append(PigListItem(
+                pig,
+                is_paired=is_paired and not auto_paired,
+                is_auto_paired=is_paired and auto_paired,
+            ))
 
         # Show message if no pigs available
         if not males:
@@ -304,10 +324,67 @@ class BreedingScreen(Screen):
 
         male_ready = "Ready" if male.can_breed else "Not ready"
         female_ready = "Ready" if female.can_breed else "Not ready"
+        auto_tag = " [AUTO]" if self._is_auto_paired() else ""
         banner.update(
-            f"Active Pair: {male.name} ({male_ready}) x {female.name} ({female_ready})"
+            f"Active Pair{auto_tag}: {male.name} ({male_ready}) x {female.name} ({female_ready})"
             f" - Waiting... [C to cancel]"
         )
+
+    def _update_program_status(self) -> None:
+        """Update the breeding program progress banner."""
+        banner = self.query_one("#program-status", Static)
+        program = self.state.breeding_program
+        if not program.enabled:
+            banner.update("")
+            return
+
+        parts = ["Program: ON"]
+
+        # Target description
+        if program.has_target:
+            panel = self.query_one("#program-panel", BreedingProgramPanel)
+            summary = panel.get_summary()
+            if summary:
+                parts.append(summary)
+        else:
+            parts.append("No target set")
+
+        # Current stock count
+        adults = [p for p in self.state.get_pigs_list() if not p.is_baby]
+        parts.append(f"Stock: {len(adults)}/{program.stock_limit}")
+
+        # Best pair probability
+        if program.has_target:
+            best_prob = self._find_best_pair_probability()
+            if best_prob is not None:
+                parts.append(f"Best pair: {best_prob * 100:.1f}%")
+
+        banner.update(" | ".join(parts))
+
+    def _find_best_pair_probability(self) -> Optional[float]:
+        """Find the highest target probability across all eligible pairs."""
+        program = self.state.breeding_program
+        pigs = self.state.get_pigs_list()
+
+        males = [p for p in pigs if p.gender == Gender.MALE and p.can_breed and not p.breeding_locked]
+        females = [p for p in pigs if p.gender == Gender.FEMALE and p.can_breed
+                   and not p.is_pregnant and not p.breeding_locked]
+
+        if not males or not females:
+            return None
+
+        best = 0.0
+        for male in males:
+            for female in females:
+                prob = calculate_target_probability(
+                    male.genotype, female.genotype,
+                    program.target_colors, program.target_patterns,
+                    program.target_intensities, program.target_roan,
+                )
+                if prob > best:
+                    best = prob
+
+        return best if best > 0 else None
 
     def _update_predictions(self) -> None:
         """Update offspring predictions."""
@@ -360,11 +437,24 @@ class BreedingScreen(Screen):
         for phenotype, prob in sorted_probs[:8]:  # Show top 8
             percentage = prob * 100
             bar_len = int(prob * 20)
-            bar = "█" * bar_len + "░" * (20 - bar_len)
+            bar = "\u2588" * bar_len + "\u2591" * (20 - bar_len)
             lines.append(f"{bar} {percentage:5.1f}% - {phenotype}")
 
         if len(sorted_probs) > 8:
             lines.append(f"\n... and {len(sorted_probs) - 8} more possibilities")
+
+        # Target probability if program has target
+        program = self.state.breeding_program
+        if program.has_target:
+            target_prob = calculate_target_probability(
+                self.selected_male.genotype,
+                self.selected_female.genotype,
+                program.target_colors,
+                program.target_patterns,
+                program.target_intensities,
+                program.target_roan,
+            )
+            lines.append(f"\nTarget probability: {target_prob * 100:.1f}%")
 
         # Pair hint
         pair = self.state.breeding_pair
@@ -450,9 +540,9 @@ class BreedingScreen(Screen):
         self._populate_lists()
         self._update_predictions()
 
-    def action_toggle_filter(self) -> None:
-        """Toggle the breeding filter panel visibility."""
-        panel = self.query_one("#filter-panel", BreedingFilterPanel)
+    def action_toggle_program(self) -> None:
+        """Toggle the breeding program panel visibility."""
+        panel = self.query_one("#program-panel", BreedingProgramPanel)
         if panel.has_class("hidden"):
             panel.has_genetics_lab = self._has_genetics_lab()
             panel.remove_class("hidden")
@@ -460,15 +550,9 @@ class BreedingScreen(Screen):
             panel.focus()
         else:
             panel.add_class("hidden")
-            self._update_filter_summary()
+            self._update_program_status()
             # Return focus to last active pig list
             if self._active_panel == "female":
                 self.action_focus_females()
             else:
                 self.action_focus_males()
-
-    def _update_filter_summary(self) -> None:
-        """Update the filter summary banner."""
-        panel = self.query_one("#filter-panel", BreedingFilterPanel)
-        summary = self.query_one("#filter-summary", Static)
-        summary.update(panel.get_summary())
