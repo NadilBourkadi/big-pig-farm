@@ -11,6 +11,7 @@ from textual.widgets import Static, DataTable, Footer
 from big_pig_farm.game.state import GameState
 from big_pig_farm.economy.currency import add_money
 from big_pig_farm.economy.shop import get_facility_cost
+from big_pig_farm.ui.utils import format_facility_bonuses
 
 
 class FacilitiesScreen(Screen):
@@ -68,7 +69,7 @@ class FacilitiesScreen(Screen):
     def on_mount(self) -> None:
         """Handle mount event."""
         table = self.query_one("#facilities-table", DataTable)
-        table.add_columns("Name", "Position", "Level", "Status")
+        table.add_columns("Name", "Position", "Status", "Bonuses")
         self._refresh_table()
 
     def _refresh_table(self) -> None:
@@ -79,7 +80,6 @@ class FacilitiesScreen(Screen):
         for facility in self.state.get_facilities_list():
             name = facility.facility_type.display_name
             position = f"({facility.position_x}, {facility.position_y})"
-            level = f"Lv.{facility.level}"
 
             # Status based on fill level for consumables
             if facility.max_amount > 0:
@@ -93,7 +93,8 @@ class FacilitiesScreen(Screen):
             else:
                 status = "Active"
 
-            table.add_row(name, position, level, status, key=str(facility.id))
+            bonuses = format_facility_bonuses(facility.facility_type) or "-"
+            table.add_row(name, position, status, bonuses, key=str(facility.id))
 
     def action_go_back(self) -> None:
         """Go back to main screen."""

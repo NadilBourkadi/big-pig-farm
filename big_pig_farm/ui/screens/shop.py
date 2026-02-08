@@ -20,6 +20,7 @@ from big_pig_farm.economy.shop import (
 from big_pig_farm.economy.currency import format_money
 from big_pig_farm.entities.facilities import FACILITY_INFO
 from big_pig_farm.game.state import GameState
+from big_pig_farm.ui.utils import format_facility_bonuses
 
 
 class ShopItemWidget(ListItem):
@@ -205,11 +206,16 @@ class ShopScreen(Screen):
             can_afford = "Yes" if self.state.money >= item.cost else "No"
             unlocked = "Yes" if item.unlocked else f"Requires Tier {item.required_tier}"
 
-            detail.update(
-                f"{item.name} - ${item.cost}\n"
-                f"{item.description}\n"
-                f"Can afford: {can_afford} | Available: {unlocked}"
-            )
+            lines = [
+                f"{item.name} - ${item.cost}",
+                f"{item.description}",
+                f"Can afford: {can_afford} | Available: {unlocked}",
+            ]
+            if item.facility_type:
+                bonuses = format_facility_bonuses(item.facility_type)
+                if bonuses:
+                    lines.append(f"Bonuses: {bonuses}")
+            detail.update("\n".join(lines))
         else:
             detail.update("Select an item to see details")
 

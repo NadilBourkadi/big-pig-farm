@@ -1,5 +1,6 @@
 """Shared UI formatting utilities."""
 
+from big_pig_farm.entities.facilities import FacilityInfo, FacilityType, FACILITY_INFO
 from big_pig_farm.entities.guinea_pig import GuineaPig
 
 
@@ -35,3 +36,27 @@ def format_breeding_status(pig: GuineaPig, verbose: bool = False) -> str:
     if pig.can_breed:
         return "Ready"
     return "Not ready" if not verbose else "Not ready (needs higher happiness)"
+
+
+def format_facility_bonuses(facility_type: FacilityType) -> str:
+    """Format facility bonuses as a short summary string.
+
+    Returns empty string if no bonuses.
+    """
+    info = FACILITY_INFO[facility_type]
+    parts = []
+    if info.health_bonus:
+        parts.append(f"+{int(info.health_bonus * 100)}% health")
+    if info.happiness_bonus:
+        parts.append(f"+{int(info.happiness_bonus * 100)}% happiness")
+    if info.social_bonus:
+        parts.append(f"+{int(info.social_bonus * 100)}% social")
+    if info.breeding_bonus:
+        parts.append(f"+{int(info.breeding_bonus * 100)}% breeding")
+    if info.growth_bonus:
+        parts.append(f"+{int(info.growth_bonus * 100)}% growth")
+    if info.sale_bonus:
+        parts.append(f"+{int(info.sale_bonus * 100)}% sale value")
+    if info.food_production:
+        parts.append(f"produces {info.food_production} food")
+    return ", ".join(parts)
