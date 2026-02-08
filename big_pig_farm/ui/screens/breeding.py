@@ -55,16 +55,12 @@ class BreedingScreen(Screen):
         ("c", "cancel_pair", "Cancel"),
     ]
 
-    # Program tab bindings
+    # Program tab bindings — arrows/space/enter are NOT bound here
+    # so they fall through to BreedingProgramPanel.on_key
     _PROGRAM_BINDINGS = [
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
         ("t", "switch_tab", "Pair"),
-        ("space", "noop", "Toggle"),
-        ("up", "noop", None),
-        ("down", "noop", None),
-        ("left", "noop", None),
-        ("right", "noop", None),
     ]
 
     DEFAULT_CSS = """
@@ -152,7 +148,7 @@ class BreedingScreen(Screen):
         yield Static("", id="breeding-status")
 
         with TabbedContent(id="breeding-tabs"):
-            with TabPane("Pair"):
+            with TabPane("Pair", id="pair-tab"):
                 with Horizontal(id="parent-selection"):
                     with Vertical(classes="parent-panel"):
                         yield Static("Males [M]", classes="panel-title")
@@ -172,7 +168,7 @@ class BreedingScreen(Screen):
                     id="prediction-panel"
                 )
 
-            with TabPane("Program"):
+            with TabPane("Program", id="program-tab"):
                 with VerticalScroll(id="program-scroll"):
                     yield BreedingProgramPanel(
                         self.state.breeding_program,
@@ -199,7 +195,10 @@ class BreedingScreen(Screen):
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         """Handle tab switch (from T key or clicking tab header)."""
-        is_program = event.pane.id != self.query(TabPane).first().id
+        self._activate_tab(event.pane.id == "program-tab")
+
+    def _activate_tab(self, is_program: bool) -> None:
+        """Handle switching between Pair and Program tabs."""
         self._on_program_tab = is_program
         self._refresh_footer()
         if is_program:
@@ -501,22 +500,13 @@ class BreedingScreen(Screen):
         """Go back to main screen."""
         self.app.pop_screen()
 
-    def action_noop(self) -> None:
-        """No-op — keys handled by BreedingProgramPanel.on_key."""
-        pass
-
     def action_switch_tab(self) -> None:
         """Switch between Pair and Program tabs."""
         tabs = self.query_one("#breeding-tabs", TabbedContent)
-        pane_ids = [pane.id for pane in tabs.query(TabPane)]
-        if not pane_ids:
-            return
-        current = tabs.active
-        if current in pane_ids:
-            idx = pane_ids.index(current)
-            tabs.active = pane_ids[(idx + 1) % len(pane_ids)]
-        else:
-            tabs.active = pane_ids[0]
+        going_to_program = tabs.active != "program-tab"
+        tabs.active = "program-tab" if going_to_program else "pair-tab"
+        # Directly activate in case TabActivated event doesn't fire
+        self._activate_tab(going_to_program)
 
     def action_switch_panel(self) -> None:
         """Switch focus between male and female lists."""
