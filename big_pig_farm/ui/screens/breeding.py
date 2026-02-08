@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from textual.app import ComposeResult
+from textual.binding import _Bindings
 from textual.screen import Screen
 from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static, ListView, ListItem, Label, Footer, TabbedContent, TabPane
@@ -42,15 +43,28 @@ class PigListItem(ListItem):
 class BreedingScreen(Screen):
     """Screen for breeding planning and genetics viewing."""
 
+    # Pair tab bindings (default)
     BINDINGS = [
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
-        ("t", "switch_tab", "Pair/Prog"),
+        ("t", "switch_tab", "Program"),
         ("tab", "switch_panel", "M/F"),
         ("m", "focus_males", None),
         ("f", "focus_females", None),
         ("p", "set_pair", "Pair"),
         ("c", "cancel_pair", "Cancel"),
+    ]
+
+    # Program tab bindings
+    _PROGRAM_BINDINGS = [
+        ("escape", "go_back", "Back"),
+        ("q", "go_back", "Back"),
+        ("t", "switch_tab", "Pair"),
+        ("space", "noop", "Toggle"),
+        ("up", "noop", None),
+        ("down", "noop", None),
+        ("left", "noop", None),
+        ("right", "noop", None),
     ]
 
     DEFAULT_CSS = """
@@ -130,6 +144,7 @@ class BreedingScreen(Screen):
         super().__init__(**kwargs)
         self.state = state
         self._active_panel = "male"  # Track which panel is active
+        self._on_program_tab = False
 
     def compose(self) -> ComposeResult:
         """Compose the breeding screen."""
@@ -181,6 +196,33 @@ class BreedingScreen(Screen):
         # Focus the male list by default
         male_list = self.query_one("#male-list", ListView)
         male_list.focus()
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Handle tab switch (from T key or clicking tab header)."""
+        is_program = event.pane.id != self.query(TabPane).first().id
+        self._on_program_tab = is_program
+        self._refresh_footer()
+        if is_program:
+            panel = self.query_one("#program-panel", BreedingProgramPanel)
+            panel.has_genetics_lab = self._has_genetics_lab()
+            panel.refresh_content()
+            panel.focus()
+        else:
+            self._update_status()
+            if self._active_panel == "female":
+                self.action_focus_females()
+            else:
+                self.action_focus_males()
+
+    def _refresh_footer(self) -> None:
+        """Rebuild bindings based on active tab and refresh footer."""
+        bindings = self._PROGRAM_BINDINGS if self._on_program_tab else self.BINDINGS
+        self._bindings = _Bindings(bindings)
+        try:
+            footer = self.query_one(Footer)
+            footer._bindings_changed(None)
+        except Exception:
+            pass
 
     def _get_paired_ids(self) -> set[UUID]:
         """Get the set of pig IDs currently in the active breeding pair."""
@@ -458,6 +500,10 @@ class BreedingScreen(Screen):
     def action_go_back(self) -> None:
         """Go back to main screen."""
         self.app.pop_screen()
+
+    def action_noop(self) -> None:
+        """No-op — keys handled by BreedingProgramPanel.on_key."""
+        pass
 
     def action_switch_tab(self) -> None:
         """Switch between Pair and Program tabs."""
