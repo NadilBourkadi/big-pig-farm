@@ -1,0 +1,598 @@
+"""Tests for the breeding program system."""
+
+import pytest
+
+from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
+from big_pig_farm.entities.genetics import (
+    Genotype,
+    BaseColor,
+    Pattern,
+    ColorIntensity,
+    RoanType,
+    calculate_phenotype,
+    calculate_target_probability,
+)
+from big_pig_farm.simulation.breeding_program import BreedingProgram, should_keep_pig, breeding_value
+from big_pig_farm.simulation.breeding import _auto_pair_from_program, cull_surplus_breeders
+from big_pig_farm.game.state import GameState
+
+
+def _make_pig_with_genotype(**loci) -> GuineaPig:
+    """Create a pig with specific locus values.
+
+    Pass keyword args like e_locus=("E", "e"), b_locus=("b", "b"), etc.
+    Unspecified loci default to homozygous dominant.
+    """
+    defaults = {
+        "e_locus": ("E", "E"),
+        "b_locus": ("B", "B"),
+        "s_locus": ("S", "S"),
+        "c_locus": ("C", "C"),
+        "r_locus": ("r", "r"),
+    }
+    defaults.update(loci)
+    genotype = Genotype(**defaults)
+    return GuineaPig.create(
+        name="Test",
+        gender=Gender.MALE,
+        genotype=genotype,
+        position=Position(x=5.0, y=5.0),
+    )
+
+
+def _make_pig(name: str, gender: Gender, age_days: float = 5.0, **loci) -> GuineaPig:
+    """Create a named pig with specific locus values and gender."""
+    defaults = {
+        "e_locus": ("E", "E"),
+        "b_locus": ("B", "B"),
+        "s_locus": ("S", "S"),
+        "c_locus": ("C", "C"),
+        "r_locus": ("r", "r"),
+    }
+    defaults.update(loci)
+    genotype = Genotype(**defaults)
+    return GuineaPig.create(
+        name=name,
+        gender=gender,
+        genotype=genotype,
+        position=Position(x=5.0, y=5.0),
+        age_days=age_days,
+    )
+
+
+# ─── should_keep_pig tests (migrated from old test_breeding_filter.py) ───
+
+
+class TestDisabledProgram:
+    """A disabled program should keep everything."""
+
+    def test_disabled_keeps_all(self):
+        f = BreedingProgram(enabled=False, target_colors={BaseColor.CHOCOLATE})
+        pig = _make_pig_with_genotype()  # Black, Solid, Full, no Roan
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_default_program_keeps_all(self):
+        f = BreedingProgram()
+        pig = _make_pig_with_genotype()
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+
+class TestEmptyAxes:
+    """Empty set on an axis means 'don't filter that axis'."""
+
+    def test_empty_program_enabled_keeps_all(self):
+        f = BreedingProgram(enabled=True)
+        pig = _make_pig_with_genotype()
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_empty_colors_keeps_any_color(self):
+        f = BreedingProgram(enabled=True, target_patterns={Pattern.SOLID})
+        pig = _make_pig_with_genotype(e_locus=("E", "E"), b_locus=("b", "b"))
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+
+class TestSingleAxisFiltering:
+    """Test filtering on individual axes."""
+
+    def test_color_match_keeps(self):
+        f = BreedingProgram(enabled=True, target_colors={BaseColor.CHOCOLATE})
+        pig = _make_pig_with_genotype(b_locus=("b", "b"))
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_color_mismatch_marks(self):
+        f = BreedingProgram(enabled=True, target_colors={BaseColor.CHOCOLATE})
+        pig = _make_pig_with_genotype()
+        assert not should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_multiple_colors_or_logic(self):
+        f = BreedingProgram(enabled=True, target_colors={BaseColor.CHOCOLATE, BaseColor.GOLDEN})
+        black_pig = _make_pig_with_genotype()
+        choc_pig = _make_pig_with_genotype(b_locus=("b", "b"))
+        golden_pig = _make_pig_with_genotype(e_locus=("e", "e"))
+        assert not should_keep_pig(f, black_pig, has_genetics_lab=False)
+        assert should_keep_pig(f, choc_pig, has_genetics_lab=False)
+        assert should_keep_pig(f, golden_pig, has_genetics_lab=False)
+
+    def test_pattern_match_keeps(self):
+        f = BreedingProgram(enabled=True, target_patterns={Pattern.DALMATIAN})
+        pig = _make_pig_with_genotype(s_locus=("s", "s"))
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_pattern_mismatch_marks(self):
+        f = BreedingProgram(enabled=True, target_patterns={Pattern.DALMATIAN})
+        pig = _make_pig_with_genotype(s_locus=("S", "S"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_intensity_match_keeps(self):
+        f = BreedingProgram(enabled=True, target_intensities={ColorIntensity.HIMALAYAN})
+        pig = _make_pig_with_genotype(c_locus=("ch", "ch"))
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_intensity_mismatch_marks(self):
+        f = BreedingProgram(enabled=True, target_intensities={ColorIntensity.HIMALAYAN})
+        pig = _make_pig_with_genotype(c_locus=("C", "C"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_roan_match_keeps(self):
+        f = BreedingProgram(enabled=True, target_roan={RoanType.ROAN})
+        pig = _make_pig_with_genotype(r_locus=("R", "r"))
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_roan_mismatch_marks(self):
+        f = BreedingProgram(enabled=True, target_roan={RoanType.ROAN})
+        pig = _make_pig_with_genotype(r_locus=("r", "r"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=False)
+
+
+class TestMultiAxisAndLogic:
+    """Multiple axes must ALL match (AND logic)."""
+
+    def test_two_axes_both_match(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.CHOCOLATE},
+            target_patterns={Pattern.DALMATIAN},
+        )
+        pig = _make_pig_with_genotype(b_locus=("b", "b"), s_locus=("s", "s"))
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_two_axes_one_fails(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.CHOCOLATE},
+            target_patterns={Pattern.DALMATIAN},
+        )
+        pig = _make_pig_with_genotype(b_locus=("b", "b"), s_locus=("S", "S"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_all_four_axes(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.GOLDEN},
+            target_patterns={Pattern.DUTCH},
+            target_intensities={ColorIntensity.HIMALAYAN},
+            target_roan={RoanType.ROAN},
+        )
+        pig = _make_pig_with_genotype(
+            e_locus=("e", "e"),
+            b_locus=("B", "B"),
+            s_locus=("S", "s"),
+            c_locus=("ch", "ch"),
+            r_locus=("R", "r"),
+        )
+        assert should_keep_pig(f, pig, has_genetics_lab=False)
+
+
+class TestCarrierAware:
+    """Keep-carriers mode rescues heterozygous pigs when Genetics Lab exists."""
+
+    def test_keep_carriers_requires_genetics_lab(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.CHOCOLATE},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(b_locus=("B", "b"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=False)
+
+    def test_keep_carriers_with_lab_keeps_carrier(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.CHOCOLATE},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(b_locus=("B", "b"))
+        assert should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_golden(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.GOLDEN},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(e_locus=("E", "e"))
+        assert should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_cream(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.CREAM},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(e_locus=("E", "e"), b_locus=("B", "b"))
+        assert should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_cream_needs_both_alleles(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.CREAM},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(e_locus=("E", "e"), b_locus=("B", "B"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_pattern_dutch(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_patterns={Pattern.DUTCH},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(s_locus=("S", "S"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_pattern_dalmatian_rescued(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_patterns={Pattern.DALMATIAN},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(s_locus=("S", "s"))
+        assert should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_intensity_himalayan(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_intensities={ColorIntensity.HIMALAYAN},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(c_locus=("C", "ch"))
+        assert should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_no_rescue_for_dominant_traits(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_colors={BaseColor.BLACK},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(e_locus=("E", "E"), b_locus=("b", "b"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=True)
+
+    def test_keep_carriers_roan_no_rescue(self):
+        f = BreedingProgram(
+            enabled=True,
+            target_roan={RoanType.ROAN},
+            keep_carriers=True,
+        )
+        pig = _make_pig_with_genotype(r_locus=("r", "r"))
+        assert not should_keep_pig(f, pig, has_genetics_lab=True)
+
+
+# ─── calculate_target_probability tests ───
+
+
+class TestTargetProbability:
+    """Tests for analytical target probability calculation."""
+
+    def test_carriers_ee_cross_golden(self):
+        """Ee x Ee -> P(ee) = 25% for golden."""
+        p1 = Genotype(e_locus=("E", "e"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "e"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, {BaseColor.GOLDEN}, set(), set(), set())
+        assert abs(prob - 0.25) < 0.001
+
+    def test_homozygous_match_100(self):
+        """ee x ee -> P(ee) = 100% for golden."""
+        p1 = Genotype(e_locus=("e", "e"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("e", "e"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, {BaseColor.GOLDEN}, set(), set(), set())
+        assert abs(prob - 1.0) < 0.001
+
+    def test_no_carrier_0(self):
+        """EE x EE -> P(ee) = 0% for golden."""
+        p1 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, {BaseColor.GOLDEN}, set(), set(), set())
+        assert prob == 0.0
+
+    def test_partial_target_only_pattern(self):
+        """Only pattern specified, no color -> only pattern probability matters."""
+        # Ss x Ss -> P(ss) = 25% for Dalmatian
+        p1 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "s"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "s"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, set(), {Pattern.DALMATIAN}, set(), set())
+        assert abs(prob - 0.25) < 0.001
+
+    def test_multi_trait_product(self):
+        """Multi-trait target = product of independent probabilities."""
+        # Ee x Ee -> P(ee) = 25% for golden
+        # Ss x Ss -> P(ss) = 25% for dalmatian
+        # Both: 0.25 * 0.25 = 6.25%
+        p1 = Genotype(e_locus=("E", "e"), b_locus=("B", "B"), s_locus=("S", "s"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "e"), b_locus=("B", "B"), s_locus=("S", "s"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, {BaseColor.GOLDEN}, {Pattern.DALMATIAN}, set(), set())
+        assert abs(prob - 0.0625) < 0.001
+
+    def test_empty_target_returns_1(self):
+        """No target on any axis -> 100%."""
+        p1 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, set(), set(), set(), set())
+        assert prob == 1.0
+
+    def test_roan_lethal_redistribution(self):
+        """Rr x Rr -> P(Rr or RR rerolled) should redistribute lethal RR."""
+        # Rr x Rr: 25% RR (lethal), 50% Rr, 25% rr
+        # After redistribution: Rr = 50/75 = 66.7%, rr = 25/75 = 33.3%
+        p1 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("R", "r"))
+        p2 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("R", "r"))
+        prob_roan = calculate_target_probability(p1, p2, set(), set(), set(), {RoanType.ROAN})
+        prob_none = calculate_target_probability(p1, p2, set(), set(), set(), {RoanType.NONE})
+        assert abs(prob_roan - 2 / 3) < 0.001
+        assert abs(prob_none - 1 / 3) < 0.001
+        assert abs(prob_roan + prob_none - 1.0) < 0.001
+
+    def test_intensity_chinchilla(self):
+        """C/ch x C/ch -> P(C/ch) = 50% for chinchilla."""
+        p1 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "ch"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "ch"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, set(), set(), {ColorIntensity.CHINCHILLA}, set())
+        assert abs(prob - 0.5) < 0.001
+
+    def test_multiple_colors_in_target(self):
+        """Target {GOLDEN, CREAM} from Ee x Ee, Bb x Bb."""
+        # P(ee) = 25%: of those, P(has_B) = 75% -> golden; P(bb) = 25% -> cream
+        # P(golden) = 0.25 * 0.75 = 18.75%, P(cream) = 0.25 * 0.25 = 6.25%
+        # Total = 25%
+        p1 = Genotype(e_locus=("E", "e"), b_locus=("B", "b"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        p2 = Genotype(e_locus=("E", "e"), b_locus=("B", "b"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        prob = calculate_target_probability(p1, p2, {BaseColor.GOLDEN, BaseColor.CREAM}, set(), set(), set())
+        assert abs(prob - 0.25) < 0.001
+
+
+# ─── _auto_pair_from_program tests ───
+
+
+class TestAutoPair:
+    """Tests for auto-pairing logic."""
+
+    def test_picks_best_pair(self):
+        """Auto-pair should select the pair with highest target probability."""
+        state = GameState()
+        # Male 1: EE (no golden alleles)
+        male1 = _make_pig("M1", Gender.MALE, e_locus=("E", "E"))
+        # Male 2: ee (homozygous golden)
+        male2 = _make_pig("M2", Gender.MALE, e_locus=("e", "e"))
+        # Female: Ee (carrier)
+        female = _make_pig("F1", Gender.FEMALE, e_locus=("E", "e"))
+
+        state.add_guinea_pig(male1)
+        state.add_guinea_pig(male2)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        _auto_pair_from_program(state)
+
+        # Should pick male2 x female (higher golden probability)
+        assert state.breeding_pair is not None
+        assert state.breeding_pair.male_id == male2.id
+        assert state.breeding_pair.female_id == female.id
+
+    def test_skips_breeding_locked_pigs(self):
+        """Auto-pair should skip breeding-locked pigs."""
+        state = GameState()
+        male = _make_pig("M1", Gender.MALE, e_locus=("e", "e"))
+        male.breeding_locked = True
+        female = _make_pig("F1", Gender.FEMALE, e_locus=("e", "e"))
+
+        state.add_guinea_pig(male)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is None
+
+    def test_skips_when_disabled(self):
+        """Auto-pair does nothing when program is disabled."""
+        state = GameState()
+        male = _make_pig("M1", Gender.MALE, e_locus=("e", "e"))
+        female = _make_pig("F1", Gender.FEMALE, e_locus=("e", "e"))
+
+        state.add_guinea_pig(male)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=False,
+            auto_pair=True,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is None
+
+    def test_does_not_override_manual_pair(self):
+        """Auto-pair should not override an existing manual breeding pair."""
+        state = GameState()
+        male = _make_pig("M1", Gender.MALE, e_locus=("e", "e"))
+        female = _make_pig("F1", Gender.FEMALE, e_locus=("e", "e"))
+
+        state.add_guinea_pig(male)
+        state.add_guinea_pig(female)
+
+        # Set a manual pair first
+        state.set_breeding_pair(male.id, female.id)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        _auto_pair_from_program(state)
+        # Should still be the original pair
+        assert state.breeding_pair.male_id == male.id
+        assert state.breeding_pair.female_id == female.id
+
+    def test_skips_when_no_target(self):
+        """Auto-pair does nothing when no target traits are set."""
+        state = GameState()
+        male = _make_pig("M1", Gender.MALE)
+        female = _make_pig("F1", Gender.FEMALE)
+
+        state.add_guinea_pig(male)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is None
+
+
+# ─── cull_surplus_breeders tests ───
+
+
+class TestCullSurplus:
+    """Tests for surplus culling logic."""
+
+    def test_under_limit_no_culling(self):
+        """No culling when under stock limit."""
+        state = GameState()
+        for i in range(4):
+            gender = Gender.MALE if i % 2 == 0 else Gender.FEMALE
+            pig = _make_pig(f"Pig{i}", gender)
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(enabled=True, stock_limit=6)
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_over_limit_marks_lowest_value(self):
+        """Over stock limit should mark lowest-value pigs."""
+        state = GameState()
+        # Create 5 adults: 3 with golden alleles (higher value), 2 without
+        for i in range(3):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Good{i}", gender, e_locus=("e", "e"))
+            state.add_guinea_pig(pig)
+        for i in range(2):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Bad{i}", gender, e_locus=("E", "E"))
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=3,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 2
+        # The marked ones should be the "Bad" pigs (no golden alleles)
+        assert all("Bad" in p.name for p in marked)
+
+    def test_gender_balance_preserved(self):
+        """Should keep at least 1 male and 1 female."""
+        state = GameState()
+        # All females except one male, all with same genetics
+        male = _make_pig("OnlyMale", Gender.MALE, e_locus=("e", "e"))
+        state.add_guinea_pig(male)
+        for i in range(5):
+            pig = _make_pig(f"F{i}", Gender.FEMALE, e_locus=("e", "e"))
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=3,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        kept = [p for p in state.get_pigs_list() if not p.marked_for_sale]
+        kept_males = [p for p in kept if p.gender == Gender.MALE]
+        kept_females = [p for p in kept if p.gender == Gender.FEMALE]
+        assert len(kept_males) >= 1
+        assert len(kept_females) >= 1
+
+    def test_pregnant_pigs_not_marked(self):
+        """Pregnant pigs should not be marked for sale."""
+        state = GameState()
+        male = _make_pig("M1", Gender.MALE)
+        state.add_guinea_pig(male)
+        for i in range(4):
+            pig = _make_pig(f"F{i}", Gender.FEMALE)
+            if i == 0:
+                pig.is_pregnant = True
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(enabled=True, stock_limit=2)
+
+        cull_surplus_breeders(state)
+        pregnant = [p for p in state.get_pigs_list() if p.is_pregnant]
+        assert all(not p.marked_for_sale for p in pregnant)
+
+    def test_disabled_program_no_culling(self):
+        """No culling when program is disabled."""
+        state = GameState()
+        for i in range(10):
+            gender = Gender.MALE if i % 2 == 0 else Gender.FEMALE
+            pig = _make_pig(f"Pig{i}", gender)
+            state.add_guinea_pig(pig)
+
+        state.breeding_program = BreedingProgram(enabled=False, stock_limit=3)
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+
+# ─── has_target and breeding_value tests ───
+
+
+class TestBreedingProgramModel:
+    """Tests for BreedingProgram model properties."""
+
+    def test_has_target_empty(self):
+        bp = BreedingProgram()
+        assert not bp.has_target
+
+    def test_has_target_with_color(self):
+        bp = BreedingProgram(target_colors={BaseColor.GOLDEN})
+        assert bp.has_target
+
+    def test_should_auto_pair_disabled(self):
+        bp = BreedingProgram(enabled=False, auto_pair=True)
+        assert not bp.should_auto_pair()
+
+    def test_should_auto_pair_enabled(self):
+        bp = BreedingProgram(enabled=True, auto_pair=True)
+        assert bp.should_auto_pair()
+
+    def test_breeding_value_golden_target(self):
+        """Pig with ee should score higher than EE for golden target."""
+        program = BreedingProgram(target_colors={BaseColor.GOLDEN})
+        pig_ee = _make_pig_with_genotype(e_locus=("e", "e"))
+        pig_EE = _make_pig_with_genotype(e_locus=("E", "E"))
+        assert breeding_value(pig_ee, program, False) > breeding_value(pig_EE, program, False)
