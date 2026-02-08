@@ -20,7 +20,6 @@ class FacilitiesScreen(Screen):
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
         ("r", "remove_facility", "Remove"),
-        ("m", "move_facility", "Move"),
     ]
 
     DEFAULT_CSS = """
@@ -60,7 +59,7 @@ class FacilitiesScreen(Screen):
         yield DataTable(id="facilities-table")
 
         yield Static(
-            "Arrow keys to select | R to remove | M to move (coming soon)",
+            "Arrow keys to select | R to remove",
             id="facilities-help"
         )
 
@@ -122,10 +121,6 @@ class FacilitiesScreen(Screen):
                 self.notify(f"Removed {name} (+${refund})")
                 self._refresh_table()
                 self._update_header()
-
-    def action_move_facility(self) -> None:
-        """Move the selected facility (placeholder)."""
-        self.notify("Move feature coming soon!")
 
     def _update_header(self) -> None:
         """Update the header."""

@@ -23,7 +23,6 @@ class PigListScreen(Screen):
         ("v", "view_pig", "View"),
         ("f", "follow_pig", "Follow"),
         ("s", "sell_pig", "Sell"),
-        ("r", "rename_pig", "Rename"),
         ("l", "toggle_breeding_lock", "Lock"),
         ("m", "toggle_mark_sale", "Mark"),
     ]
@@ -46,11 +45,6 @@ class PigListScreen(Screen):
         margin: 1;
     }
 
-    #pig-footer-info {
-        height: 2;
-        padding: 0 1;
-        color: $text-muted;
-    }
     """
 
     def __init__(self, state: GameState, **kwargs):
@@ -66,8 +60,6 @@ class PigListScreen(Screen):
 
         self._table = DataTable(id="pig-table")
         yield self._table
-
-        yield Static("V = View | F = Follow | L = Lock | M = Mark | S = Sell", id="pig-footer-info")
 
         yield Footer()
 
@@ -168,10 +160,6 @@ class PigListScreen(Screen):
             # Store pig to follow and go back to main screen
             self.app.pig_to_follow = pig
             self.app.pop_screen()
-
-    def action_rename_pig(self) -> None:
-        """Rename the selected pig (placeholder)."""
-        self.notify("Rename feature coming soon!")
 
     def _update_header(self) -> None:
         """Update the header."""
