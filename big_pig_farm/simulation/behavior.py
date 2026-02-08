@@ -20,6 +20,8 @@ class BehaviorController:
         self._blocked_timers: dict[UUID, float] = {}  # Track how long pigs have been blocked
         self._failed_facilities: dict[UUID, set[UUID]] = {}  # Track recently-failed facility IDs per pig
         self._failed_cooldowns: dict[UUID, int] = {}  # Decisions remaining before clearing failed list
+        self._stuck_positions: dict[UUID, tuple[int, int]] = {}  # Last known grid cell while blocked
+        self._stuck_timers: dict[UUID, float] = {}  # Time stuck at same grid cell (not reset by facility switches)
 
     def cleanup_dead_pig(self, pig_id: UUID) -> None:
         """Remove tracking state for a pig that is no longer alive."""
@@ -27,6 +29,8 @@ class BehaviorController:
         self._blocked_timers.pop(pig_id, None)
         self._failed_facilities.pop(pig_id, None)
         self._failed_cooldowns.pop(pig_id, None)
+        self._stuck_positions.pop(pig_id, None)
+        self._stuck_timers.pop(pig_id, None)
 
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
@@ -790,6 +794,8 @@ class BehaviorController:
         pig.target_facility_id = None
         pig.target_description = None
         self._blocked_timers[pig.id] = 0
+        self._stuck_positions.pop(pig.id, None)
+        self._stuck_timers.pop(pig.id, None)
 
         # If hunger or thirst is critical, clear failed list so the pig
         # immediately retries on next decision — don't let cooldowns kill it
@@ -887,13 +893,30 @@ class BehaviorController:
                     if pig.target_description and "(blocked)" in pig.target_description:
                         pig.target_description = pig.target_description.replace(" (blocked)", "")
                     self._blocked_timers[pig.id] = 0
+                    self._stuck_positions.pop(pig.id, None)
+                    self._stuck_timers.pop(pig.id, None)
                 else:
                     # Blocked - track how long and try to find alternative
                     blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
                     self._blocked_timers[pig.id] = blocked_time
 
+                    # Track how long pig is stuck at the same grid cell.
+                    # Unlike _blocked_timers, this is NOT reset by facility
+                    # switches — only by actual physical movement.
+                    grid_pos = (int(pig.position.x), int(pig.position.y))
+                    if self._stuck_positions.get(pig.id) != grid_pos:
+                        self._stuck_positions[pig.id] = grid_pos
+                        self._stuck_timers[pig.id] = 0.0
+                    self._stuck_timers[pig.id] = self._stuck_timers.get(pig.id, 0.0) + delta_seconds
+
                     if pig.target_description and "(blocked)" not in pig.target_description:
                         pig.target_description = f"{pig.target_description} (blocked)"
+
+                    # If stuck at the same cell too long, force give-up regardless
+                    # of whether alternative facilities exist (prevents corridor deadlock)
+                    if self._stuck_timers.get(pig.id, 0) > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
+                        self._give_up_and_fallback(pig)
+                        return
 
                     # After 2 seconds of being blocked, try to find an alternative facility
                     if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
@@ -919,18 +942,35 @@ class BehaviorController:
                 if pig.target_description and "(blocked)" in pig.target_description:
                     pig.target_description = pig.target_description.replace(" (blocked)", "")
                 self._blocked_timers[pig.id] = 0
+                self._stuck_positions.pop(pig.id, None)
+                self._stuck_timers.pop(pig.id, None)
             elif self._try_dodge(pig, dx, dy, delta_seconds, speed):
                 # Dodged sideways to get around blocking pig
                 if pig.target_description and "(blocked)" in pig.target_description:
                     pig.target_description = pig.target_description.replace(" (blocked)", "")
                 self._blocked_timers[pig.id] = 0
+                self._stuck_positions.pop(pig.id, None)
+                self._stuck_timers.pop(pig.id, None)
             else:
                 # Blocked and can't dodge - track how long and try to find alternative
                 blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
                 self._blocked_timers[pig.id] = blocked_time
 
+                # Track how long pig is stuck at the same grid cell
+                grid_pos = (int(pig.position.x), int(pig.position.y))
+                if self._stuck_positions.get(pig.id) != grid_pos:
+                    self._stuck_positions[pig.id] = grid_pos
+                    self._stuck_timers[pig.id] = 0.0
+                self._stuck_timers[pig.id] = self._stuck_timers.get(pig.id, 0.0) + delta_seconds
+
                 if pig.target_description and "(blocked)" not in pig.target_description:
                     pig.target_description = f"{pig.target_description} (blocked)"
+
+                # If stuck at the same cell too long, force give-up regardless
+                # of whether alternative facilities exist
+                if self._stuck_timers.get(pig.id, 0) > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
+                    self._give_up_and_fallback(pig)
+                    return
 
                 # After 2 seconds of being blocked, try to find an alternative facility
                 if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
@@ -954,8 +994,10 @@ class BehaviorController:
 
     def _check_arrived_at_facility(self, pig: GuineaPig) -> None:
         """Check if pig arrived at a facility and update behavior state."""
-        # Reset blocked timer since we arrived
+        # Reset blocked/stuck timers since we arrived
         self._blocked_timers[pig.id] = 0
+        self._stuck_positions.pop(pig.id, None)
+        self._stuck_timers.pop(pig.id, None)
 
         grid_pos = pig.position.grid_pos()
         successfully_using_facility = False
