@@ -70,6 +70,12 @@ class EventLog(BaseModel):
     event_type: str = "info"  # info, birth, death, sale, purchase
 
 
+class BreedingPair(BaseModel):
+    """A manually set breeding pair."""
+    male_id: UUID
+    female_id: UUID
+
+
 class GameState(BaseModel):
     """Complete game state."""
     # Core collections
@@ -98,6 +104,9 @@ class GameState(BaseModel):
     # Collections
     pigdex: Pigdex = Field(default_factory=Pigdex)
     contract_board: ContractBoard = Field(default_factory=ContractBoard)
+
+    # Manual breeding
+    breeding_pair: Optional[BreedingPair] = None
 
     # Statistics
     total_pigs_born: int = 0
@@ -178,6 +187,14 @@ class GameState(BaseModel):
     def is_at_capacity(self) -> bool:
         """Check if farm is at maximum capacity."""
         return self.pig_count >= self.capacity
+
+    def set_breeding_pair(self, male_id: UUID, female_id: UUID) -> None:
+        """Set a manual breeding pair."""
+        self.breeding_pair = BreedingPair(male_id=male_id, female_id=female_id)
+
+    def clear_breeding_pair(self) -> None:
+        """Clear the manual breeding pair."""
+        self.breeding_pair = None
 
     def get_pigs_list(self) -> list[GuineaPig]:
         """Get all guinea pigs as a list."""
