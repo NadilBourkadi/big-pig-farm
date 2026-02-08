@@ -431,8 +431,13 @@ def sell_marked_adults(game_state) -> list[tuple[str, int, UUID]]:
     return sold
 
 
+_last_breeding_warning_day: int = -1
+
+
 def _auto_pair_from_program(game_state) -> None:
     """Auto-pair the best breeding pair based on the breeding program target."""
+    global _last_breeding_warning_day
+
     if game_state.breeding_pair is not None:
         return  # Manual pair or previous auto-pair still active
 
@@ -453,6 +458,18 @@ def _auto_pair_from_program(game_state) -> None:
     ]
 
     if not males or not females:
+        current_day = game_state.game_time.day
+        if current_day != _last_breeding_warning_day:
+            _last_breeding_warning_day = current_day
+            reasons = []
+            if not males:
+                reasons.append("no eligible males")
+            if not females:
+                reasons.append("no eligible females")
+            game_state.log_event(
+                f"Breeding program: cannot auto-pair — {', '.join(reasons)}",
+                event_type="breeding",
+            )
         return
 
     best_pair = None
