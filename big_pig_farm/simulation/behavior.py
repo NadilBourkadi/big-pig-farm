@@ -933,7 +933,7 @@ class BehaviorController:
                     pig.target_description = f"{pig.target_description} (blocked)"
 
                 # After 2 seconds of being blocked, try to find an alternative facility
-                if blocked_time > 2.0:
+                if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
                     current_target = pig.target_position
                     if current_target and self._try_alternative_facility(pig, current_target):
                         # Found alternative, reset blocked timer
