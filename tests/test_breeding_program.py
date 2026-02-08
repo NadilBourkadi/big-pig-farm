@@ -341,12 +341,12 @@ class TestTargetProbability:
         assert abs(prob_none - 1 / 3) < 0.001
         assert abs(prob_roan + prob_none - 1.0) < 0.001
 
-    def test_intensity_chinchilla(self):
-        """C/ch x C/ch -> P(C/ch) = 50% for chinchilla."""
+    def test_intensity_himalayan(self):
+        """C/ch x C/ch -> P(ch/ch) = 25% for himalayan."""
         p1 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "ch"), r_locus=("r", "r"))
         p2 = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "ch"), r_locus=("r", "r"))
-        prob = calculate_target_probability(p1, p2, set(), set(), {ColorIntensity.CHINCHILLA}, set())
-        assert abs(prob - 0.5) < 0.001
+        prob = calculate_target_probability(p1, p2, set(), set(), {ColorIntensity.HIMALAYAN}, set())
+        assert abs(prob - 0.25) < 0.001
 
     def test_multiple_colors_in_target(self):
         """Target {GOLDEN, CREAM} from Ee x Ee, Bb x Bb."""
