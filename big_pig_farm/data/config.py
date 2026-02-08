@@ -32,9 +32,9 @@ _init_speed_display()
 class NeedsConfig:
     """Configuration for guinea pig needs decay and thresholds."""
     # Decay rates per game hour
-    HUNGER_DECAY: float = 1.5
-    THIRST_DECAY: float = 2.0
-    ENERGY_DECAY: float = 1.5
+    HUNGER_DECAY: float = 0.6
+    THIRST_DECAY: float = 0.8
+    ENERGY_DECAY: float = 0.6
     HAPPINESS_BASE_DECAY: float = 2.0
 
     # Thresholds
@@ -277,7 +277,7 @@ class BehaviorConfig:
     FAILED_COOLDOWN_CYCLES: int = 3        # Decision cycles to preserve failed list
 
     # Decision thresholds
-    ENERGY_SLEEP_THRESHOLD: int = 30       # Energy level to seek sleep
+    ENERGY_SLEEP_THRESHOLD: int = 40       # Energy level to seek sleep (matches LOW_THRESHOLD)
     EMERGENCY_WAKE_ENERGY: int = 15        # Min energy to wake from sleep for critical need
     BOREDOM_PLAY_THRESHOLD: int = 30       # Boredom level to seek play
     BOREDOM_KEEP_PLAYING: int = 20         # Boredom level to keep playing
