@@ -46,13 +46,6 @@ _AXES = [
     ("Roan", _ROAN, _ROAN_LABELS),
 ]
 
-# Max label width per axis for consistent column widths
-_AXIS_WIDTHS = [
-    max(len(l) for l in _COLOR_LABELS.values()),
-    max(len(l) for l in _PATTERN_LABELS.values()),
-    max(len(l) for l in _INTENSITY_LABELS.values()),
-    max(len(l) for l in _ROAN_LABELS.values()),
-]
 
 
 class BreedingProgramPanel(Static, can_focus=True):
@@ -157,11 +150,10 @@ class BreedingProgramPanel(Static, can_focus=True):
             # Enabled toggle
             self.breeding_program.enabled = not self.breeding_program.enabled
 
-    def _fmt_check(self, checked: bool, label: str, is_cursor: bool, width: int = 0) -> str:
-        """Format a checkbox item with Rich markup and fixed width."""
+    def _fmt_check(self, checked: bool, label: str, is_cursor: bool) -> str:
+        """Format a checkbox item with Rich markup."""
         icon = "\u25cf" if checked else "\u25cb"
-        padded = f"{label:<{width}}" if width else label
-        text = f" {icon} {padded} "
+        text = f" {icon} {label} "
         if is_cursor:
             style = "reverse green" if checked else "reverse"
             return f"[{style}]{text}[/]"
@@ -184,12 +176,11 @@ class BreedingProgramPanel(Static, can_focus=True):
 
         for axis_idx, (axis_name, values, labels) in enumerate(_AXES):
             target_set = self._get_set_for_axis(axis_idx)
-            col_w = _AXIS_WIDTHS[axis_idx]
             items = []
             for item_idx, val in enumerate(values):
                 checked = val in target_set
                 is_cursor = axis_idx == self._cursor_axis and item_idx == self._cursor_item
-                items.append(self._fmt_check(checked, labels[val], is_cursor, width=col_w))
+                items.append(self._fmt_check(checked, labels[val], is_cursor))
 
             all_empty = len(target_set) == 0
             any_tag = " [dim](any)[/]" if all_empty else ""
