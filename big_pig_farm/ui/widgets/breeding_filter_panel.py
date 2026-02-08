@@ -47,7 +47,7 @@ _AXES = [
 ]
 
 
-class BreedingFilterPanel(Static):
+class BreedingFilterPanel(Static, can_focus=True):
     """Panel for configuring trait-based breeding filter."""
 
     DEFAULT_CSS = """
