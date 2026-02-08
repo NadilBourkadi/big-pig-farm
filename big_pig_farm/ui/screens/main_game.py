@@ -23,9 +23,7 @@ from big_pig_farm.ui.screens.breeding import BreedingScreen
 from big_pig_farm.ui.screens.facilities import FacilitiesScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.adoption import AdoptionScreen
-from big_pig_farm.ui.screens.pigdex import PigdexScreen
-from big_pig_farm.ui.screens.contracts import ContractsScreen
-from big_pig_farm.ui.screens.event_log import EventLogScreen
+from big_pig_farm.ui.screens.almanac import AlmanacScreen
 
 
 class MainGameScreen(Screen):
@@ -37,9 +35,7 @@ class MainGameScreen(Screen):
         ("a", "open_adoption", "Adopt"),
         ("p", "open_pigs", "Pigs"),
         ("b", "open_breeding", "Breed"),
-        ("x", "open_pigdex", "Pigdex"),
-        ("c", "open_contracts", "Contracts"),
-        ("l", "open_event_log", "Log"),
+        ("j", "open_almanac", "Almanac"),
         ("e", "toggle_edit", "Edit"),
         ("n", "new_game", "New"),
         ("space", "toggle_pause", "Pause"),
@@ -338,17 +334,9 @@ class MainGameScreen(Screen):
         """Open the breeding screen."""
         self.app.push_screen(BreedingScreen(self.state))
 
-    def action_open_pigdex(self) -> None:
-        """Open the pigdex screen."""
-        self.app.push_screen(PigdexScreen(self.state))
-
-    def action_open_contracts(self) -> None:
-        """Open the contracts screen."""
-        self.app.push_screen(ContractsScreen(self.state))
-
-    def action_open_event_log(self) -> None:
-        """Open the event log screen."""
-        self.app.push_screen(EventLogScreen(self.state))
+    def action_open_almanac(self) -> None:
+        """Open the almanac (Pigdex, Contracts, Event Log)."""
+        self.app.push_screen(AlmanacScreen(self.state))
 
     def action_open_facilities(self) -> None:
         """Open the facilities screen."""
