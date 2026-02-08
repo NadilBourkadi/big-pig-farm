@@ -45,10 +45,10 @@ class BreedingScreen(Screen):
     BINDINGS = [
         ("escape", "go_back", "Back"),
         ("q", "go_back", "Back"),
-        ("t", "switch_tab", "Tab"),
-        ("tab", "switch_panel", "Switch"),
-        ("m", "focus_males", "Males"),
-        ("f", "focus_females", "Females"),
+        ("t", "switch_tab", "Pair/Prog"),
+        ("tab", "switch_panel", "M/F"),
+        ("m", "focus_males", None),
+        ("f", "focus_females", None),
         ("p", "set_pair", "Pair"),
         ("c", "cancel_pair", "Cancel"),
     ]
