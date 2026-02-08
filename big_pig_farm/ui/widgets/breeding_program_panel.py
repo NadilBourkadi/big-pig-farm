@@ -159,7 +159,7 @@ class BreedingProgramPanel(Static, can_focus=True):
     def _fmt_check(self, checked: bool, label: str, is_cursor: bool) -> str:
         """Format a checkbox item with Rich markup at fixed column width."""
         icon = "\u25cf" if checked else "\u25cb"
-        inner = f"{icon} {label:<{_ITEM_WIDTH}}"
+        inner = f"{icon} {label:<{_ITEM_WIDTH + 2}}"
         if is_cursor:
             style = "reverse green" if checked else "reverse"
             return f" [{style}]{inner}[/]"
