@@ -5,7 +5,7 @@ from uuid import UUID
 
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.containers import Horizontal
+from textual.containers import Container
 from textual.widgets import Static, DataTable, Footer
 
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
@@ -40,14 +40,13 @@ class PigListScreen(Screen):
     }
 
     #pig-split {
+        layout: horizontal;
         height: 1fr;
-        width: 100%;
     }
 
     #pig-table {
         width: 1fr;
         height: 100%;
-        margin: 1;
     }
 
     #pig-detail-panel {
@@ -55,6 +54,7 @@ class PigListScreen(Screen):
         height: 100%;
         border-left: solid $secondary;
         overflow-y: auto;
+        padding: 1;
     }
     """
 
@@ -68,7 +68,7 @@ class PigListScreen(Screen):
         capacity = self.state.capacity
         yield Static(f"Guinea Pigs ({count}/{capacity})", id="pig-header")
 
-        with Horizontal(id="pig-split"):
+        with Container(id="pig-split"):
             yield DataTable(id="pig-table")
             yield PigDetailPanel(self.state, id="pig-detail-panel")
 
