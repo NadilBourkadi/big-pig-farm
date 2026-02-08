@@ -163,9 +163,9 @@ class BreedingProgramPanel(Static, can_focus=True):
                 checked = "x" if val in target_set else " "
                 label = labels[val]
                 if axis_idx == self._cursor_axis and item_idx == self._cursor_item:
-                    items.append(f">\[{checked}] {label}")
+                    items.append(f">\\[{checked}] {label}")
                 else:
-                    items.append(f" \[{checked}] {label}")
+                    items.append(f" \\[{checked}] {label}")
             all_empty = len(target_set) == 0
             suffix = " (any)" if all_empty else ""
             lines.append(f"  {axis_name}:{suffix}  {'  '.join(items)}")
@@ -176,12 +176,12 @@ class BreedingProgramPanel(Static, can_focus=True):
         kc_check = "x" if self.breeding_program.keep_carriers else " "
         lab_status = " (Lab built)" if self.has_genetics_lab else " (needs Lab)"
         kc_cursor = ">" if self._cursor_axis == 4 else " "
-        lines.append(f"  {kc_cursor}\[{kc_check}] Keep Carriers{lab_status}")
+        lines.append(f"  {kc_cursor}\\[{kc_check}] Keep Carriers{lab_status}")
 
         # Auto-pair toggle
         ap_check = "x" if self.breeding_program.auto_pair else " "
         ap_cursor = ">" if self._cursor_axis == 5 else " "
-        lines.append(f"  {ap_cursor}\[{ap_check}] Auto-Pair")
+        lines.append(f"  {ap_cursor}\\[{ap_check}] Auto-Pair")
 
         # Stock limit
         sl_cursor = ">" if self._cursor_axis == 6 else " "
@@ -190,7 +190,7 @@ class BreedingProgramPanel(Static, can_focus=True):
         # Enabled toggle
         en_check = "x" if self.breeding_program.enabled else " "
         en_cursor = ">" if self._cursor_axis == 7 else " "
-        lines.append(f"  {en_cursor}\[{en_check}] Program Enabled")
+        lines.append(f"  {en_cursor}\\[{en_check}] Program Enabled")
 
         self.update("\n".join(lines))
 
