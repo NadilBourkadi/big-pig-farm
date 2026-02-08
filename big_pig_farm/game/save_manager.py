@@ -11,7 +11,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
-from big_pig_farm.game.state import GameState, GameTime, EventLog
+from big_pig_farm.game.state import GameState, GameTime, EventLog, BreedingPair
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Personality, Needs, Position
 from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype, BaseColor, Pattern, ColorIntensity, RoanType
 from big_pig_farm.entities.facilities import Facility, FacilityType
@@ -165,6 +165,15 @@ class SaveManager:
                 )
             """)
 
+            # Breeding pair table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS breeding_pair (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    male_id TEXT NOT NULL,
+                    female_id TEXT NOT NULL
+                )
+            """)
+
             conn.commit()
 
     def _backup_save(self) -> None:
@@ -199,6 +208,7 @@ class SaveManager:
             cursor.execute("DELETE FROM pigdex_meta")
             cursor.execute("DELETE FROM contracts")
             cursor.execute("DELETE FROM contract_meta")
+            cursor.execute("DELETE FROM breeding_pair")
 
             # Save game state
             cursor.execute("""
@@ -320,6 +330,13 @@ class SaveManager:
                 cursor.execute(
                     "INSERT INTO contract_meta VALUES (1, ?, ?, ?)",
                     (board.completed_contracts, board.total_contract_earnings, board.last_refresh_day),
+                )
+
+            # Save breeding pair
+            if state.breeding_pair is not None:
+                cursor.execute(
+                    "INSERT INTO breeding_pair VALUES (1, ?, ?)",
+                    (str(state.breeding_pair.male_id), str(state.breeding_pair.female_id)),
                 )
 
             conn.commit()
@@ -501,6 +518,19 @@ class SaveManager:
                     state.contract_board.last_refresh_day = cmeta["last_refresh_day"]
             except (sqlite3.OperationalError, ImportError):
                 pass  # Table doesn't exist or contracts module not yet available
+
+            # Load breeding pair
+            try:
+                cursor.execute("SELECT male_id, female_id FROM breeding_pair WHERE id = 1")
+                breeding_pair_row = cursor.fetchone()
+                if breeding_pair_row:
+                    male_id = UUID(breeding_pair_row["male_id"])
+                    female_id = UUID(breeding_pair_row["female_id"])
+                    # Only restore if both pigs still exist
+                    if male_id in state.guinea_pigs and female_id in state.guinea_pigs:
+                        state.breeding_pair = BreedingPair(male_id=male_id, female_id=female_id)
+            except sqlite3.OperationalError:
+                pass  # Table doesn't exist in old saves
 
             conn.close()
 
