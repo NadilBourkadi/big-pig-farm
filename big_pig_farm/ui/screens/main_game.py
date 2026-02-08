@@ -21,7 +21,6 @@ from big_pig_farm.ui.screens.shop import ShopScreen
 from big_pig_farm.ui.screens.pig_list import PigListScreen
 from big_pig_farm.ui.screens.breeding import BreedingScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
-from big_pig_farm.ui.screens.adoption import AdoptionScreen
 from big_pig_farm.ui.screens.almanac import JournalScreen
 
 
@@ -32,7 +31,6 @@ class MainGameScreen(Screen):
         # Normal mode bindings (hidden in edit mode via check_action)
         ("f", "feed", "Feed"),
         ("s", "open_shop", "Shop"),
-        ("a", "open_adoption", "Adopt"),
         ("p", "open_pigs", "Pigs"),
         ("b", "open_breeding", "Breed"),
         ("j", "open_journal", "Journal"),
@@ -62,7 +60,7 @@ class MainGameScreen(Screen):
     _EDIT_ONLY_ACTIONS = {"start_move", "remove_facility", "handle_enter"}
     # Actions that should only appear in the footer when NOT in edit mode
     _NORMAL_ONLY_ACTIONS = {
-        "feed", "open_shop", "open_adoption", "open_pigs",
+        "feed", "open_shop", "open_pigs",
         "open_breeding", "open_journal", "toggle_pause",
         "speed_up", "slow_down", "next_pig", "new_game",
     }
@@ -355,10 +353,6 @@ class MainGameScreen(Screen):
     def action_open_shop(self) -> None:
         """Open the shop screen."""
         self.app.push_screen(ShopScreen(self.state))
-
-    def action_open_adoption(self) -> None:
-        """Open the adoption center screen."""
-        self.app.push_screen(AdoptionScreen(self.state))
 
     def action_open_pigs(self) -> None:
         """Open the pig list screen."""
