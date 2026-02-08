@@ -4,7 +4,7 @@ import random
 from typing import Optional
 from uuid import UUID
 
-from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION
+from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION, NEEDS
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.economy.market import sell_pig
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
@@ -364,6 +364,15 @@ def _apply_breeding_filter(game_state, babies: list[GuineaPig]) -> None:
     if not program.enabled:
         return
 
+    # Skip filter when adult population is at or below the minimum
+    adults = [p for p in game_state.get_pigs_list() if not p.is_baby]
+    if len(adults) <= BREEDING.MIN_BREEDING_POPULATION:
+        game_state.log_event(
+            "Breeding program: skipping filter — population too low",
+            event_type="filter",
+        )
+        return
+
     has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))
     marked = []
     for baby in babies:
@@ -482,7 +491,8 @@ def cull_surplus_breeders(game_state) -> None:
         if not p.marked_for_sale and not p.is_baby
     ]
 
-    if len(adults) <= program.stock_limit:
+    effective_limit = max(program.stock_limit, BREEDING.MIN_BREEDING_POPULATION)
+    if len(adults) <= effective_limit:
         return  # Under limit, nothing to cull
 
     # Score each pig by breeding value (target allele count)
@@ -496,7 +506,7 @@ def cull_surplus_breeders(game_state) -> None:
     surplus = []
 
     for pig, score in scored:
-        if len(kept) < program.stock_limit:
+        if len(kept) < effective_limit:
             kept.append(pig)
             if pig.gender == Gender.MALE:
                 has_male = True
