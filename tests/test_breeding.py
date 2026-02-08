@@ -195,3 +195,90 @@ class TestPigdexRegistration:
         register_pig_in_pigdex(state, pig2)
         # No additional reward for duplicate
         assert state.money == money_after_first
+
+
+class TestManualBreeding:
+    """Tests for the manual breeding pair system."""
+
+    def test_manual_pair_triggers_pregnancy(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+
+        state.set_breeding_pair(male.id, female.id)
+        check_breeding_opportunities(state)
+
+        assert female.is_pregnant
+        assert female.partner_id == male.id
+        assert state.breeding_pair is None  # Cleared after success
+
+    def test_manual_pair_clears_on_missing_pig(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+
+        state.set_breeding_pair(male.id, female.id)
+        state.remove_guinea_pig(male.id)
+
+        check_breeding_opportunities(state)
+
+        assert not female.is_pregnant
+        assert state.breeding_pair is None
+
+    def test_manual_pair_waits_if_not_ready(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+
+        # Low happiness prevents breeding
+        male.needs.happiness = 10
+        state.set_breeding_pair(male.id, female.id)
+
+        check_breeding_opportunities(state)
+
+        assert not female.is_pregnant
+        assert state.breeding_pair is not None  # Still waiting
+
+    def test_manual_pair_clears_if_female_pregnant(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+
+        female.is_pregnant = True
+        female.pregnancy_days = 0.5
+        female.partner_id = male.id
+
+        state.set_breeding_pair(male.id, female.id)
+        check_breeding_opportunities(state)
+
+        assert state.breeding_pair is None  # Cleared because already pregnant
+
+    def test_manual_pair_bypasses_distance(self):
+        state = GameState()
+        # Place pigs at opposite corners
+        male = _make_pig("Boar", Gender.MALE, age_days=5.0, x=1.0, y=1.0)
+        female = _make_pig("Sow", Gender.FEMALE, age_days=5.0, x=30.0, y=20.0)
+        male.needs.happiness = 90
+        female.needs.happiness = 90
+        male.needs.health = 100
+        female.needs.health = 100
+        state.add_guinea_pig(male)
+        state.add_guinea_pig(female)
+
+        state.set_breeding_pair(male.id, female.id)
+        check_breeding_opportunities(state)
+
+        assert female.is_pregnant
+        assert state.breeding_pair is None
+
+    def test_set_new_pair_replaces_old(self):
+        state = GameState()
+        male1 = _make_pig("Boar1", Gender.MALE, age_days=5.0, x=5.0, y=5.0)
+        male2 = _make_pig("Boar2", Gender.MALE, age_days=5.0, x=6.0, y=5.0)
+        female = _make_pig("Sow", Gender.FEMALE, age_days=5.0, x=5.5, y=5.0)
+        for pig in [male1, male2, female]:
+            pig.needs.happiness = 90
+            pig.needs.health = 100
+            state.add_guinea_pig(pig)
+
+        state.set_breeding_pair(male1.id, female.id)
+        state.set_breeding_pair(male2.id, female.id)
+
+        assert state.breeding_pair.male_id == male2.id
+        assert state.breeding_pair.female_id == female.id
