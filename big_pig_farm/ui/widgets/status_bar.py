@@ -1,6 +1,5 @@
 """Status bar widget showing resources and time."""
 
-from textual.app import ComposeResult
 from textual.widgets import Static
 from textual.reactive import reactive
 
@@ -10,7 +9,7 @@ from big_pig_farm.entities.facilities import FacilityType
 
 
 class StatusBar(Static):
-    """Top status bar showing game resources and time."""
+    """Top status bar showing game resources and time (2 lines)."""
 
     day: reactive[int] = reactive(1)
     time_display: reactive[str] = reactive("8:00 AM")
@@ -23,11 +22,12 @@ class StatusBar(Static):
     is_paused: reactive[bool] = reactive(False)
     speed: reactive[int] = reactive(1)
     warning: reactive[str] = reactive("")
+    edit_mode: reactive[bool] = reactive(False)
 
     DEFAULT_CSS = """
     StatusBar {
         dock: top;
-        height: 1;
+        height: 2;
         background: $surface;
         color: $text;
         padding: 0 1;
@@ -35,32 +35,43 @@ class StatusBar(Static):
     """
 
     def render(self) -> str:
-        """Render the status bar content."""
+        """Render the two-line status bar."""
         # Time icon based on time of day
-        time_icon = "☀" if self.time_of_day in ("Morning", "Afternoon") else "☽"
+        time_icon = "\u2600" if self.time_of_day in ("Morning", "Afternoon") else "\u263d"
 
         # Pause/speed indicator
         if self.is_paused:
-            speed_str = "⏸ PAUSED"
+            speed_str = "\u23f8 PAUSED"
         elif self.speed > GameSpeed.NORMAL.value:
-            speed_str = f"▶▶ {SPEED_DISPLAY.get(GameSpeed(self.speed), f'{self.speed}x')}"
+            speed_str = f"\u25b6\u25b6 {SPEED_DISPLAY.get(GameSpeed(self.speed), f'{self.speed}x')}"
         else:
-            speed_str = "▶"
+            speed_str = "\u25b6"
 
-        # Format components
-        parts = [
+        # Line 1: Day, Time, Money, Pigs, Speed
+        top_parts = [
             f"Day {self.day}",
             f"{time_icon} {self.time_of_day}",
             f"${format_money(self.money)}",
-            f"🐹 {self.pig_count}/{self.capacity}",
-            f"🥗{self.food_level}% 💧{self.water_level}%",
+            f"\U0001f439 {self.pig_count}/{self.capacity}",
             speed_str,
+        ]
+        top_line = " \u2502 ".join(top_parts)
+
+        # Line 2: Food, Water, Warnings, Edit mode
+        bottom_parts = [
+            f"\U0001f957{self.food_level}%",
+            f"\U0001f4a7{self.water_level}%",
         ]
 
         if self.warning:
-            parts.append(f"⚠ {self.warning}")
+            bottom_parts.append(f"\u26a0 {self.warning}")
 
-        return " │ ".join(parts)
+        if self.edit_mode:
+            bottom_parts.append("[bold reverse] EDIT [/]")
+
+        bottom_line = " \u2502 ".join(bottom_parts)
+
+        return f"{top_line}\n{bottom_line}"
 
     def update_from_state(self, state) -> None:
         """Update all values from game state."""

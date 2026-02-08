@@ -225,6 +225,8 @@ class MainGameScreen(Screen):
         """Toggle facility edit mode."""
         if self._farm_view:
             is_edit = self._farm_view.toggle_edit_mode()
+            if self._status_bar:
+                self._status_bar.edit_mode = is_edit
             if is_edit:
                 self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
             else:
@@ -238,6 +240,8 @@ class MainGameScreen(Screen):
                 self.notify("Placement cancelled")
             else:
                 self._farm_view.toggle_edit_mode()
+                if self._status_bar:
+                    self._status_bar.edit_mode = False
                 self.notify("Edit mode off")
         else:
             self._selected_pig_index = -1
