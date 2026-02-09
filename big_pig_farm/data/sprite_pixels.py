@@ -411,33 +411,46 @@ def get_pig_pixel_sprite(
 
 
 # ---------------------------------------------------------------------------
-# Procedural pig portraits  (20 x 16 pixels -> 20 x 8 half-block chars)
+# Procedural pig portraits  (32 x 24 pixels -> 32 x 12 half-block chars)
 # ---------------------------------------------------------------------------
 
-# The 20x16 face template: a front-facing guinea pig head.
-# Wider than tall = oval face, NOT circular.  Puffy cheeks that barely taper
-# toward the chin = fluffy.  Ears are petal-shaped flaps on the SIDES.
-# Eyes are large 3x2 blocks (dark pupil + gleam) set high on the face.
+# The 32x24 face template: a front-facing guinea pig head.
+# Guinea pigs are WIDER than tall with puffy cheeks and fluffy fur.
+# Key features that make it look like a guinea pig, not a potato:
+#   - Irregular silhouette with fur tufts breaking the outline
+#   - Prominent rounded ears on the sides with inner-ear detail
+#   - Large expressive eyes (4x3 with pupil + white gleam)
+#   - Wide guinea pig nose with Y-shaped nostrils
+#   - Fluffy cheek poufs that bulge outward
+#   - Wisps of fur on top of head (rosette)
 # Uses palette keys directly — pattern/intensity functions mutate them.
 # fmt: off
 _FACE_TEMPLATE: PixelGrid = [
-    #  0     1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
-    [ T,    T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T    ],  # 0  top of head
-    [ T,    T,     T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,     T    ],  # 1  upper head
-    [ T,    T,     T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T    ],  # 2  forehead
-    [ T,   "ear","ear","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear","ear", T    ],  # 3  ears protrude from sides
-    ["ear","ear","dark","fur", "fur","pupil","pupil","pupil","fur", "fur", "fur", "fur","pupil","pupil","pupil","fur", "fur","dark","ear","ear"],  # 4  eyes upper (3px pupil)
-    ["dark","dark","fur", "fur", "fur","pupil","pupil","eye", "fur", "fur", "fur", "fur","pupil","pupil","eye", "fur", "fur", "fur","dark","dark"],  # 5  eyes lower (pupil+gleam)
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 6  cheeks
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 7  cheeks (widest)
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 8  nose start
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 9  nose wider
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur","nose","nose","fur", "fur","nose","nose","fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 10 nostrils
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 11 lower cheeks (still wide!)
-    [ T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 12 chin (barely tapers)
-    [ T,    T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T    ],  # 13 lower chin
-    [ T,    T,     T,  "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T    ],  # 14 jaw (still wide = fluffy)
-    [ T,    T,     T,    T,     T,  "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T    ],  # 15 bottom
+    #  0     1     2     3     4     5     6     7     8     9    10    11    12    13    14    15    16    17    18    19    20    21    22    23    24    25    26    27    28    29    30    31
+    [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "fur", T,   "dark","dark","dark","dark","dark","dark","dark","dark", T,   "fur", T,    T,    T,    T,    T,    T,    T,    T,    T,    T   ],  # 0  fur tufts on top
+    [ T,    T,    T,    T,    T,    T,    T,    T,    T,   "dark","dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","dark","dark","dark", T,    T,    T,    T,    T,    T,    T,    T,    T   ],  # 1  crown
+    [ T,    T,    T,    T,    T,    T,    T,   "dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","dark", T,    T,    T,    T,    T,    T,    T   ],  # 2  upper head
+    [ T,    T,    T,    T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T,    T,    T   ],  # 3  forehead
+    [ T,    T,    T,   "dark","ear","ear","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","ear","ear","dark", T,    T,    T   ],  # 4  ears start
+    [ T,    T,   "dark","ear","ear","ear","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","ear","ear","ear","dark", T,    T   ],  # 5  ears full
+    [ T,   "dark","ear","ear","ear","dark","fur","fur","fur","pupil","pupil","pupil","pupil","fur","fur","fur","fur","fur","pupil","pupil","pupil","pupil","fur","fur","fur","fur","dark","ear","ear","ear","dark", T   ],  # 6  ears + eyes upper
+    [ T,   "dark","ear","ear","dark","dark","fur","fur","fur","pupil","pupil","pupil","eye","fur","fur","fur","fur","fur","pupil","pupil","pupil","eye","fur","fur","fur","fur","dark","dark","ear","ear","dark", T   ],  # 7  eyes lower (pupil+gleam)
+    [ T,    T,   "dark","dark", T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,   "dark","dark", T,    T   ],  # 8  below eyes / upper cheeks
+    [ T,    T,    T,    T,    T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T,    T   ],  # 9  cheeks
+    ["fur", T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,   "fur"],  # 10 cheeks widest + tufts
+    [ T,    T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T   ],  # 11 cheeks
+    [ T,    T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","fur","nose","nose","nose","nose","nose","nose","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T   ],  # 12 nose area
+    [ T,    T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","nose","nose","nose","nose","nose","nose","nose","nose","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T   ],  # 13 nose wider
+    [ T,    T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","nose","nose","fur","fur","fur","fur","nose","nose","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T   ],  # 14 nostrils
+    [ T,    T,    T,    T,   "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T   ],  # 15 lower cheeks
+    [ T,    T,    T,    T,    T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T,    T   ],  # 16 chin starts
+    ["fur", T,    T,    T,    T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T,    T,    T,    T,   "fur"],  # 17 chin + tufts
+    [ T,    T,    T,    T,    T,   "dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","dark", T,    T,    T,    T,    T   ],  # 18 lower chin
+    [ T,    T,    T,    T,    T,    T,   "dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","dark", T,    T,    T,    T,    T,    T   ],  # 19 jaw
+    [ T,    T,    T,    T,    T,    T,    T,   "dark","dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","dark","dark", T,    T,    T,    T,    T,    T,    T   ],  # 20 lower jaw + tufts
+    [ T,    T,    T,    T,    T,    T,    T,    T,    T,   "dark","dark","dark","dark","fur","fur","fur","fur","fur","fur","dark","dark","dark","dark", T,    T,    T,    T,    T,    T,    T,    T,    T   ],  # 21 throat
+    [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T   ],  # 22 bottom
+    [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "dark","dark","dark","dark","dark","dark", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T   ],  # 23 very bottom
 ]
 # fmt: on
 
@@ -445,8 +458,8 @@ _FACE_TEMPLATE: PixelGrid = [
 _FUR_PIXELS: set[tuple[int, int]] = set()
 _EAR_PIXELS: set[tuple[int, int]] = set()
 _NOSE_PIXELS: set[tuple[int, int]] = set()
-_FOREHEAD_PIXELS: set[tuple[int, int]] = set()  # rows 1-4, inner area
-_CHIN_PIXELS: set[tuple[int, int]] = set()       # rows 11-14, inner area
+_FOREHEAD_PIXELS: set[tuple[int, int]] = set()  # rows 0-7, inner area
+_CHIN_PIXELS: set[tuple[int, int]] = set()       # rows 16-23, inner area
 
 for _r, _row in enumerate(_FACE_TEMPLATE):
     for _c, _val in enumerate(_row):
@@ -455,9 +468,9 @@ for _r, _row in enumerate(_FACE_TEMPLATE):
             _FUR_PIXELS.add((_r, _c))  # ears are also fur for pattern purposes
         elif _val == "fur":
             _FUR_PIXELS.add((_r, _c))
-            if _r <= 4:
+            if _r <= 7:
                 _FOREHEAD_PIXELS.add((_r, _c))
-            if _r >= 11:
+            if _r >= 16:
                 _CHIN_PIXELS.add((_r, _c))
         elif _val == "nose":
             _NOSE_PIXELS.add((_r, _c))
@@ -493,7 +506,7 @@ def _apply_dutch_markings(grid: PixelGrid) -> None:
     """Apply Dutch pattern: white blaze on forehead + white chin."""
     # White blaze: center columns of forehead
     for r, c in _FOREHEAD_PIXELS:
-        if 7 <= c <= 12:  # center area
+        if 12 <= c <= 19:  # center area
             grid[r][c] = "white"
 
     # White chin
@@ -534,7 +547,7 @@ def generate_portrait(
     roan: str,
     pig_id: str,
 ) -> PixelGrid:
-    """Generate a 20x16 pixel face portrait from phenotype traits.
+    """Generate a 32x24 pixel face portrait from phenotype traits.
 
     Args:
         base_color_name: "BLACK", "CHOCOLATE", "GOLDEN", or "CREAM"
@@ -544,7 +557,7 @@ def generate_portrait(
         pig_id: UUID string for deterministic randomness
 
     Returns:
-        20x16 pixel grid with palette keys. Use with convert_pixels() + PALETTES.
+        32x24 pixel grid with palette keys. Use with convert_pixels() + PALETTES.
     """
     grid = copy.deepcopy(_FACE_TEMPLATE)
 

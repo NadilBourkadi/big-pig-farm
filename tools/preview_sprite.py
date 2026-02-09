@@ -75,7 +75,7 @@ def preview_sprites() -> None:
 
 def preview_portraits() -> None:
     """Render sample portraits for various phenotype combinations."""
-    console.print("\n[bold underline]PIG PORTRAITS (16x16 -> 16x8 half-block)[/]\n")
+    console.print("\n[bold underline]PIG PORTRAITS (32x24 -> 32x12 half-block)[/]\n")
 
     samples = [
         ("BLACK",     "solid",     "full",       "none",  "pig-001"),
