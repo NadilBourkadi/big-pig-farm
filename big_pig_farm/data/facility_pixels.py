@@ -22,14 +22,14 @@ PixelGrid = list[list[Optional[str]]]
 
 FACILITY_PALETTES: dict[str, dict[str, str]] = {
     "food_bowl": {
-        "frame":  "#8B4513",     # saddle brown rim
+        "frame":  "#A0582A",     # warm brown rim
         "bowl":   "#CD853F",     # peru bowl interior (lighter for contrast)
         "food":   "#DAA520",     # goldenrod pellets
         "empty":  "#5C4033",     # dark brown empty slot
         "base":   "#6B3A2A",     # darker base
     },
     "water_bottle": {
-        "frame":  "#A0A0A0",     # silver frame
+        "frame":  "#B8B8B8",     # light silver frame
         "glass":  "#B0C4DE",     # light steel blue glass
         "water":  "#4169E1",     # royal blue water
         "empty":  "#87CEEB",     # light empty glass
@@ -38,34 +38,34 @@ FACILITY_PALETTES: dict[str, dict[str, str]] = {
         "drop":   "#00BFFF",     # deep sky blue drip
     },
     "hay_rack": {
-        "frame":  "#8B7355",     # wood brown frame
+        "frame":  "#A08868",     # wood brown frame
         "hay":    "#DAA520",     # goldenrod hay
         "straw":  "#F0E68C",     # khaki light straw
         "empty":  "#6B5B3A",     # dark empty rack
         "slat":   "#A0522D",     # sienna wood slat
     },
     "hideout": {
-        "frame":  "#654321",     # dark wood outline
+        "frame":  "#7A5838",     # wood outline
         "roof":   "#8B4513",     # saddle brown roof
         "wall":   "#A0522D",     # sienna walls
         "door":   "#2F1B0E",     # very dark doorway
         "plank":  "#CD853F",     # peru wood planks
     },
     "exercise_wheel": {
-        "frame":  "#696969",     # dim grey frame
+        "frame":  "#808080",     # grey frame
         "wheel":  "#A9A9A9",     # dark grey wheel
         "spoke":  "#C0C0C0",     # silver spokes
         "axle":   "#808080",     # grey axle
         "stand":  "#555555",     # darker stand
     },
     "tunnel": {
-        "frame":  "#556B2F",     # dark olive green
+        "frame":  "#6B8040",     # olive green
         "tube":   "#6B8E23",     # olive drab tube
         "open":   "#2F4F2F",     # dark green opening
         "ridge":  "#8FBC8F",     # dark sea green ridges
     },
     "play_area": {
-        "frame":  "#D2691E",     # chocolate fence
+        "frame":  "#E07830",     # warm fence
         "fence":  "#DEB887",     # burlywood fence rails
         "ball":   "#FF6347",     # tomato red ball
         "block":  "#4169E1",     # royal blue block
@@ -73,14 +73,14 @@ FACILITY_PALETTES: dict[str, dict[str, str]] = {
         "star":   "#FFD700",     # gold star
     },
     "breeding_den": {
-        "frame":  "#8B4513",     # wood brown
+        "frame":  "#A0582A",     # warm brown
         "wall":   "#BC8F8F",     # rosy brown wall
         "heart":  "#FF69B4",     # hot pink heart
         "cushion":"#DDA0DD",     # plum cushion
         "roof":   "#CD853F",     # peru roof
     },
     "nursery": {
-        "frame":  "#B0C4DE",     # light steel blue
+        "frame":  "#C4D8F0",     # soft blue
         "wall":   "#E6E6FA",     # lavender wall
         "star":   "#FFD700",     # gold star
         "blanket":"#FFB6C1",     # light pink blanket
@@ -88,7 +88,7 @@ FACILITY_PALETTES: dict[str, dict[str, str]] = {
         "rail":   "#87CEEB",     # sky blue rails
     },
     "veggie_garden": {
-        "frame":  "#8B4513",     # wood brown border
+        "frame":  "#A0582A",     # warm brown border
         "soil":   "#5C4033",     # dark brown soil
         "leaf":   "#228B22",     # forest green leaves
         "veggie": "#FF6347",     # tomato veggie
@@ -96,7 +96,7 @@ FACILITY_PALETTES: dict[str, dict[str, str]] = {
         "carrot": "#FF8C00",     # dark orange carrot
     },
     "grooming_station": {
-        "frame":  "#A9A9A9",     # dark grey frame
+        "frame":  "#C0C0C0",     # silver frame
         "mirror": "#B0C4DE",     # light steel blue mirror (cooler tone)
         "brush":  "#DEB887",     # burlywood brush
         "shine":  "#FFFFFF",     # white shine
@@ -104,7 +104,7 @@ FACILITY_PALETTES: dict[str, dict[str, str]] = {
         "stand":  "#696969",     # dim grey stand pole
     },
     "genetics_lab": {
-        "frame":  "#4B0082",     # indigo frame
+        "frame":  "#5C1A98",     # purple frame
         "flask":  "#E0E0E0",     # light grey flask
         "liquid": "#00CED1",     # dark turquoise liquid
         "dna":    "#9370DB",     # medium purple dna helix

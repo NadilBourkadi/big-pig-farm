@@ -263,6 +263,14 @@ TERRAIN = {
     "corner_br": "┘",
 }
 
+# Floor texture: subtle hay/straw variation (normal + close zoom)
+FLOOR_CHARS = ["·", ".", "'", ",", '"', "`", "~", ";"]
+FLOOR_COLORS = ["#6e5c42", "#62553a", "#7a6850", "#685a3e", "#5e5235", "#806e55"]
+
+# Floor texture: quieter variant for far zoom
+FLOOR_CHARS_FAR = ["·", ".", "'", ","]
+FLOOR_COLORS_FAR = ["#62553a", "#5e5235", "#685a3e", "#6e5c42"]
+
 
 def get_pig_sprite(state: str, direction: Direction, is_baby: bool = False) -> list[str]:
     """Get the appropriate sprite for a guinea pig's current state and direction."""
