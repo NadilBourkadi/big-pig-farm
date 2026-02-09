@@ -4,7 +4,14 @@ from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, Footer
+from rich.text import Text
 
+from big_pig_farm.data.sprite_pixels import (
+    generate_portrait,
+    convert_pixels,
+    render_to_rich_text,
+    PALETTES,
+)
 from big_pig_farm.economy.market import calculate_pig_value, calculate_pig_value_breakdown
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
@@ -34,12 +41,39 @@ class PigDetailPanel(Static):
     def __init__(self, state: GameState, pig: GuineaPig | None = None, **kwargs):
         self.state = state
         self._pig = pig
-        super().__init__(self._build_content(), **kwargs)
+        super().__init__(self._build_full_content(), **kwargs)
 
     def refresh_pig(self, pig: GuineaPig | None) -> None:
         """Update the panel for a different pig."""
         self._pig = pig
-        self.update(self._build_content())
+        self.update(self._build_full_content())
+
+    def _build_full_content(self) -> Text | str:
+        """Build portrait + text content as a Rich Text object."""
+        if not self._pig:
+            return "[dim]Select a pig to see details[/]"
+
+        portrait = self._build_portrait_text(self._pig)
+        markup = self._build_content()
+
+        combined = Text()
+        combined.append_text(portrait)
+        combined.append("\n\n")
+        combined.append(Text.from_markup(markup))
+        return combined
+
+    def _build_portrait_text(self, pig: GuineaPig) -> Text:
+        """Render a half-block portrait for the given pig."""
+        grid = generate_portrait(
+            pig.phenotype.base_color.name,
+            pig.phenotype.pattern.value,
+            pig.phenotype.intensity.value,
+            pig.phenotype.roan.value,
+            str(pig.id),
+        )
+        palette = PALETTES.get(pig.phenotype.base_color.name, PALETTES["BLACK"])
+        converted = convert_pixels(grid, palette)
+        return render_to_rich_text(converted)
 
     def _build_content(self) -> str:
         """Build all pig detail content as a markup string."""
