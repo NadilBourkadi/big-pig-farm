@@ -20,22 +20,22 @@ from big_pig_farm.entities.pigdex import (
 from big_pig_farm.game.state import GameState
 
 
-# Short labels for compact Pigdex grid
+# Pigdex grid labels
 _COLOR_HEADERS = {
     BaseColor.BLACK: "Black",
-    BaseColor.CHOCOLATE: "Choco",
-    BaseColor.GOLDEN: "Gold",
+    BaseColor.CHOCOLATE: "Chocolate",
+    BaseColor.GOLDEN: "Golden",
     BaseColor.CREAM: "Cream",
 }
 _INTENSITY_LABELS = {
     ColorIntensity.FULL: "Full",
-    ColorIntensity.CHINCHILLA: "Chin",
-    ColorIntensity.HIMALAYAN: "Hima",
+    ColorIntensity.CHINCHILLA: "Chinchilla",
+    ColorIntensity.HIMALAYAN: "Himalayan",
 }
 _PATTERN_LABELS = {
     Pattern.SOLID: "Solid",
     Pattern.DUTCH: "Dutch",
-    Pattern.DALMATIAN: "Dalm",
+    Pattern.DALMATIAN: "Dalmatian",
 }
 _RARITY_SYMBOLS = {
     Rarity.COMMON: "\u2713",
@@ -80,15 +80,18 @@ class PigdexPanel(Static):
         lines.append("")
 
         # Column header row
-        col_w = 8  # width per color column
-        header = "              "
+        col_w = 12  # width per color column
+        i_w = 12   # intensity label width
+        p_w = 11   # pattern label width
+        prefix_w = 2 + i_w + p_w  # total prefix width
+        header = " " * prefix_w
         for color in ALL_BASE_COLORS:
             header += f"{_COLOR_HEADERS[color]:<{col_w}}"
         lines.append(f"[bold]{header}[/]")
 
         for roan in ALL_ROAN_TYPES:
             roan_label = "ROAN" if roan == RoanType.ROAN else "STANDARD"
-            lines.append(f"[bold]{'─' * 14}{'─' * col_w * len(ALL_BASE_COLORS)}[/]")
+            lines.append(f"[bold]{'─' * prefix_w}{'─' * col_w * len(ALL_BASE_COLORS)}[/]")
             lines.append(f"[bold]{roan_label}[/]")
 
             for intensity in ALL_INTENSITIES:
@@ -97,9 +100,9 @@ class PigdexPanel(Static):
                     p_label = _PATTERN_LABELS[pattern]
                     # Show intensity label only on first pattern row
                     if pi == 0:
-                        prefix = f"  {i_label:<6}{p_label:<6}"
+                        prefix = f"  {i_label:<{i_w}}{p_label:<{p_w}}"
                     else:
-                        prefix = f"  {'':6}{p_label:<6}"
+                        prefix = f"  {'':<{i_w}}{p_label:<{p_w}}"
 
                     cells = ""
                     for color in ALL_BASE_COLORS:
