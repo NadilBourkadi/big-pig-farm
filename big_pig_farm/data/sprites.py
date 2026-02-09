@@ -8,7 +8,13 @@ from big_pig_farm.data.sprite_pixels import (
     HalfBlockRows,
     convert_pixels,
     get_pig_pixel_sprite,
+    scale_pixel_grid,
     PALETTES,
+)
+from big_pig_farm.data.facility_pixels import (
+    FACILITY_PALETTES,
+    FACILITY_PIXELS,
+    FACILITY_PIXELS_FAR,
 )
 
 
@@ -307,3 +313,46 @@ def get_facility_sprite(facility_type: str, state: str = "") -> list[str]:
             return FACILITY_SPRITES[key]
 
     return FACILITY_SPRITES.get(facility_type, ["[?]"])
+
+
+def get_facility_halfblock_sprite(
+    facility_type: str,
+    state: str = "",
+    zoom: ZoomLevel = ZoomLevel.NORMAL,
+) -> Optional[HalfBlockRows]:
+    """Get a half-block rendered facility sprite.
+
+    Args:
+        facility_type: Facility type value string (e.g. "food_bowl").
+        state: Optional state variant ("empty", "full") for consumables.
+        zoom: Current zoom level.
+
+    Returns:
+        Half-block rows with resolved colors, or None if no pixel art exists.
+    """
+    palette = FACILITY_PALETTES.get(facility_type)
+    if palette is None:
+        return None
+
+    if zoom == ZoomLevel.FAR:
+        grid = FACILITY_PIXELS_FAR.get(facility_type)
+        if grid is None:
+            return None
+        return convert_pixels(grid, palette)
+
+    # Normal or close zoom — look up with state variant
+    if state:
+        key = f"{facility_type}_{state}"
+        grid = FACILITY_PIXELS.get(key)
+        if grid is None:
+            grid = FACILITY_PIXELS.get(facility_type)
+    else:
+        grid = FACILITY_PIXELS.get(facility_type)
+
+    if grid is None:
+        return None
+
+    if zoom == ZoomLevel.CLOSE:
+        grid = scale_pixel_grid(grid, 2)
+
+    return convert_pixels(grid, palette)
