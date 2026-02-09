@@ -327,7 +327,10 @@ class FarmView(Static):
         # --- All zoom levels: half-block sprite ---
         tpf = ANIM_TICKS_PER_FRAME.get(pig.display_state)
         if tpf:
-            phase = pig.id.int % (tpf * 2)
+            pig_hash = pig.id.int
+            speed_var = (pig_hash >> 8) % 3 - 1   # -1, 0, or +1
+            tpf = max(2, tpf + speed_var)
+            phase = pig_hash % (tpf * 2)
             frame = ((self._render_tick + phase) // tpf) % 2
         else:
             frame = 0
