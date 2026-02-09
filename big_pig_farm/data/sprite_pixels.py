@@ -460,9 +460,9 @@ _FACE_TEMPLATE: PixelGrid = [
     [ T,     T,     T,     T,     T,   "dark","fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 16 lower cheeks
     [ T,     T,     T,   "dark","fur",  "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 17 chin widens into body
     [ T,   "dark","fur",  "fur",  "fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 18 body flares out
-    [ T,   "dark","fur",  "fur",  "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur","dark", T    ],  # 19 chubby body
-    [ T,   "dark","fur",  "fur",  "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur","dark", T    ],  # 20 body
-    [ T,     T,   "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,     T    ],  # 21 body bottom
+    ["dark","fur",  "fur",  "fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 19 chubby body
+    ["fur",  "fur",  "fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur", "fur"],  # 20 body extends past edges
+    ["fur",  "fur",  "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur"],  # 21 body continues off-frame
 ]
 # fmt: on
 
