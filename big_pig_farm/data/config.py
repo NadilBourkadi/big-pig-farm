@@ -145,12 +145,12 @@ class FarmTier:
 
 # Farm expansion tiers
 FARM_TIERS: list[FarmTier] = [
-    FarmTier("Starter Hutch", 80, 40, 4, 0, 1),
-    FarmTier("Cozy Enclosure", 100, 50, 8, 500, 2),
-    FarmTier("Family Pen", 130, 65, 14, 2000, 3),
-    FarmTier("Guinea Grove", 160, 80, 24, 8000, 4),
-    FarmTier("Piggy Paradise", 200, 100, 40, 25000, 5),
-    FarmTier("Ultimate Farm", 260, 130, 60, 100000, 6),
+    FarmTier("Starter Hutch", 56, 28, 4, 0, 1),
+    FarmTier("Cozy Enclosure", 70, 35, 8, 500, 2),
+    FarmTier("Family Pen", 90, 45, 14, 2000, 3),
+    FarmTier("Guinea Grove", 110, 55, 24, 8000, 4),
+    FarmTier("Piggy Paradise", 140, 70, 40, 25000, 5),
+    FarmTier("Ultimate Farm", 180, 90, 60, 100000, 6),
 ]
 
 
@@ -328,8 +328,8 @@ class AutoArrangeConfig:
     ZONE_MARGIN: int = 1          # Margin inside each zone boundary
 
     # Small farm thresholds — collapse to 3 zones when farm is small
-    SMALL_FARM_THRESHOLD_W: int = 100
-    SMALL_FARM_THRESHOLD_H: int = 50
+    SMALL_FARM_THRESHOLD_W: int = 70
+    SMALL_FARM_THRESHOLD_H: int = 35
 
     # Reduced spacing for small farms
     SMALL_HORIZONTAL_GAP: int = 1
