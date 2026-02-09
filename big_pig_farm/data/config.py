@@ -145,12 +145,12 @@ class FarmTier:
 
 # Farm expansion tiers
 FARM_TIERS: list[FarmTier] = [
-    FarmTier("Starter Hutch", 30, 15, 4, 0, 1),
-    FarmTier("Cozy Enclosure", 40, 20, 12, 500, 2),
-    FarmTier("Family Pen", 50, 25, 20, 2000, 3),
-    FarmTier("Guinea Grove", 60, 30, 35, 8000, 4),
-    FarmTier("Piggy Paradise", 80, 40, 55, 25000, 5),
-    FarmTier("Ultimate Farm", 100, 50, 80, 100000, 6),
+    FarmTier("Starter Hutch", 56, 28, 4, 0, 1),
+    FarmTier("Cozy Enclosure", 70, 35, 8, 500, 2),
+    FarmTier("Family Pen", 90, 45, 14, 2000, 3),
+    FarmTier("Guinea Grove", 110, 55, 24, 8000, 4),
+    FarmTier("Piggy Paradise", 140, 70, 40, 25000, 5),
+    FarmTier("Ultimate Farm", 180, 90, 60, 100000, 6),
 ]
 
 
@@ -236,10 +236,10 @@ class SimulationConfig:
     TICKS_PER_SECOND: int = 10
 
     # Movement
-    BASE_MOVE_SPEED: float = 1.0  # Cells per game minute
+    BASE_MOVE_SPEED: float = 3.5  # Cells per game minute
 
     # Pathfinding
-    MAX_PATHFINDING_ITERATIONS: int = 1000
+    MAX_PATHFINDING_ITERATIONS: int = 3000
 
     # Behavior
     DECISION_INTERVAL_SECONDS: float = 2.0
@@ -328,8 +328,8 @@ class AutoArrangeConfig:
     ZONE_MARGIN: int = 1          # Margin inside each zone boundary
 
     # Small farm thresholds — collapse to 3 zones when farm is small
-    SMALL_FARM_THRESHOLD_W: int = 40
-    SMALL_FARM_THRESHOLD_H: int = 20
+    SMALL_FARM_THRESHOLD_W: int = 70
+    SMALL_FARM_THRESHOLD_H: int = 35
 
     # Reduced spacing for small farms
     SMALL_HORIZONTAL_GAP: int = 1

@@ -135,6 +135,14 @@ class MainGameScreen(Screen):
             self.app.pig_to_follow = None  # Clear it
             self._follow_pig(pig)
 
+        # Continuous follow cam — re-center on selected pig every tick
+        if self._farm_view and self._farm_view.selected_pig_id:
+            pig = self.state.get_guinea_pig(self._farm_view.selected_pig_id)
+            if pig:
+                self._farm_view.center_on_pig(pig)
+            else:
+                self._stop_following()
+
         if self._status_bar:
             self._status_bar.update_from_state(self.state)
 
@@ -165,6 +173,14 @@ class MainGameScreen(Screen):
             if idx > 0:
                 self.state.speed = speeds[idx - 1]
                 self.notify(f"Speed: {SPEED_DISPLAY[self.state.speed]}")
+
+    def _stop_following(self) -> None:
+        """Stop following the currently selected pig."""
+        if self._farm_view and self._farm_view.selected_pig_id:
+            self._farm_view.select_pig(None)
+            self._selected_pig_index = -1
+            if self._pig_sidebar:
+                self._pig_sidebar.set_pig(None)
 
     def _follow_pig(self, pig) -> None:
         """Start following a specific pig."""
@@ -264,6 +280,7 @@ class MainGameScreen(Screen):
             if self._farm_view.edit_mode:
                 self._farm_view.move_cursor(0, -1)
             else:
+                self._stop_following()
                 self._farm_view.scroll(0, -2)
 
     def action_handle_down(self) -> None:
@@ -272,6 +289,7 @@ class MainGameScreen(Screen):
             if self._farm_view.edit_mode:
                 self._farm_view.move_cursor(0, 1)
             else:
+                self._stop_following()
                 self._farm_view.scroll(0, 2)
 
     def action_handle_left(self) -> None:
@@ -280,6 +298,7 @@ class MainGameScreen(Screen):
             if self._farm_view.edit_mode:
                 self._farm_view.move_cursor(-1, 0)
             else:
+                self._stop_following()
                 self._farm_view.scroll(-2, 0)
 
     def action_handle_right(self) -> None:
@@ -288,6 +307,7 @@ class MainGameScreen(Screen):
             if self._farm_view.edit_mode:
                 self._farm_view.move_cursor(1, 0)
             else:
+                self._stop_following()
                 self._farm_view.scroll(2, 0)
 
     def action_handle_enter(self) -> None:
