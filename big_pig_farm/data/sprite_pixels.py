@@ -127,7 +127,7 @@ def render_to_rich_text(
 #   "nose"  — nose / mouth
 #   "ear"   — inner ear
 #   "paw"   — feet
-#   "tuft"  — protruding fur wisps (same color as fur, excluded from patterns)
+#    T  — protruding fur wisps (same color as fur, excluded from patterns)
 #   "white" — white markings (for patterns / roan)
 
 PALETTES: dict[str, dict[str, str]] = {
@@ -140,7 +140,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "nose":  "grey50",
         "ear":   "grey30",
         "paw":   "grey19",
-        "tuft":  "grey23",
+         T:  "grey23",
         "tooth": "white",
         "white": "grey82",
     },
@@ -153,7 +153,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "nose":  "rosy_brown",
         "ear":   "indian_red",
         "paw":   "dark_orange3",
-        "tuft":  "orange4",
+         T:  "orange4",
         "tooth": "white",
         "white": "grey82",
     },
@@ -166,7 +166,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "nose":  "tan",
         "ear":   "gold3",
         "paw":   "dark_goldenrod",
-        "tuft":  "gold1",
+         T:  "gold1",
         "tooth": "white",
         "white": "grey82",
     },
@@ -179,7 +179,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "nose":  "misty_rose1",
         "ear":   "navajo_white1",
         "paw":   "tan",
-        "tuft":  "wheat1",
+         T:  "wheat1",
         "tooth": "white",
         "white": "grey82",
     },
@@ -436,32 +436,32 @@ def get_pig_pixel_sprite(
 #   - Cartoonish eyes (3x3 white sclera with dark pupil center)
 #   - Small distinct nose with nostrils + little mouth with teeth
 #   - Fluffy cheek poufs that bulge outward
-#   - Wisps of fur on top of head (rosette) using "tuft" key
+#   - Wisps of fur on top of head (rosette) using  T key
 # Uses palette keys directly — pattern/intensity functions mutate them.
 # fmt: off
 _FACE_TEMPLATE: PixelGrid = [
     #  0      1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19     20     21     22     23     24     25     26     27     28     29     30     31
-    [ T,     T,     T,     T,     T,     T,     T,    "tuft", T,    "tuft", T,     T,    "dark","dark","dark","dark","dark","dark","dark","dark", T,     T,    "tuft", T,    "tuft", T,     T,     T,     T,     T,     T,     T    ],  # 0  rosette tufts
-    [ T,     T,     T,     T,     T,     T,    "tuft", T,    "dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark", T,    "tuft", T,     T,     T,     T,     T,     T    ],  # 1  crown + tufts
+    [ T,     T,     T,     T,     T,     T,     T,     T, T,     T, T,     T,    "dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T, T,     T, T,     T,     T,     T,     T,     T,     T    ],  # 0  rosette tufts
+    [ T,     T,     T,     T,     T,     T,     T, T,    "dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark", T,     T, T,     T,     T,     T,     T,     T    ],  # 1  crown + tufts
     [ T,     T,     T,     T,     T,     T,    "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,     T,     T,     T    ],  # 2  upper head
     [ T,     T,     T,     T,     T,    "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 3  forehead
     [ T,     T,     T,    "dark","ear", "ear","dark", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear", "ear","dark", T,     T,     T    ],  # 4  ears start
     [ T,     T,    "dark","ear", "ear", "ear","dark", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear", "ear", "ear","dark", T,     T    ],  # 5  ears full
     [ T,    "dark","ear", "ear", "ear","dark","fur",  "fur", "fur", "fur", "eye","pupil","pupil","fur", "fur", "fur", "fur", "fur", "fur", "eye","pupil","pupil","fur", "fur", "fur", "fur","dark","ear", "ear", "ear","dark", T    ],  # 6  eyes top (pupil 2x2 upper)
     [ T,    "dark","ear", "ear","dark","dark","fur",  "fur", "fur", "fur", "eye","pupil","pupil","fur", "fur", "fur", "fur", "fur", "fur", "eye","pupil","pupil","fur", "fur", "fur", "fur","dark","dark","ear", "ear","dark", T    ],  # 7  eyes mid (pupil 2x2 lower)
-    ["tuft","dark","dark","dark", T,   "dark","fur",  "fur", "fur", "fur", "eye", "eye", "eye", "fur", "fur", "fur", "fur", "fur", "fur", "eye", "eye", "eye", "fur", "fur", "fur", "fur","dark", T,   "dark","dark","dark","tuft"],  # 8  eyes bottom + side tufts
+    [ T,"dark","dark","dark", T,   "dark","fur",  "fur", "fur", "fur", "eye", "eye", "eye", "fur", "fur", "fur", "fur", "fur", "fur", "eye", "eye", "eye", "fur", "fur", "fur", "fur","dark", T,   "dark","dark","dark", T],  # 8  eyes bottom + side tufts
     [ T,     T,     T,     T,     T,   "dark","fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 9  upper cheeks
-    ["tuft", T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,    "tuft"],  # 10 cheeks + nose top
-    ["tuft", T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,    "tuft"],  # 11 nose pad
+    [ T, T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T],  # 10 cheeks + nose top
+    [ T, T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T],  # 11 nose pad
     [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","dark","fur", "fur","dark","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 12 nostrils
     [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 13 below nose
     [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","tooth","tooth","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 14 mouth + teeth
     [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 15 lower lip
     [ T,     T,     T,     T,     T,   "dark","fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 16 lower cheeks
-    ["tuft", T,     T,     T,     T,   "dark","fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,    "tuft"],  # 17 chin + tufts
-    ["tuft","tuft", T,     T,     T,   "dark","dark", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,    "tuft","tuft"],  # 18 lower chin + flowing fur
-    [ T,    "tuft","tuft", T,     T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,    "tuft","tuft", T    ],  # 19 jaw + fur cascade
-    [ T,     T,    "tuft", T,     T,     T,     T,   "dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark", T,     T,     T,     T,    "tuft", T,     T    ],  # 20 lower jaw + tufts
+    [ T, T,     T,     T,     T,   "dark","fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T],  # 17 chin + tufts
+    [ T, T, T,     T,     T,   "dark","dark", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,     T, T],  # 18 lower chin + flowing fur
+    [ T,     T, T, T,     T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,     T, T, T    ],  # 19 jaw + fur cascade
+    [ T,     T,     T, T,     T,     T,     T,   "dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark", T,     T,     T,     T,     T, T,     T    ],  # 20 lower jaw + tufts
     [ T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 21 throat
     [ T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 22 bottom
     [ T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 23 very bottom
@@ -564,7 +564,7 @@ def _apply_roan(grid: PixelGrid, pig_id: str) -> None:
     fur_list = sorted(_INNER_FUR_PIXELS)
 
     for r, c in fur_list:
-        if grid[r][c] not in ("white", "eye", "pupil", "dark", "tuft", "tooth", T):
+        if grid[r][c] not in ("white", "eye", "pupil", "dark",  T, "tooth", T):
             if rng.random() < 0.3:  # 30% of fur pixels turn white
                 grid[r][c] = "white"
 
