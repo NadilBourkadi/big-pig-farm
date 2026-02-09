@@ -320,6 +320,22 @@ class FacilityInteractionConfig:
     DEFAULT_HIDEOUT_CAPACITY: int = 2
 
 
+@dataclass(frozen=True)
+class AutoArrangeConfig:
+    """Configuration for auto-arrange facility layout."""
+    HORIZONTAL_GAP: int = 2       # Cells between facilities horizontally
+    VERTICAL_GAP: int = 3         # Cells between facilities vertically (includes interaction row)
+    ZONE_MARGIN: int = 1          # Margin inside each zone boundary
+
+    # Small farm thresholds — collapse to 3 zones when farm is small
+    SMALL_FARM_THRESHOLD_W: int = 40
+    SMALL_FARM_THRESHOLD_H: int = 20
+
+    # Reduced spacing for small farms
+    SMALL_HORIZONTAL_GAP: int = 1
+    SMALL_VERTICAL_GAP: int = 2
+
+
 # Singleton instances
 NEEDS = NeedsConfig()
 BREEDING = BreedingConfig()
@@ -332,3 +348,4 @@ PIGDEX = PigdexConfig()
 CONTRACTS = ContractConfig()
 BEHAVIOR = BehaviorConfig()
 FACILITY_INTERACTION = FacilityInteractionConfig()
+AUTO_ARRANGE = AutoArrangeConfig()

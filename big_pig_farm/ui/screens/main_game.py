@@ -22,6 +22,7 @@ from big_pig_farm.ui.screens.pig_list import PigListScreen
 from big_pig_farm.ui.screens.breeding import BreedingScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.almanac import JournalScreen
+from big_pig_farm.game.auto_arrange import compute_arrangement, apply_arrangement, clear_pig_navigation
 
 
 class MainGameScreen(Screen):
@@ -54,6 +55,7 @@ class MainGameScreen(Screen):
     _EDIT_BINDINGS = [
         ("m", "start_move", "Move"),
         ("r", "remove_facility", "Remove"),
+        ("a", "auto_arrange", "Auto"),
         ("delete", "remove_facility", None),
         ("enter", "handle_enter", "Place"),
         ("e", "toggle_edit", "Edit"),
@@ -327,6 +329,41 @@ class MainGameScreen(Screen):
                 self.notify(f"Removed: {name} (+${refund})")
             else:
                 self.notify("Select a facility first (Enter)")
+
+    def action_auto_arrange(self) -> None:
+        """Auto-arrange all facilities into logical zones."""
+        if not self._farm_view or not self._farm_view.edit_mode:
+            return
+
+        if not self.state.get_facilities_list():
+            self.notify("No facilities to arrange")
+            return
+
+        def handle_confirm(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            placements, overflow = compute_arrangement(self.state)
+            apply_arrangement(self.state, placements, overflow)
+            clear_pig_navigation(self.state)
+            self.app.behavior_controller.reset_all_tracking()
+
+            placed_count = len(placements)
+            if overflow:
+                self.notify(
+                    f"Arranged {placed_count} facilities "
+                    f"({len(overflow)} couldn't fit)",
+                    severity="warning",
+                )
+            else:
+                self.notify(f"Arranged {placed_count} facilities into zones")
+
+        self.app.push_screen(
+            ConfirmScreen(
+                "Auto-arrange all facilities?\n"
+                "Positions will be reorganized into zones."
+            ),
+            handle_confirm,
+        )
 
     def action_open_shop(self) -> None:
         """Open the shop screen."""
