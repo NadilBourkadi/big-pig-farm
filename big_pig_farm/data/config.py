@@ -236,7 +236,7 @@ class SimulationConfig:
     TICKS_PER_SECOND: int = 10
 
     # Movement
-    BASE_MOVE_SPEED: float = 2.5  # Cells per game minute
+    BASE_MOVE_SPEED: float = 3.5  # Cells per game minute
 
     # Pathfinding
     MAX_PATHFINDING_ITERATIONS: int = 3000
