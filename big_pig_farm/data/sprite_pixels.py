@@ -488,6 +488,22 @@ for _r, _row in enumerate(_FACE_TEMPLATE):
         elif _val == "nose":
             _NOSE_PIXELS.add((_r, _c))
 
+# Inner fur: fur pixels where ALL 4 neighbors are also fur/nose/eye/pupil
+# (not adjacent to outline, ears, tufts, or transparency).
+# Used for dalmatian spots and roan scatter to keep patterns inside the face.
+_INNER_KEYS = {"fur", "nose", "eye", "pupil"}
+_INNER_FUR_PIXELS: set[tuple[int, int]] = set()
+for _r, _c in _FUR_PIXELS:
+    _all_inner = True
+    for _dr, _dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+        _nr, _nc = _r + _dr, _c + _dc
+        _nval = _FACE_TEMPLATE[_nr][_nc] if 0 <= _nr < len(_FACE_TEMPLATE) and 0 <= _nc < len(_FACE_TEMPLATE[0]) else None
+        if _nval not in _INNER_KEYS:
+            _all_inner = False
+            break
+    if _all_inner:
+        _INNER_FUR_PIXELS.add((_r, _c))
+
 
 def _seeded_rng(pig_id: str) -> _random.Random:
     """Create a deterministic RNG from a pig's UUID string."""
@@ -496,10 +512,10 @@ def _seeded_rng(pig_id: str) -> _random.Random:
 
 
 def _apply_dalmatian_spots(grid: PixelGrid, pig_id: str) -> None:
-    """Scatter white spots across fur pixels — seeded by pig ID."""
+    """Scatter white spots across inner fur pixels — seeded by pig ID."""
     rng = _seeded_rng(pig_id + "_dalmatian")
-    fur_list = sorted(_FUR_PIXELS)  # deterministic order
-    # Pick ~25-35% of fur pixels as spot clusters
+    fur_list = sorted(_INNER_FUR_PIXELS)  # deterministic order, interior only
+    # Pick ~25-35% of inner fur pixels as spot clusters
     spot_centers = rng.sample(fur_list, k=max(1, len(fur_list) // 4))
     spotted: set[tuple[int, int]] = set()
 
@@ -508,7 +524,7 @@ def _apply_dalmatian_spots(grid: PixelGrid, pig_id: str) -> None:
         # Expand each center to a small cluster (1-2 neighbors)
         for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
             nr, nc = r + dr, c + dc
-            if (nr, nc) in _FUR_PIXELS and rng.random() < 0.5:
+            if (nr, nc) in _INNER_FUR_PIXELS and rng.random() < 0.5:
                 spotted.add((nr, nc))
 
     for r, c in spotted:
@@ -535,17 +551,17 @@ def _apply_himalayan(grid: PixelGrid) -> None:
 
 
 def _apply_chinchilla(grid: PixelGrid) -> None:
-    """Chinchilla: silver tint — replace some fur with white mix."""
-    for r, c in _FUR_PIXELS:
+    """Chinchilla: silver tint — replace some inner fur with white mix."""
+    for r, c in _INNER_FUR_PIXELS:
         # Alternate pixels to create a silver/ticked effect
         if (r + c) % 3 == 0:
             grid[r][c] = "white"
 
 
 def _apply_roan(grid: PixelGrid, pig_id: str) -> None:
-    """Roan: scatter white hairs through fur, seeded by pig ID."""
+    """Roan: scatter white hairs through inner fur, seeded by pig ID."""
     rng = _seeded_rng(pig_id + "_roan")
-    fur_list = sorted(_FUR_PIXELS)
+    fur_list = sorted(_INNER_FUR_PIXELS)
 
     for r, c in fur_list:
         if grid[r][c] not in ("white", "eye", "pupil", "dark", "tuft", "tooth", T):
