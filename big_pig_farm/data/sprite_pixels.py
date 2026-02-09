@@ -530,6 +530,40 @@ PIG_PIXELS_FAR_ADULT = {
         [ T,  "dark","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,  "paw", T,   T  ],
     ],
+    # Walking frame 1: body bobs down (top row empty, paws tucked)
+    "walking_right_1": [
+        [ T,   T,   T,   T,   T,   T,   T  ],
+        [ T,   T,  "dark","dark","dark","ear","dark"],
+        [ T,  "dark","fur", "fur","eye","pupil","dark"],
+        ["dark","fur", "fur", "fur", "fur","nose","dark"],
+        [ T,  "dark","fur", "belly","belly","dark", T  ],
+        [ T,  "dark","belly","belly","belly","dark", T  ],
+    ],
+    "walking_left_1": [
+        [ T,   T,   T,   T,   T,   T,   T  ],
+        ["dark","ear","dark","dark","dark", T,   T  ],
+        ["dark","pupil","eye","fur", "fur","dark", T  ],
+        ["dark","nose","fur", "fur", "fur", "fur","dark"],
+        [ T,  "dark","belly","belly","fur","dark", T  ],
+        [ T,  "dark","belly","belly","belly","dark", T  ],
+    ],
+    # Sleeping frame 1: belly widens (breathing)
+    "sleeping_right_1": [
+        [ T,   T,  "dark","dark","dark","ear","dark"],
+        [ T,  "dark","fur", "fur", "fur","fur","dark"],
+        ["dark","fur", "fur", "fur","dark","dark","dark"],
+        ["dark","fur", "fur", "fur", "fur","fur","dark"],
+        ["dark","belly","belly","belly","belly","belly","dark"],
+        [ T,   T,  "paw", T,  "paw", T,   T  ],
+    ],
+    "sleeping_left_1": [
+        ["dark","ear","dark","dark","dark", T,   T  ],
+        ["dark","fur", "fur", "fur","fur","dark", T  ],
+        ["dark","dark","dark","fur", "fur", "fur","dark"],
+        ["dark","fur", "fur", "fur", "fur", "fur","dark"],
+        ["dark","belly","belly","belly","belly","belly","dark"],
+        [ T,   T,  "paw", T,  "paw", T,   T  ],
+    ],
 }
 
 # --- Far-zoom baby sprites (5w x 4h pixels -> 5x2 half-block chars) ---
@@ -546,6 +580,19 @@ PIG_PIXELS_FAR_BABY = {
         ["dark","pupil","eye","fur","dark"],
         ["dark","nose","fur", "fur","dark"],
         [ T,  "dark","belly","dark", T  ],
+    ],
+    # Walking frame 1: body bobs down
+    "walking_right_1": [
+        [ T,   T,   T,   T,   T  ],
+        [ T,  "dark","dark","ear","dark"],
+        ["dark","fur","eye","pupil","dark"],
+        ["dark","fur", "fur","nose","dark"],
+    ],
+    "walking_left_1": [
+        [ T,   T,   T,   T,   T  ],
+        ["dark","ear","dark","dark", T  ],
+        ["dark","pupil","eye","fur","dark"],
+        ["dark","nose","fur", "fur","dark"],
     ],
 }
 
@@ -584,12 +631,16 @@ def get_pig_pixel_sprite(
 
     Falls back gracefully: missing state -> idle, missing frame -> frame 0.
     Close zoom auto-scales the normal sprite by 2x.
-    Far zoom returns tiny 6x4 (adult) or 4x4 (baby) sprites (no animation).
+    Far zoom returns tiny 7x6 (adult) or 5x4 (baby) sprites.
     """
     key = f"{state}_{direction}"
 
     if far_zoom:
         sprites = PIG_PIXELS_FAR_BABY if is_baby else PIG_PIXELS_FAR_ADULT
+        if frame > 0:
+            anim_key = f"{key}_{frame}"
+            if anim_key in sprites:
+                return sprites[anim_key]
         if key not in sprites:
             key = f"idle_{direction}"
         return sprites.get(key, sprites["idle_right"])
