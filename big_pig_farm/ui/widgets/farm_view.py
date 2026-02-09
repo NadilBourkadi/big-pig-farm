@@ -200,6 +200,18 @@ class FarmView(Static):
         if is_selected:
             color = "yellow"
 
+        pig_style = Style(color=color, bold=True) if is_selected else Style(color=color)
+
+        # Draw down-arrow indicator above selected pig
+        if is_selected:
+            indicator_y = base_y - len(sprite) // 2 - 1
+            indicator_x = base_x - 1
+            indicator_style = Style(color="yellow", bold=True)
+            for i, ch in enumerate("vvv"):
+                if 0 <= indicator_y < height and 0 <= indicator_x + i < width:
+                    self._char_buffer[indicator_y][indicator_x + i] = ch
+                    self._style_buffer[indicator_y][indicator_x + i] = indicator_style
+
         # Draw sprite (block out background only for interior spaces)
         for dy, line in enumerate(sprite):
             # Find the bounds of actual sprite content on this line
@@ -219,7 +231,7 @@ class FarmView(Static):
                     # Draw non-space characters, or interior spaces (between first and last char)
                     if char != " ":
                         self._char_buffer[screen_y][screen_x] = char
-                        self._style_buffer[screen_y][screen_x] = Style(color=color)
+                        self._style_buffer[screen_y][screen_x] = pig_style
                     elif first_char != -1 and first_char < dx < last_char:
                         # Interior space - block out background
                         self._char_buffer[screen_y][screen_x] = " "
@@ -230,10 +242,11 @@ class FarmView(Static):
         if 0 <= name_y < height:
             name = pig.name[:10]  # Truncate long names
             name_x = base_x - len(name) // 2
+            name_style = Style(color="yellow", bold=True) if is_selected else Style(color="white", dim=True)
             for i, char in enumerate(name):
                 if 0 <= name_x + i < width:
                     self._char_buffer[name_y][name_x + i] = char
-                    self._style_buffer[name_y][name_x + i] = Style(color="white", dim=True)
+                    self._style_buffer[name_y][name_x + i] = name_style
 
     def _buffer_to_text(self) -> Text:
         """Convert the character buffer to Rich Text."""
