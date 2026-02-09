@@ -27,6 +27,22 @@ from big_pig_farm.game.state import GameState
 # Ordered cycle for zoom toggle
 _ZOOM_ORDER = [ZoomLevel.FAR, ZoomLevel.NORMAL, ZoomLevel.CLOSE]
 
+# Short labels drawn below facility sprites (normal + close zoom only)
+_FACILITY_LABELS: dict[str, str] = {
+    "food_bowl": "Food",
+    "water_bottle": "Water",
+    "hay_rack": "Hay",
+    "hideout": "Hideout",
+    "exercise_wheel": "Wheel",
+    "tunnel": "Tunnel",
+    "play_area": "Play",
+    "breeding_den": "Love Den",
+    "nursery": "Nursery",
+    "veggie_garden": "Garden",
+    "grooming_station": "Groom",
+    "genetics_lab": "Gen. Lab",
+}
+
 
 class FarmView(Static):
     """Widget that renders the farm grid with guinea pigs and facilities."""
@@ -275,6 +291,9 @@ class FarmView(Static):
             anchor_x = int((facility.position_x - self._viewport_x) * scale) + offset_x
             anchor_y = int((facility.position_y - self._viewport_y) * scale) + offset_y
 
+            sprite_h = len(halfblock)
+            sprite_w = len(halfblock[0]) if halfblock else 0
+
             for dy, row in enumerate(halfblock):
                 for dx, (char, fg, bg) in enumerate(row):
                     screen_x = anchor_x + dx
@@ -295,6 +314,24 @@ class FarmView(Static):
 
                     self._char_buffer[screen_y][screen_x] = char
                     self._style_buffer[screen_y][screen_x] = style
+
+            # Draw label below sprite (skip at far zoom — no room)
+            if self._zoom != ZoomLevel.FAR:
+                label = _FACILITY_LABELS.get(facility.facility_type.value, "")
+                if label:
+                    label_y = anchor_y + sprite_h
+                    label_x = anchor_x + (sprite_w - len(label)) // 2
+                    if is_moving:
+                        label_style = Style(color="bright_green", bold=True)
+                    elif is_selected:
+                        label_style = Style(color="yellow", bold=True)
+                    else:
+                        label_style = Style(color="white", dim=True)
+                    for i, ch in enumerate(label):
+                        sx = label_x + i
+                        if 0 <= sx < width and 0 <= label_y < height:
+                            self._char_buffer[label_y][sx] = ch
+                            self._style_buffer[label_y][sx] = label_style
             return
 
         # Fallback: ASCII sprite (monochrome cyan)
