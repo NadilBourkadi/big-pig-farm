@@ -473,6 +473,41 @@ PIG_PIXELS_BABY = {
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
+    # --- Frame 1 variants (animation alternates) ---
+    # Walking: paws move together (idle position) vs spread (frame 0)
+    "walking_right_1": [
+        [ T,   T,   T,   T,   T,  "ear","dark", T  ],
+        [ T,  "dark","dark","dark","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","eye","pupil","fur","dark"],
+        ["dark","belly","fur","fur","eye","eye","nose","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
+    ],
+    "walking_left_1": [
+        [ T,  "dark","ear", T,   T,   T,   T,   T  ],
+        ["dark","fur","fur","fur","dark","dark","dark", T  ],
+        ["dark","fur","pupil","eye","fur","fur","dark", T  ],
+        ["dark","nose","eye","eye","fur","fur","belly","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
+    ],
+    # Sleeping: body row widens (breathing)
+    "sleeping_right_1": [
+        [ T,   T,   T,   T,   T,  "ear","dark", T  ],
+        [ T,  "dark","dark","dark","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","dark","dark","fur","dark"],
+        ["dark","belly","belly","fur","fur","fur","belly","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
+    ],
+    "sleeping_left_1": [
+        [ T,  "dark","ear", T,   T,   T,   T,   T  ],
+        ["dark","fur","fur","fur","dark","dark","dark", T  ],
+        ["dark","fur","dark","dark","fur","fur","dark", T  ],
+        ["dark","belly","fur","fur","fur","belly","belly","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
+    ],
 }
 
 # --- Far-zoom adult sprites (7w x 6h pixels -> 7x3 half-block chars) ---
