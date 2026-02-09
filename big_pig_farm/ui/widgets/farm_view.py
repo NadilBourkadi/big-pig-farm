@@ -65,8 +65,22 @@ class FarmView(Static):
         idx = _ZOOM_ORDER.index(self._zoom)
         idx = (idx + direction) % len(_ZOOM_ORDER)
         self._zoom = _ZOOM_ORDER[idx]
+        self._clamp_viewport()
         self.refresh()
         return self._zoom
+
+    def _clamp_viewport(self) -> None:
+        """Clamp viewport to valid range for current zoom level."""
+        width = self.size.width
+        height = self.size.height
+        if width <= 0 or height <= 0:
+            return
+        farm = self.state.farm
+        scale = self._scale()
+        max_x = max(0, int(farm.width - width / scale))
+        max_y = max(0, int(farm.height - height / scale))
+        self._viewport_x = max(0, min(self._viewport_x, max_x))
+        self._viewport_y = max(0, min(self._viewport_y, max_y))
 
     def _scale(self) -> float:
         return ZOOM_SCALES[self._zoom]
@@ -120,6 +134,10 @@ class FarmView(Static):
         """Draw the terrain/floor."""
         farm = self.state.farm
 
+        if scale < 1.0:
+            self._draw_terrain_far(width, height, offset_x, offset_y, scale)
+            return
+
         for world_y in range(farm.height):
             for world_x in range(farm.width):
                 screen_x = int((world_x - self._viewport_x) * scale) + offset_x
@@ -167,12 +185,71 @@ class FarmView(Static):
                                 self._char_buffer[sy][sx] = char
                                 self._style_buffer[sy][sx] = style
 
+    def _draw_terrain_far(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+        """Simplified terrain for far zoom — explicit border + floor fill.
+
+        At sub-1x scales, world→screen mapping is lossy (multiple world cells
+        map to the same screen cell). Drawing border explicitly avoids walls
+        being overwritten by adjacent floor cells.
+        """
+        farm = self.state.farm
+        wall_style = Style(color="bright_white")
+        floor_style = Style(color="grey37")
+
+        # Screen extents of the farm rectangle
+        x0 = int((0 - self._viewport_x) * scale) + offset_x
+        y0 = int((0 - self._viewport_y) * scale) + offset_y
+        x1 = int(((farm.width - 1) - self._viewport_x) * scale) + offset_x
+        y1 = int(((farm.height - 1) - self._viewport_y) * scale) + offset_y
+
+        # Fill interior with floor
+        for sy in range(max(0, y0 + 1), min(height, y1)):
+            for sx in range(max(0, x0 + 1), min(width, x1)):
+                self._char_buffer[sy][sx] = TERRAIN["floor"]
+                self._style_buffer[sy][sx] = floor_style
+
+        # Draw horizontal walls (top + bottom)
+        for sx in range(max(0, x0), min(width, x1 + 1)):
+            if 0 <= y0 < height:
+                self._char_buffer[y0][sx] = TERRAIN["wall_h"]
+                self._style_buffer[y0][sx] = wall_style
+            if 0 <= y1 < height:
+                self._char_buffer[y1][sx] = TERRAIN["wall_h"]
+                self._style_buffer[y1][sx] = wall_style
+
+        # Draw vertical walls (left + right)
+        for sy in range(max(0, y0 + 1), min(height, y1)):
+            if 0 <= x0 < width:
+                self._char_buffer[sy][x0] = TERRAIN["wall_v"]
+                self._style_buffer[sy][x0] = wall_style
+            if 0 <= x1 < width:
+                self._char_buffer[sy][x1] = TERRAIN["wall_v"]
+                self._style_buffer[sy][x1] = wall_style
+
+        # Corners
+        for cx, cy, key in [
+            (x0, y0, "corner_tl"), (x1, y0, "corner_tr"),
+            (x0, y1, "corner_bl"), (x1, y1, "corner_br"),
+        ]:
+            if 0 <= cx < width and 0 <= cy < height:
+                self._char_buffer[cy][cx] = TERRAIN[key]
+                self._style_buffer[cy][cx] = wall_style
+
     # ------------------------------------------------------------------
     # Facilities
     # ------------------------------------------------------------------
 
     def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw all facilities on the farm."""
+        if self._zoom == ZoomLevel.FAR:
+            # Simplified: single colored marker per facility
+            for facility in self.state.get_facilities_list():
+                sx = int((facility.position_x - self._viewport_x) * scale) + offset_x
+                sy = int((facility.position_y - self._viewport_y) * scale) + offset_y
+                if 0 <= sx < width and 0 <= sy < height:
+                    self._char_buffer[sy][sx] = "■"
+                    self._style_buffer[sy][sx] = Style(color="cyan")
+            return
         for facility in self.state.get_facilities_list():
             self._draw_facility(facility, width, height, offset_x, offset_y, scale)
 
