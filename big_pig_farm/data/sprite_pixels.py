@@ -336,78 +336,78 @@ PIG_PIXELS_ADULT = {
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     # --- Frame 1 variants (animation alternates) ---
-    # Walking: paws move together (idle position) vs spread (frame 0)
+    # Walking: ear bounce (flattens into head) + belly sway (waddle) + paws together
     "walking_right_1": [
-        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
-        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "dark", T,   T  ],
+        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","ear","fur","dark", T  ],
         [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
+        [ T,  "dark","belly","belly","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "walking_left_1": [
-        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
-        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
+        [ T,   T,  "dark", T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","ear","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
         ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","belly","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
-    # Eating: nose dips down one pixel (head-bob nibble)
+    # Eating: ear flattens + whole face dips (closed eyes shift down 1 row) + nose dips
     "eating_right_1": [
-        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
-        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","dark","fur","fur","dark"],
-        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "dark", T,   T  ],
+        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","ear","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","dark","dark","fur","fur","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "eating_left_1": [
-        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
-        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
-        ["dark","fur","fur","dark","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark", T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","ear","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","dark","dark","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
-    # Happy (playing): entire sprite shifts up 1 pixel (hop)
+    # Happy (playing): hop up 1px + ear merges into head + paws spread (jumping pose)
     "happy_right_1": [
-        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","ear","fur","dark", T  ],
         [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
-        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
+        [ T,   T,  "paw", T,   T,   T,   T,   T,   T,   T,   T,  "paw", T,   T  ],
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
     ],
     "happy_left_1": [
-        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
+        [ T,  "dark","fur","ear","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
         ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
-        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
+        [ T,   T,  "paw", T,   T,   T,   T,   T,   T,   T,   T,  "paw", T,   T  ],
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
     ],
-    # Sleeping: belly row widens by 1px each side (breathing)
+    # Sleeping: belly + underside expand outward on both sides (visible body puffing)
     "sleeping_right_1": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
         [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","dark","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T,  "dark","belly","belly","fur","fur","fur","fur","fur","fur","belly","belly","dark", T  ],
-        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        ["dark","belly","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","belly","dark"],
+        [ T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","dark", T  ],
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "sleeping_left_1": [
@@ -416,8 +416,8 @@ PIG_PIXELS_ADULT = {
         ["dark","fur","fur","dark","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T,  "dark","belly","belly","fur","fur","fur","fur","fur","fur","belly","belly","dark", T  ],
-        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        ["dark","belly","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","belly","dark"],
+        [ T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","dark", T  ],
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
 }
@@ -474,30 +474,30 @@ PIG_PIXELS_BABY = {
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
     # --- Frame 1 variants (animation alternates) ---
-    # Walking: paws move together (idle position) vs spread (frame 0)
+    # Walking: ear bounce (flattens into head) + paws together
     "walking_right_1": [
-        [ T,   T,   T,   T,   T,  "ear","dark", T  ],
-        [ T,  "dark","dark","dark","fur","fur","fur","dark"],
+        [ T,   T,   T,   T,   T,   T,  "dark", T  ],
+        [ T,  "dark","dark","dark","fur","ear","fur","dark"],
         [ T,  "dark","fur","fur","eye","pupil","fur","dark"],
         ["dark","belly","fur","fur","eye","eye","nose","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
     "walking_left_1": [
-        [ T,  "dark","ear", T,   T,   T,   T,   T  ],
-        ["dark","fur","fur","fur","dark","dark","dark", T  ],
+        [ T,  "dark", T,   T,   T,   T,   T,   T  ],
+        ["dark","fur","ear","fur","dark","dark","dark", T  ],
         ["dark","fur","pupil","eye","fur","fur","dark", T  ],
         ["dark","nose","eye","eye","fur","fur","belly","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
-    # Sleeping: body row widens (breathing)
+    # Sleeping: body + underside expand outward (breathing)
     "sleeping_right_1": [
         [ T,   T,   T,   T,   T,  "ear","dark", T  ],
         [ T,  "dark","dark","dark","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","dark","dark","fur","dark"],
         ["dark","belly","belly","fur","fur","fur","belly","dark"],
-        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        ["dark","belly","belly","belly","belly","belly","belly","dark"],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
     "sleeping_left_1": [
@@ -505,7 +505,7 @@ PIG_PIXELS_BABY = {
         ["dark","fur","fur","fur","dark","dark","dark", T  ],
         ["dark","fur","dark","dark","fur","fur","dark", T  ],
         ["dark","belly","fur","fur","fur","belly","belly","dark"],
-        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        ["dark","belly","belly","belly","belly","belly","belly","dark"],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
 }
