@@ -296,8 +296,9 @@ class FarmView(Static):
     # ------------------------------------------------------------------
 
     def _draw_guinea_pigs(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
-        """Draw all guinea pigs."""
-        for pig in self.state.get_pigs_list():
+        """Draw all guinea pigs, sorted by Y so lower pigs draw on top."""
+        pigs = sorted(self.state.get_pigs_list(), key=lambda p: p.position.y)
+        for pig in pigs:
             self._draw_pig(pig, width, height, offset_x, offset_y, scale)
 
     def _draw_pig(self, pig: GuineaPig, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
