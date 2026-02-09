@@ -153,6 +153,10 @@ class FarmView(Static):
         """Initialize character and style buffers."""
         self._char_buffer = [[" " for _ in range(width)] for _ in range(height)]
         self._style_buffer = [[None for _ in range(width)] for _ in range(height)]
+        # Separate buffer for terrain/facility background colors.
+        # Used when drawing pig outlines so semi-transparent edge pixels
+        # blend with the ground instead of with other pigs' body colors.
+        self._terrain_bg_buffer = [[None for _ in range(width)] for _ in range(height)]
 
     # ------------------------------------------------------------------
     # Terrain
@@ -210,6 +214,7 @@ class FarmView(Static):
 
                 self._char_buffer[screen_y][screen_x] = char
                 self._style_buffer[screen_y][screen_x] = style
+                self._terrain_bg_buffer[screen_y][screen_x] = style
 
                 # At close zoom, fill the 2x2 block for this world cell
                 if scale >= 2.0:
@@ -220,6 +225,7 @@ class FarmView(Static):
                             if 0 <= sx < width and 0 <= sy < height:
                                 self._char_buffer[sy][sx] = char
                                 self._style_buffer[sy][sx] = style
+                                self._terrain_bg_buffer[sy][sx] = style
 
     def _draw_terrain_far(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Simplified terrain for far zoom — explicit border + floor fill.
@@ -246,6 +252,7 @@ class FarmView(Static):
                 char, style = self._floor_texture(wx, wy, far=True)
                 self._char_buffer[sy][sx] = char
                 self._style_buffer[sy][sx] = style
+                self._terrain_bg_buffer[sy][sx] = style
 
         # Draw horizontal walls (top + bottom)
         for sx in range(max(0, x0), min(width, x1 + 1)):
@@ -329,6 +336,7 @@ class FarmView(Static):
 
                     self._char_buffer[screen_y][screen_x] = char
                     self._style_buffer[screen_y][screen_x] = style
+                    self._terrain_bg_buffer[screen_y][screen_x] = style
 
             # Draw label below sprite (skip at far zoom — no room)
             if self._zoom != ZoomLevel.FAR:
@@ -451,13 +459,13 @@ class FarmView(Static):
                     continue  # Transparent pixel — don't overwrite background
 
                 # For semi-transparent edge cells, inherit the bg from
-                # whatever is already drawn (terrain/facility) so the
-                # pig blends with the background instead of showing black.
+                # the terrain/facility layer so the pig blends with the
+                # ground instead of picking up another pig's body color.
                 effective_bg = bg
                 if effective_bg is None:
-                    existing = self._style_buffer[screen_y][screen_x]
-                    if existing is not None:
-                        effective_bg = existing.bgcolor
+                    terrain = self._terrain_bg_buffer[screen_y][screen_x]
+                    if terrain is not None:
+                        effective_bg = terrain.bgcolor
 
                 if is_selected:
                     style = Style(color="yellow", bgcolor=effective_bg, bold=True)

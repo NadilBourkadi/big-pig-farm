@@ -61,6 +61,9 @@ class BehaviorController:
         # Update movement
         self._update_movement(pig, delta_seconds)
 
+        # Clamp position inside walkable bounds (walls + buffer)
+        self._clamp_to_bounds(pig)
+
         # Update behavior-specific logic
         self._update_current_behavior(pig, delta_seconds)
 
@@ -589,6 +592,18 @@ class BehaviorController:
             if pig.path:
                 pig.target_position = Position(x=float(target[0]), y=float(target[1]))
 
+    def _clamp_to_bounds(self, pig: GuineaPig) -> None:
+        """Clamp pig position to stay within the walkable area of the farm.
+
+        Walls occupy the outermost ring (row/col 0 and height-1/width-1).
+        The first walkable cells are at (1, 1), so we clamp to [1.0, w-2]
+        and [1.0, h-2] — just enough to keep pigs off wall cells without
+        blocking valid pathfinding waypoints along the border.
+        """
+        farm = self.game_state.farm
+        pig.position.x = max(1.0, min(pig.position.x, float(farm.width - 2)))
+        pig.position.y = max(1.0, min(pig.position.y, float(farm.height - 2)))
+
     def _is_cell_occupied_by_pig(self, x: int, y: int, exclude_pig: Optional[GuineaPig] = None) -> bool:
         """Check if a cell is occupied by another guinea pig."""
         for other_pig in self.game_state.get_pigs_list():
@@ -947,8 +962,10 @@ class BehaviorController:
                 new_x = pig.position.x + (dx / distance) * move_distance
                 new_y = pig.position.y + (dy / distance) * move_distance
 
-            # Check if new position would collide with another pig
-            if not self._is_position_blocked(new_x, new_y, pig, min_distance=BEHAVIOR.BLOCKING_DEFAULT):
+            # Check walkability and collision with other pigs
+            farm = self.game_state.farm
+            if (farm.is_walkable(int(new_x), int(new_y))
+                    and not self._is_position_blocked(new_x, new_y, pig, min_distance=BEHAVIOR.BLOCKING_DEFAULT)):
                 pig.position.x = new_x
                 pig.position.y = new_y
                 # Clear blocked status and timer
