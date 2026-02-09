@@ -336,8 +336,10 @@ PIG_PIXELS_ADULT = {
         [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     # --- Frame 1 variants (animation alternates) ---
-    # Walking: ear bounce (flattens into head) + belly sway (waddle) + paws together
+    # Walking: body bobs down 1px + ear flattens + belly sway (waddle)
+    # Frame 0 = up stride (paws spread, visible), frame 1 = down stride (body dips, paws tucked)
     "walking_right_1": [
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "dark", T,   T  ],
         [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","ear","fur","dark", T  ],
         [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
@@ -345,9 +347,9 @@ PIG_PIXELS_ADULT = {
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","belly","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
-        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "walking_left_1": [
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,   T,  "dark", T,   T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","ear","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
         ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
@@ -355,7 +357,6 @@ PIG_PIXELS_ADULT = {
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","belly","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
-        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     # Eating: ear flattens + whole face dips (closed eyes shift down 1 row) + nose dips
     "eating_right_1": [
