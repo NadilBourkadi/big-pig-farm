@@ -1,4 +1,4 @@
-"""Farm view widget - renders the ASCII farm grid with guinea pigs."""
+"""Farm view widget - renders the farm grid with guinea pigs."""
 
 from typing import Optional
 from uuid import UUID
@@ -9,14 +9,22 @@ from rich.text import Text
 from rich.style import Style
 
 from big_pig_farm.data.sprites import (
-    get_pig_sprite,
+    ANIM_TICKS_PER_FRAME,
+    get_pig_halfblock_sprite,
     get_facility_sprite,
+    FAR_FACILITY_SPRITES,
     TERRAIN,
     Direction,
+    ZoomLevel,
+    ZOOM_SCALES,
 )
 from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.facilities import Facility
 from big_pig_farm.game.state import GameState
+
+
+# Ordered cycle for zoom toggle
+_ZOOM_ORDER = [ZoomLevel.FAR, ZoomLevel.NORMAL, ZoomLevel.CLOSE]
 
 
 class FarmView(Static):
@@ -47,10 +55,49 @@ class FarmView(Static):
         # Cursor position for edit mode
         self._cursor_x = 5
         self._cursor_y = 5
+        # Zoom
+        self._zoom = ZoomLevel.NORMAL
+        # Persistent facing direction per pig (avoids oscillation)
+        self._pig_facing: dict[UUID, Direction] = {}
+        # Animation tick counter (incremented every render call)
+        self._render_tick: int = 0
+
+    @property
+    def zoom(self) -> ZoomLevel:
+        return self._zoom
+
+    def cycle_zoom(self, direction: int = 1) -> ZoomLevel:
+        """Cycle zoom level forward (+1) or backward (-1). Returns new level."""
+        idx = _ZOOM_ORDER.index(self._zoom)
+        idx = (idx + direction) % len(_ZOOM_ORDER)
+        self._zoom = _ZOOM_ORDER[idx]
+        self._clamp_viewport()
+        self.refresh()
+        return self._zoom
+
+    def _clamp_viewport(self) -> None:
+        """Clamp viewport to valid range for current zoom level."""
+        width = self.size.width
+        height = self.size.height
+        if width <= 0 or height <= 0:
+            return
+        farm = self.state.farm
+        scale = self._scale()
+        max_x = max(0, int(farm.width - width / scale))
+        max_y = max(0, int(farm.height - height / scale))
+        self._viewport_x = max(0, min(self._viewport_x, max_x))
+        self._viewport_y = max(0, min(self._viewport_y, max_y))
+
+    def _scale(self) -> float:
+        return ZOOM_SCALES[self._zoom]
+
+    # ------------------------------------------------------------------
+    # Rendering
+    # ------------------------------------------------------------------
 
     def render(self) -> Text:
         """Render the farm view."""
-        # Get available size
+        self._render_tick += 1
         width = self.size.width
         height = self.size.height
 
@@ -58,28 +105,27 @@ class FarmView(Static):
             return Text("Resize window")
 
         farm = self.state.farm
+        scale = self._scale()
 
-        # Calculate centering offset if farm is smaller than viewport
-        offset_x = max(0, (width - farm.width) // 2)
-        offset_y = max(0, (height - farm.height) // 2)
+        # Scaled farm dimensions (in screen chars)
+        scaled_w = int(farm.width * scale)
+        scaled_h = int(farm.height * scale)
+
+        # Calculate centering offset if scaled farm is smaller than viewport
+        offset_x = max(0, (width - scaled_w) // 2)
+        offset_y = max(0, (height - scaled_h) // 2)
 
         # Initialize buffers
         self._init_buffers(width, height)
 
-        # Draw terrain (centered)
-        self._draw_terrain(width, height, offset_x, offset_y)
+        # Draw layers
+        self._draw_terrain(width, height, offset_x, offset_y, scale)
+        self._draw_facilities(width, height, offset_x, offset_y, scale)
+        self._draw_guinea_pigs(width, height, offset_x, offset_y, scale)
 
-        # Draw facilities (centered)
-        self._draw_facilities(width, height, offset_x, offset_y)
-
-        # Draw guinea pigs (centered)
-        self._draw_guinea_pigs(width, height, offset_x, offset_y)
-
-        # Draw cursor in edit mode
         if self.edit_mode:
-            self._draw_cursor(width, height, offset_x, offset_y)
+            self._draw_cursor(width, height, offset_x, offset_y, scale)
 
-        # Convert buffer to Rich Text
         return self._buffer_to_text()
 
     def _init_buffers(self, width: int, height: int) -> None:
@@ -87,60 +133,137 @@ class FarmView(Static):
         self._char_buffer = [[" " for _ in range(width)] for _ in range(height)]
         self._style_buffer = [[None for _ in range(width)] for _ in range(height)]
 
-    def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
-        """Draw the terrain/floor (only visible portion)."""
+    # ------------------------------------------------------------------
+    # Terrain
+    # ------------------------------------------------------------------
+
+    def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+        """Draw the terrain/floor."""
         farm = self.state.farm
 
-        # Only iterate cells that fall within the viewport
-        y_start = max(0, self._viewport_y - offset_y)
-        y_end = min(farm.height, self._viewport_y - offset_y + height)
-        x_start = max(0, self._viewport_x - offset_x)
-        x_end = min(farm.width, self._viewport_x - offset_x + width)
+        if scale < 1.0:
+            self._draw_terrain_far(width, height, offset_x, offset_y, scale)
+            return
 
-        for world_y in range(y_start, y_end):
-            for world_x in range(x_start, x_end):
-                screen_x = world_x - self._viewport_x + offset_x
-                screen_y = world_y - self._viewport_y + offset_y
+        for world_y in range(farm.height):
+            for world_x in range(farm.width):
+                screen_x = int((world_x - self._viewport_x) * scale) + offset_x
+                screen_y = int((world_y - self._viewport_y) * scale) + offset_y
 
-                if 0 <= screen_x < width and 0 <= screen_y < height:
-                    cell = farm.cells[world_y][world_x]
+                if not (0 <= screen_x < width and 0 <= screen_y < height):
+                    continue
 
-                    if cell.cell_type.value == "wall":
-                        # Draw walls with box-drawing characters
-                        if world_y == 0 and world_x == 0:
-                            char = TERRAIN["corner_tl"]
-                        elif world_y == 0 and world_x == farm.width - 1:
-                            char = TERRAIN["corner_tr"]
-                        elif world_y == farm.height - 1 and world_x == 0:
-                            char = TERRAIN["corner_bl"]
-                        elif world_y == farm.height - 1 and world_x == farm.width - 1:
-                            char = TERRAIN["corner_br"]
-                        elif world_y == 0 or world_y == farm.height - 1:
-                            char = TERRAIN["wall_h"]
-                        else:
-                            char = TERRAIN["wall_v"]
-                        style = Style(color="bright_white")
-                    elif cell.cell_type.value == "bedding":
-                        char = TERRAIN["bedding"]
-                        style = Style(color="yellow4")
-                    elif cell.cell_type.value == "grass":
-                        char = TERRAIN["grass"]
-                        style = Style(color="green")
+                cell = farm.cells[world_y][world_x]
+
+                if cell.cell_type.value == "wall":
+                    if world_y == 0 and world_x == 0:
+                        char = TERRAIN["corner_tl"]
+                    elif world_y == 0 and world_x == farm.width - 1:
+                        char = TERRAIN["corner_tr"]
+                    elif world_y == farm.height - 1 and world_x == 0:
+                        char = TERRAIN["corner_bl"]
+                    elif world_y == farm.height - 1 and world_x == farm.width - 1:
+                        char = TERRAIN["corner_br"]
+                    elif world_y == 0 or world_y == farm.height - 1:
+                        char = TERRAIN["wall_h"]
                     else:
-                        char = TERRAIN["floor"]
-                        style = Style(color="grey37")
+                        char = TERRAIN["wall_v"]
+                    style = Style(color="bright_white")
+                elif cell.cell_type.value == "bedding":
+                    char = TERRAIN["bedding"]
+                    style = Style(color="yellow4")
+                elif cell.cell_type.value == "grass":
+                    char = TERRAIN["grass"]
+                    style = Style(color="green")
+                else:
+                    char = TERRAIN["floor"]
+                    style = Style(color="grey37")
 
-                    self._char_buffer[screen_y][screen_x] = char
-                    self._style_buffer[screen_y][screen_x] = style
+                self._char_buffer[screen_y][screen_x] = char
+                self._style_buffer[screen_y][screen_x] = style
 
-    def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
+                # At close zoom, fill the 2x2 block for this world cell
+                if scale >= 2.0:
+                    for dy in range(2):
+                        for dx in range(2):
+                            sx = screen_x + dx
+                            sy = screen_y + dy
+                            if 0 <= sx < width and 0 <= sy < height:
+                                self._char_buffer[sy][sx] = char
+                                self._style_buffer[sy][sx] = style
+
+    def _draw_terrain_far(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+        """Simplified terrain for far zoom — explicit border + floor fill.
+
+        At sub-1x scales, world→screen mapping is lossy (multiple world cells
+        map to the same screen cell). Drawing border explicitly avoids walls
+        being overwritten by adjacent floor cells.
+        """
+        farm = self.state.farm
+        wall_style = Style(color="bright_white")
+        floor_style = Style(color="grey37")
+
+        # Screen extents of the farm rectangle
+        x0 = int((0 - self._viewport_x) * scale) + offset_x
+        y0 = int((0 - self._viewport_y) * scale) + offset_y
+        x1 = int(((farm.width - 1) - self._viewport_x) * scale) + offset_x
+        y1 = int(((farm.height - 1) - self._viewport_y) * scale) + offset_y
+
+        # Fill interior with floor
+        for sy in range(max(0, y0 + 1), min(height, y1)):
+            for sx in range(max(0, x0 + 1), min(width, x1)):
+                self._char_buffer[sy][sx] = TERRAIN["floor"]
+                self._style_buffer[sy][sx] = floor_style
+
+        # Draw horizontal walls (top + bottom)
+        for sx in range(max(0, x0), min(width, x1 + 1)):
+            if 0 <= y0 < height:
+                self._char_buffer[y0][sx] = TERRAIN["wall_h"]
+                self._style_buffer[y0][sx] = wall_style
+            if 0 <= y1 < height:
+                self._char_buffer[y1][sx] = TERRAIN["wall_h"]
+                self._style_buffer[y1][sx] = wall_style
+
+        # Draw vertical walls (left + right)
+        for sy in range(max(0, y0 + 1), min(height, y1)):
+            if 0 <= x0 < width:
+                self._char_buffer[sy][x0] = TERRAIN["wall_v"]
+                self._style_buffer[sy][x0] = wall_style
+            if 0 <= x1 < width:
+                self._char_buffer[sy][x1] = TERRAIN["wall_v"]
+                self._style_buffer[sy][x1] = wall_style
+
+        # Corners
+        for cx, cy, key in [
+            (x0, y0, "corner_tl"), (x1, y0, "corner_tr"),
+            (x0, y1, "corner_bl"), (x1, y1, "corner_br"),
+        ]:
+            if 0 <= cx < width and 0 <= cy < height:
+                self._char_buffer[cy][cx] = TERRAIN[key]
+                self._style_buffer[cy][cx] = wall_style
+
+    # ------------------------------------------------------------------
+    # Facilities
+    # ------------------------------------------------------------------
+
+    def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw all facilities on the farm."""
+        if self._zoom == ZoomLevel.FAR:
+            # Compact per-type icons at far zoom
+            for facility in self.state.get_facilities_list():
+                sx = int((facility.position_x - self._viewport_x) * scale) + offset_x
+                sy = int((facility.position_y - self._viewport_y) * scale) + offset_y
+                icon = FAR_FACILITY_SPRITES.get(facility.facility_type.value, "■")
+                for i, ch in enumerate(icon):
+                    if 0 <= sx + i < width and 0 <= sy < height:
+                        self._char_buffer[sy][sx + i] = ch
+                        self._style_buffer[sy][sx + i] = Style(color="cyan")
+            return
         for facility in self.state.get_facilities_list():
-            self._draw_facility(facility, width, height, offset_x, offset_y)
+            self._draw_facility(facility, width, height, offset_x, offset_y, scale)
 
-    def _draw_facility(self, facility: Facility, width: int, height: int, offset_x: int, offset_y: int) -> None:
+    def _draw_facility(self, facility: Facility, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw a single facility."""
-        # Get sprite based on fill state
         if facility.is_empty:
             sprite = get_facility_sprite(facility.facility_type.value, "empty")
         elif facility.current_amount >= facility.max_amount:
@@ -148,11 +271,9 @@ class FarmView(Static):
         else:
             sprite = get_facility_sprite(facility.facility_type.value)
 
-        # Check if this facility is selected
         is_selected = self.edit_mode and facility.id == self.selected_facility_id
         is_moving = is_selected and self.moving_facility
 
-        # Determine color
         if is_moving:
             color = "bright_green"
         elif is_selected:
@@ -160,51 +281,78 @@ class FarmView(Static):
         else:
             color = "cyan"
 
-        # Draw sprite at facility position
         for dy, line in enumerate(sprite):
             for dx, char in enumerate(line):
-                screen_x = facility.position_x + dx - self._viewport_x + offset_x
-                screen_y = facility.position_y + dy - self._viewport_y + offset_y
+                screen_x = int((facility.position_x + dx - self._viewport_x) * scale) + offset_x
+                screen_y = int((facility.position_y + dy - self._viewport_y) * scale) + offset_y
 
                 if 0 <= screen_x < width and 0 <= screen_y < height:
                     if char != " ":
                         self._char_buffer[screen_y][screen_x] = char
                         self._style_buffer[screen_y][screen_x] = Style(color=color)
 
-    def _draw_guinea_pigs(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
-        """Draw all guinea pigs."""
-        for pig in self.state.get_pigs_list():
-            self._draw_pig(pig, width, height, offset_x, offset_y)
+    # ------------------------------------------------------------------
+    # Guinea pigs
+    # ------------------------------------------------------------------
 
-    def _draw_pig(self, pig: GuineaPig, width: int, height: int, offset_x: int, offset_y: int) -> None:
-        """Draw a single guinea pig."""
-        # Determine direction based on movement
+    def _draw_guinea_pigs(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+        """Draw all guinea pigs, sorted by Y so lower pigs draw on top."""
+        pigs = sorted(self.state.get_pigs_list(), key=lambda p: p.position.y)
+        for pig in pigs:
+            self._draw_pig(pig, width, height, offset_x, offset_y, scale)
+
+    def _draw_pig(self, pig: GuineaPig, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+        """Draw a single guinea pig using half-block sprites (or dot at far zoom)."""
+        # Determine direction — look ahead in path for meaningful horizontal
+        # movement.  Only update the stored facing when a clear direction is
+        # found, so vertical movement and float-boundary crossings don't cause
+        # rapid left/right flipping.
         if pig.path and len(pig.path) > 0:
-            next_x = pig.path[0][0]
-            direction = Direction.RIGHT if next_x > pig.position.x else Direction.LEFT
-        else:
-            direction = Direction.RIGHT
+            for wx, _wy in pig.path:
+                if wx > pig.position.x + 0.5:
+                    self._pig_facing[pig.id] = Direction.RIGHT
+                    break
+                elif wx < pig.position.x - 0.5:
+                    self._pig_facing[pig.id] = Direction.LEFT
+                    break
+        direction = self._pig_facing.get(pig.id, Direction.RIGHT)
 
-        # Get sprite for current state
-        sprite = get_pig_sprite(pig.display_state, direction, pig.is_baby)
-
-        # Calculate screen position (center sprite on pig position)
-        base_x = int(pig.position.x) - self._viewport_x + offset_x
-        base_y = int(pig.position.y) - self._viewport_y + offset_y
-
-        # Determine color based on phenotype
-        color = pig.phenotype.ascii_color
-
-        # Highlight if selected
         is_selected = pig.id == self.selected_pig_id
-        if is_selected:
-            color = "yellow"
 
-        pig_style = Style(color=color, bold=True) if is_selected else Style(color=color)
+        # Screen position of the pig's world coordinate
+        base_x = int((pig.position.x - self._viewport_x) * scale) + offset_x
+        base_y = int((pig.position.y - self._viewport_y) * scale) + offset_y
 
-        # Draw down-arrow indicator above selected pig
-        if is_selected:
-            indicator_y = base_y - len(sprite) // 2 - 1
+        base_color_name = pig.phenotype.base_color.name  # BLACK, CHOCOLATE, etc.
+
+        # --- All zoom levels: half-block sprite ---
+        tpf = ANIM_TICKS_PER_FRAME.get(pig.display_state)
+        if tpf:
+            pig_hash = pig.id.int
+            speed_var = (pig_hash >> 8) % 3 - 1   # -1, 0, or +1
+            tpf = max(2, tpf + speed_var)
+            phase = pig_hash % (tpf * 2)
+            frame = ((self._render_tick + phase) // tpf) % 2
+        else:
+            frame = 0
+
+        halfblock = get_pig_halfblock_sprite(
+            pig.display_state, direction, base_color_name,
+            is_baby=pig.is_baby, zoom=self._zoom, frame=frame,
+        )
+        if halfblock is None:
+            return
+
+        sprite_h = len(halfblock)
+        sprite_w = len(halfblock[0]) if halfblock else 0
+
+        # Center sprite on pig position
+        anchor_x = base_x - sprite_w // 2
+        anchor_y = base_y - sprite_h // 2
+
+        # Draw down-arrow indicator above selected pig (skip at far zoom — too large)
+        if is_selected and self._zoom != ZoomLevel.FAR:
+            indicator_y = anchor_y - 1
             indicator_x = base_x - 1
             indicator_style = Style(color="yellow", bold=True)
             for i, ch in enumerate("vvv"):
@@ -212,41 +360,42 @@ class FarmView(Static):
                     self._char_buffer[indicator_y][indicator_x + i] = ch
                     self._style_buffer[indicator_y][indicator_x + i] = indicator_style
 
-        # Draw sprite (block out background only for interior spaces)
-        for dy, line in enumerate(sprite):
-            # Find the bounds of actual sprite content on this line
-            first_char = -1
-            last_char = -1
-            for i, c in enumerate(line):
-                if c != " ":
-                    if first_char == -1:
-                        first_char = i
-                    last_char = i
+        # Draw half-block sprite
+        for dy, row in enumerate(halfblock):
+            for dx, (char, fg, bg) in enumerate(row):
+                screen_x = anchor_x + dx
+                screen_y = anchor_y + dy
 
-            for dx, char in enumerate(line):
-                screen_x = base_x + dx - len(line) // 2
-                screen_y = base_y + dy - len(sprite) // 2
+                if not (0 <= screen_x < width and 0 <= screen_y < height):
+                    continue
 
-                if 0 <= screen_x < width and 0 <= screen_y < height:
-                    # Draw non-space characters, or interior spaces (between first and last char)
-                    if char != " ":
-                        self._char_buffer[screen_y][screen_x] = char
-                        self._style_buffer[screen_y][screen_x] = pig_style
-                    elif first_char != -1 and first_char < dx < last_char:
-                        # Interior space - block out background
-                        self._char_buffer[screen_y][screen_x] = " "
-                        self._style_buffer[screen_y][screen_x] = Style()
+                if char == " " and fg is None and bg is None:
+                    continue  # Transparent pixel — don't overwrite background
 
-        # Draw name below pig (if there's room)
-        name_y = base_y + len(sprite) // 2 + 1
-        if 0 <= name_y < height:
-            name = pig.name[:10]  # Truncate long names
-            name_x = base_x - len(name) // 2
-            name_style = Style(color="yellow", bold=True) if is_selected else Style(color="white", dim=True)
-            for i, char in enumerate(name):
-                if 0 <= name_x + i < width:
-                    self._char_buffer[name_y][name_x + i] = char
-                    self._style_buffer[name_y][name_x + i] = name_style
+                if is_selected:
+                    # Tint toward yellow for selection highlight
+                    style = Style(color="yellow", bgcolor=bg, bold=True)
+                else:
+                    style = Style(color=fg, bgcolor=bg)
+
+                self._char_buffer[screen_y][screen_x] = char
+                self._style_buffer[screen_y][screen_x] = style
+
+        # Draw name below pig (skip at far zoom — no room)
+        if self._zoom != ZoomLevel.FAR:
+            name_y = anchor_y + sprite_h
+            if 0 <= name_y < height:
+                name = pig.name[:10]
+                name_x = base_x - len(name) // 2
+                name_style = Style(color="yellow", bold=True) if is_selected else Style(color="white", dim=True)
+                for i, char in enumerate(name):
+                    if 0 <= name_x + i < width:
+                        self._char_buffer[name_y][name_x + i] = char
+                        self._style_buffer[name_y][name_x + i] = name_style
+
+    # ------------------------------------------------------------------
+    # Buffer → Text
+    # ------------------------------------------------------------------
 
     def _buffer_to_text(self) -> Text:
         """Convert the character buffer to Rich Text."""
@@ -261,20 +410,29 @@ class FarmView(Static):
 
         return text
 
+    # ------------------------------------------------------------------
+    # Camera / viewport
+    # ------------------------------------------------------------------
+
     def center_on_pig(self, pig: GuineaPig) -> None:
         """Center the viewport on a specific guinea pig."""
         width = self.size.width
         height = self.size.height
         farm = self.state.farm
+        scale = self._scale()
 
-        # Only scroll if farm is larger than viewport
-        if farm.width > width:
-            self._viewport_x = int(pig.position.x) - width // 2
-            self._viewport_x = max(0, min(self._viewport_x, farm.width - width))
+        scaled_w = int(farm.width * scale)
+        scaled_h = int(farm.height * scale)
 
-        if farm.height > height:
-            self._viewport_y = int(pig.position.y) - height // 2
-            self._viewport_y = max(0, min(self._viewport_y, farm.height - height))
+        if scaled_w > width:
+            self._viewport_x = int(pig.position.x) - int(width / scale) // 2
+            max_vx = int(farm.width - width / scale)
+            self._viewport_x = max(0, min(self._viewport_x, max_vx))
+
+        if scaled_h > height:
+            self._viewport_y = int(pig.position.y) - int(height / scale) // 2
+            max_vy = int(farm.height - height / scale)
+            self._viewport_y = max(0, min(self._viewport_y, max_vy))
 
         self.refresh()
 
@@ -282,7 +440,6 @@ class FarmView(Static):
         """Select a guinea pig."""
         self.selected_pig_id = pig_id
 
-        # Center on selected pig
         if pig_id:
             pig = self.state.get_guinea_pig(pig_id)
             if pig:
@@ -295,25 +452,28 @@ class FarmView(Static):
         width = self.size.width
         height = self.size.height
         farm = self.state.farm
+        scale = self._scale()
 
         self._viewport_x += dx
         self._viewport_y += dy
 
-        # Clamp to farm bounds (only if farm is larger than viewport)
-        max_x = max(0, farm.width - width)
-        max_y = max(0, farm.height - height)
+        max_x = max(0, int(farm.width - width / scale))
+        max_y = max(0, int(farm.height - height / scale))
 
         self._viewport_x = max(0, min(self._viewport_x, max_x))
         self._viewport_y = max(0, min(self._viewport_y, max_y))
 
         self.refresh()
 
-    def _draw_cursor(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
-        """Draw the edit mode cursor."""
-        screen_x = self._cursor_x - self._viewport_x + offset_x
-        screen_y = self._cursor_y - self._viewport_y + offset_y
+    # ------------------------------------------------------------------
+    # Edit mode (unchanged)
+    # ------------------------------------------------------------------
 
-        # Draw a blinking cursor marker
+    def _draw_cursor(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+        """Draw the edit mode cursor."""
+        screen_x = int((self._cursor_x - self._viewport_x) * scale) + offset_x
+        screen_y = int((self._cursor_y - self._viewport_y) * scale) + offset_y
+
         if 0 <= screen_x < width and 0 <= screen_y < height:
             self._char_buffer[screen_y][screen_x] = "█"
             self._style_buffer[screen_y][screen_x] = Style(color="bright_magenta", bold=True)
@@ -336,31 +496,24 @@ class FarmView(Static):
         new_x = self._cursor_x + dx
         new_y = self._cursor_y + dy
 
-        # Clamp to farm bounds (inside walls)
         new_x = max(1, min(new_x, farm.width - 2))
         new_y = max(1, min(new_y, farm.height - 2))
 
-        # If moving a facility, move it with the cursor
         if self.moving_facility and self.selected_facility_id:
             facility = self.state.get_facility(self.selected_facility_id)
             if facility and farm.is_walkable(new_x, new_y):
-                # Check if new position is valid (not overlapping other facilities)
                 can_move = True
                 for other in self.state.get_facilities_list():
                     if other.id != facility.id:
-                        # Simple overlap check
                         if (abs(other.position_x - new_x) < 3 and
                             abs(other.position_y - new_y) < 3):
                             can_move = False
                             break
 
                 if can_move:
-                    # Remove from old position
                     farm.remove_facility(facility)
-                    # Update position
                     facility.position_x = new_x
                     facility.position_y = new_y
-                    # Place at new position
                     farm.place_facility(facility)
 
         self._cursor_x = new_x
@@ -373,7 +526,6 @@ class FarmView(Static):
             return None
 
         for facility in self.state.get_facilities_list():
-            # Check if cursor is within facility bounds
             sprite = get_facility_sprite(facility.facility_type.value)
             sprite_width = max(len(line) for line in sprite)
             sprite_height = len(sprite)
@@ -384,7 +536,6 @@ class FarmView(Static):
                 self.refresh()
                 return facility
 
-        # No facility under cursor
         self.selected_facility_id = None
         self.refresh()
         return None
