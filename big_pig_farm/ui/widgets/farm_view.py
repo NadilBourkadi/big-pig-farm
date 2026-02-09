@@ -9,7 +9,6 @@ from rich.text import Text
 from rich.style import Style
 
 from big_pig_farm.data.sprites import (
-    get_pig_sprite,
     get_pig_halfblock_sprite,
     get_facility_sprite,
     TERRAIN,
