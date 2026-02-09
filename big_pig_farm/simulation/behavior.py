@@ -32,6 +32,19 @@ class BehaviorController:
         self._stuck_positions.pop(pig_id, None)
         self._stuck_timers.pop(pig_id, None)
 
+    def reset_all_tracking(self) -> None:
+        """Clear all internal tracking state for every pig.
+
+        Used after auto-arrange repositions facilities, so pigs
+        start fresh with no stale blocked/failed/stuck state.
+        """
+        self._decision_timers.clear()
+        self._blocked_timers.clear()
+        self._failed_facilities.clear()
+        self._failed_cooldowns.clear()
+        self._stuck_positions.clear()
+        self._stuck_timers.clear()
+
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
         # Check if it's time to make a new decision
