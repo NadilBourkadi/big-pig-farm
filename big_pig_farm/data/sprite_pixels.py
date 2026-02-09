@@ -4,6 +4,9 @@ Unicode half-block characters (▀▄█ ) give 2 vertical pixels per terminal c
 All sprites — farm, portraits, UI — share the convert_pixels() pipeline.
 """
 
+import copy
+import hashlib
+import random as _random
 from typing import Optional
 
 from rich.text import Text
@@ -382,3 +385,167 @@ def get_pig_pixel_sprite(
 
     fallback = f"idle_{direction}"
     return sprites.get(fallback, sprites["idle_right"])
+
+
+# ---------------------------------------------------------------------------
+# Procedural pig portraits  (16 x 16 pixels -> 16 x 8 half-block chars)
+# ---------------------------------------------------------------------------
+
+# Semantic region tags used to know WHERE each pixel lives.
+# These are NOT color keys — they are overwritten with color keys below.
+_R_EAR = "ear"      # ear region
+_R_HEAD = "fur"     # head / cheek fur
+_R_FORE = "fur"     # forehead
+_R_CHIN = "fur"     # chin area
+_R_NOSE = "nose"    # nose region
+_R_EYE = "eye"      # eye region
+_R_DARK = "dark"    # outline / shadows
+
+# The 16x16 face template: a front-facing guinea pig head.
+# Uses palette keys directly — pattern/intensity functions mutate them.
+# fmt: off
+_FACE_TEMPLATE: PixelGrid = [
+    #  0     1      2      3      4      5      6      7      8      9     10     11     12     13     14     15
+    [ T,    T,     T,     T,    "dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T    ],  # 0  top of head outline
+    [ T,    T,    "dark","dark","ear", "fur", "fur", "fur", "fur", "fur", "fur","ear", "dark","dark", T,     T    ],  # 1  ears + forehead
+    [ T,   "dark","ear", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","ear", "dark", T    ],  # 2  ears + upper head
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 3  upper face
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 4  mid face
+    ["dark","fur", "fur","eye",  T,   "eye",  "fur", "fur", "fur","eye",  T,   "eye",  "fur", "fur", "fur","dark"],  # 5  eyes row
+    ["dark","fur", "fur","eye",  T,   "eye",  "fur", "fur", "fur","eye",  T,   "eye",  "fur", "fur", "fur","dark"],  # 6  eyes row lower
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 7  cheeks
+    ["dark","fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose", "fur", "fur", "fur", "fur", "fur","dark"],  # 8  nose row
+    ["dark","fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose", "fur", "fur", "fur", "fur","dark"],  # 9  nose lower
+    ["dark","fur", "fur", "fur", "fur", "fur","nose", "fur", "fur","nose", "fur", "fur", "fur", "fur", "fur","dark"],  # 10 nostrils
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 11 lower cheeks
+    [ T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 12 chin upper
+    [ T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 13 chin
+    [ T,    T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T    ],  # 14 jaw
+    [ T,    T,    T,    T,   "dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T    ],  # 15 bottom outline
+]
+# fmt: on
+
+# Regions: sets of (row, col) coordinates for pattern/intensity targeting
+_FUR_PIXELS: set[tuple[int, int]] = set()
+_EAR_PIXELS: set[tuple[int, int]] = set()
+_NOSE_PIXELS: set[tuple[int, int]] = set()
+_FOREHEAD_PIXELS: set[tuple[int, int]] = set()  # rows 1-4, inner area
+_CHIN_PIXELS: set[tuple[int, int]] = set()       # rows 11-14, inner area
+
+for _r, _row in enumerate(_FACE_TEMPLATE):
+    for _c, _val in enumerate(_row):
+        if _val == "ear":
+            _EAR_PIXELS.add((_r, _c))
+            _FUR_PIXELS.add((_r, _c))  # ears are also fur for pattern purposes
+        elif _val == "fur":
+            _FUR_PIXELS.add((_r, _c))
+            if _r <= 4:
+                _FOREHEAD_PIXELS.add((_r, _c))
+            if _r >= 11:
+                _CHIN_PIXELS.add((_r, _c))
+        elif _val == "nose":
+            _NOSE_PIXELS.add((_r, _c))
+
+
+def _seeded_rng(pig_id: str) -> _random.Random:
+    """Create a deterministic RNG from a pig's UUID string."""
+    seed = int(hashlib.md5(pig_id.encode()).hexdigest()[:8], 16)
+    return _random.Random(seed)
+
+
+def _apply_dalmatian_spots(grid: PixelGrid, pig_id: str) -> None:
+    """Scatter white spots across fur pixels — seeded by pig ID."""
+    rng = _seeded_rng(pig_id + "_dalmatian")
+    fur_list = sorted(_FUR_PIXELS)  # deterministic order
+    # Pick ~25-35% of fur pixels as spot clusters
+    spot_centers = rng.sample(fur_list, k=max(1, len(fur_list) // 4))
+    spotted: set[tuple[int, int]] = set()
+
+    for r, c in spot_centers:
+        spotted.add((r, c))
+        # Expand each center to a small cluster (1-2 neighbors)
+        for dr, dc in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+            nr, nc = r + dr, c + dc
+            if (nr, nc) in _FUR_PIXELS and rng.random() < 0.5:
+                spotted.add((nr, nc))
+
+    for r, c in spotted:
+        grid[r][c] = "white"
+
+
+def _apply_dutch_markings(grid: PixelGrid) -> None:
+    """Apply Dutch pattern: white blaze on forehead + white chin."""
+    # White blaze: center columns of forehead
+    for r, c in _FOREHEAD_PIXELS:
+        if 5 <= c <= 10:  # center area
+            grid[r][c] = "white"
+
+    # White chin
+    for r, c in _CHIN_PIXELS:
+        grid[r][c] = "white"
+
+
+def _apply_himalayan(grid: PixelGrid) -> None:
+    """Himalayan: lighten body fur to near-white, keep ears/nose colored."""
+    for r, c in _FUR_PIXELS:
+        if (r, c) not in _EAR_PIXELS:
+            grid[r][c] = "belly"  # use belly (lighter) color for body
+
+
+def _apply_chinchilla(grid: PixelGrid) -> None:
+    """Chinchilla: silver tint — replace some fur with white mix."""
+    for r, c in _FUR_PIXELS:
+        # Alternate pixels to create a silver/ticked effect
+        if (r + c) % 3 == 0:
+            grid[r][c] = "white"
+
+
+def _apply_roan(grid: PixelGrid, pig_id: str) -> None:
+    """Roan: scatter white hairs through fur, seeded by pig ID."""
+    rng = _seeded_rng(pig_id + "_roan")
+    fur_list = sorted(_FUR_PIXELS)
+
+    for r, c in fur_list:
+        if grid[r][c] not in ("white", "eye", "dark", T):
+            if rng.random() < 0.3:  # 30% of fur pixels turn white
+                grid[r][c] = "white"
+
+
+def generate_portrait(
+    base_color_name: str,
+    pattern: str,
+    intensity: str,
+    roan: str,
+    pig_id: str,
+) -> PixelGrid:
+    """Generate a 16x16 pixel face portrait from phenotype traits.
+
+    Args:
+        base_color_name: "BLACK", "CHOCOLATE", "GOLDEN", or "CREAM"
+        pattern: "solid", "dutch", or "dalmatian"
+        intensity: "full", "chinchilla", or "himalayan"
+        roan: "none" or "roan"
+        pig_id: UUID string for deterministic randomness
+
+    Returns:
+        16x16 pixel grid with palette keys. Use with convert_pixels() + PALETTES.
+    """
+    grid = copy.deepcopy(_FACE_TEMPLATE)
+
+    # 1. Apply pattern (modifies fur pixels to "white")
+    if pattern == "dalmatian":
+        _apply_dalmatian_spots(grid, pig_id)
+    elif pattern == "dutch":
+        _apply_dutch_markings(grid)
+
+    # 2. Apply intensity (lightens/modifies fur pixels)
+    if intensity == "himalayan":
+        _apply_himalayan(grid)
+    elif intensity == "chinchilla":
+        _apply_chinchilla(grid)
+
+    # 3. Apply roan (scatters white into remaining fur)
+    if roan == "roan":
+        _apply_roan(grid, pig_id)
+
+    return grid
