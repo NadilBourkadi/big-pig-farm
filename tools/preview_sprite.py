@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Preview tool for half-block pig sprites and portraits.
+"""Preview tool for half-block pig sprites, portraits, and facility sprites.
 
 Usage:
-    poetry run python tools/preview_sprite.py [--sprites] [--portraits] [--all]
+    poetry run python tools/preview_sprite.py [--sprites] [--portraits] [--facilities] [--all]
 
-Renders pig sprites and/or portraits to the terminal so you can visually
-verify the half-block rendering pipeline.
+Renders pig sprites, portraits, and/or facility sprites to the terminal
+so you can visually verify the half-block rendering pipeline.
 """
 
 import argparse
@@ -21,11 +21,17 @@ from rich.text import Text
 from big_pig_farm.data.sprite_pixels import (
     convert_pixels,
     render_to_rich_text,
+    scale_pixel_grid,
     generate_portrait,
     get_pig_pixel_sprite,
     PALETTES,
     PIG_PIXELS_ADULT,
     PIG_PIXELS_BABY,
+)
+from big_pig_farm.data.facility_pixels import (
+    FACILITY_PALETTES,
+    FACILITY_PIXELS,
+    FACILITY_PIXELS_FAR,
 )
 
 console = Console()
@@ -126,14 +132,94 @@ def preview_determinism() -> None:
         console.print("[yellow]WARN[/] — Different pig IDs produced same portrait (unlikely)")
 
 
+def preview_facilities() -> None:
+    """Render all facility sprites at all zoom levels."""
+    # Facility types that have state variants (consumables)
+    consumable_types = {"food_bowl", "water_bottle", "hay_rack"}
+
+    # All facility types in order
+    facility_types = [
+        "food_bowl", "water_bottle", "hay_rack", "hideout",
+        "exercise_wheel", "tunnel", "play_area", "breeding_den",
+        "nursery", "veggie_garden", "grooming_station", "genetics_lab",
+    ]
+
+    # --- Normal zoom ---
+    console.print("\n[bold underline]FACILITY SPRITES (Normal Zoom)[/]\n")
+    for ftype in facility_types:
+        palette = FACILITY_PALETTES.get(ftype)
+        if palette is None:
+            continue
+
+        label = ftype.replace("_", " ").title()
+        states = ["default"]
+        if ftype in consumable_types:
+            states = ["default", "empty", "full"]
+
+        for state_name in states:
+            key = ftype if state_name == "default" else f"{ftype}_{state_name}"
+            grid = FACILITY_PIXELS.get(key)
+            if grid is None:
+                continue
+            converted = convert_pixels(grid, palette)
+            rich_text = render_to_rich_text(converted)
+            console.print(f"  [bold]{label}[/] ({state_name}):")
+            for line in rich_text.split():
+                console.print(f"    ", end="")
+                console.print(line)
+            console.print()
+
+    # --- Far zoom ---
+    console.print("[bold underline]FACILITY SPRITES (Far Zoom)[/]\n")
+    for ftype in facility_types:
+        palette = FACILITY_PALETTES.get(ftype)
+        if palette is None:
+            continue
+
+        grid = FACILITY_PIXELS_FAR.get(ftype)
+        if grid is None:
+            continue
+
+        label = ftype.replace("_", " ").title()
+        converted = convert_pixels(grid, palette)
+        rich_text = render_to_rich_text(converted)
+        console.print(f"  [bold]{label}[/]:")
+        for line in rich_text.split():
+            console.print(f"    ", end="")
+            console.print(line)
+        console.print()
+
+    # --- Close zoom (2x scaled) ---
+    console.print("[bold underline]FACILITY SPRITES (Close Zoom — 2x)[/]\n")
+    for ftype in facility_types:
+        palette = FACILITY_PALETTES.get(ftype)
+        if palette is None:
+            continue
+
+        grid = FACILITY_PIXELS.get(ftype)
+        if grid is None:
+            continue
+
+        label = ftype.replace("_", " ").title()
+        scaled = scale_pixel_grid(grid, 2)
+        converted = convert_pixels(scaled, palette)
+        rich_text = render_to_rich_text(converted)
+        console.print(f"  [bold]{label}[/]:")
+        for line in rich_text.split():
+            console.print(f"    ", end="")
+            console.print(line)
+        console.print()
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Preview half-block pig sprites and portraits")
+    parser = argparse.ArgumentParser(description="Preview half-block pig sprites, portraits, and facilities")
     parser.add_argument("--sprites", action="store_true", help="Show pig sprites")
     parser.add_argument("--portraits", action="store_true", help="Show pig portraits")
+    parser.add_argument("--facilities", action="store_true", help="Show facility sprites")
     parser.add_argument("--all", action="store_true", help="Show everything")
     args = parser.parse_args()
 
-    if not (args.sprites or args.portraits or args.all):
+    if not (args.sprites or args.portraits or args.facilities or args.all):
         args.all = True
 
     if args.sprites or args.all:
@@ -142,6 +228,9 @@ def main() -> None:
     if args.portraits or args.all:
         preview_portraits()
         preview_determinism()
+
+    if args.facilities or args.all:
+        preview_facilities()
 
 
 if __name__ == "__main__":

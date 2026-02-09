@@ -12,6 +12,7 @@ from big_pig_farm.data.sprites import (
     ANIM_TICKS_PER_FRAME,
     get_pig_halfblock_sprite,
     get_facility_sprite,
+    get_facility_halfblock_sprite,
     FAR_FACILITY_SPRITES,
     TERRAIN,
     Direction,
@@ -25,6 +26,22 @@ from big_pig_farm.game.state import GameState
 
 # Ordered cycle for zoom toggle
 _ZOOM_ORDER = [ZoomLevel.FAR, ZoomLevel.NORMAL, ZoomLevel.CLOSE]
+
+# Short labels drawn below facility sprites (normal + close zoom only)
+_FACILITY_LABELS: dict[str, str] = {
+    "food_bowl": "Food",
+    "water_bottle": "Water",
+    "hay_rack": "Hay",
+    "hideout": "Hideout",
+    "exercise_wheel": "Wheel",
+    "tunnel": "Tunnel",
+    "play_area": "Play",
+    "breeding_den": "Love Den",
+    "nursery": "Nursery",
+    "veggie_garden": "Garden",
+    "grooming_station": "Groom",
+    "genetics_lab": "Gen. Lab",
+}
 
 
 class FarmView(Static):
@@ -248,31 +265,77 @@ class FarmView(Static):
 
     def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw all facilities on the farm."""
-        if self._zoom == ZoomLevel.FAR:
-            # Compact per-type icons at far zoom
-            for facility in self.state.get_facilities_list():
-                sx = int((facility.position_x - self._viewport_x) * scale) + offset_x
-                sy = int((facility.position_y - self._viewport_y) * scale) + offset_y
-                icon = FAR_FACILITY_SPRITES.get(facility.facility_type.value, "■")
-                for i, ch in enumerate(icon):
-                    if 0 <= sx + i < width and 0 <= sy < height:
-                        self._char_buffer[sy][sx + i] = ch
-                        self._style_buffer[sy][sx + i] = Style(color="cyan")
-            return
         for facility in self.state.get_facilities_list():
             self._draw_facility(facility, width, height, offset_x, offset_y, scale)
 
     def _draw_facility(self, facility: Facility, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
-        """Draw a single facility."""
+        """Draw a single facility using half-block sprites (with ASCII fallback)."""
+        # Determine state for consumable facilities
         if facility.is_empty:
-            sprite = get_facility_sprite(facility.facility_type.value, "empty")
+            state = "empty"
         elif facility.current_amount >= facility.max_amount:
-            sprite = get_facility_sprite(facility.facility_type.value, "full")
+            state = "full"
         else:
-            sprite = get_facility_sprite(facility.facility_type.value)
+            state = ""
 
         is_selected = self.edit_mode and facility.id == self.selected_facility_id
         is_moving = is_selected and self.moving_facility
+
+        # Try half-block sprite
+        halfblock = get_facility_halfblock_sprite(
+            facility.facility_type.value, state, self._zoom,
+        )
+
+        if halfblock is not None:
+            # Anchor at top-left of facility position (not centered like pigs)
+            anchor_x = int((facility.position_x - self._viewport_x) * scale) + offset_x
+            anchor_y = int((facility.position_y - self._viewport_y) * scale) + offset_y
+
+            sprite_h = len(halfblock)
+            sprite_w = len(halfblock[0]) if halfblock else 0
+
+            for dy, row in enumerate(halfblock):
+                for dx, (char, fg, bg) in enumerate(row):
+                    screen_x = anchor_x + dx
+                    screen_y = anchor_y + dy
+
+                    if not (0 <= screen_x < width and 0 <= screen_y < height):
+                        continue
+
+                    if char == " " and fg is None and bg is None:
+                        continue  # Transparent — don't overwrite terrain
+
+                    if is_moving:
+                        style = Style(color="bright_green", bgcolor=bg, bold=True)
+                    elif is_selected:
+                        style = Style(color="yellow", bgcolor=bg, bold=True)
+                    else:
+                        style = Style(color=fg, bgcolor=bg)
+
+                    self._char_buffer[screen_y][screen_x] = char
+                    self._style_buffer[screen_y][screen_x] = style
+
+            # Draw label below sprite (skip at far zoom — no room)
+            if self._zoom != ZoomLevel.FAR:
+                label = _FACILITY_LABELS.get(facility.facility_type.value, "")
+                if label:
+                    label_y = anchor_y + sprite_h
+                    label_x = anchor_x + (sprite_w - len(label)) // 2
+                    if is_moving:
+                        label_style = Style(color="bright_green", bold=True)
+                    elif is_selected:
+                        label_style = Style(color="yellow", bold=True)
+                    else:
+                        label_style = Style(color="white", dim=True)
+                    for i, ch in enumerate(label):
+                        sx = label_x + i
+                        if 0 <= sx < width and 0 <= label_y < height:
+                            self._char_buffer[label_y][sx] = ch
+                            self._style_buffer[label_y][sx] = label_style
+            return
+
+        # Fallback: ASCII sprite (monochrome cyan)
+        sprite = get_facility_sprite(facility.facility_type.value, state)
 
         if is_moving:
             color = "bright_green"
@@ -526,9 +589,17 @@ class FarmView(Static):
             return None
 
         for facility in self.state.get_facilities_list():
-            sprite = get_facility_sprite(facility.facility_type.value)
-            sprite_width = max(len(line) for line in sprite)
-            sprite_height = len(sprite)
+            # Use halfblock sprite dimensions for hit-testing
+            halfblock = get_facility_halfblock_sprite(
+                facility.facility_type.value, "", self._zoom,
+            )
+            if halfblock is not None:
+                sprite_height = len(halfblock)
+                sprite_width = len(halfblock[0]) if halfblock else 0
+            else:
+                sprite = get_facility_sprite(facility.facility_type.value)
+                sprite_width = max(len(line) for line in sprite)
+                sprite_height = len(sprite)
 
             if (facility.position_x <= self._cursor_x < facility.position_x + sprite_width and
                 facility.position_y <= self._cursor_y < facility.position_y + sprite_height):

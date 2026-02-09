@@ -340,14 +340,26 @@ class TestOverflow:
 
 
 def _assert_no_sprite_overlap(state: GameState) -> None:
-    """Assert no two facilities' sprites visually overlap."""
-    from big_pig_farm.data.sprites import get_facility_sprite
+    """Assert no two facilities' sprites visually overlap.
+
+    Uses half-block sprite dimensions (the actual rendered size) with
+    fallback to ASCII sprites when no half-block art exists.
+    """
+    from big_pig_farm.data.sprites import get_facility_halfblock_sprite, get_facility_sprite, ZoomLevel
 
     occupied: set[tuple[int, int]] = set()
     for f in state.get_facilities_list():
-        sprite = get_facility_sprite(f.facility_type.value)
-        for dy, line in enumerate(sprite):
-            for dx in range(len(line)):
+        halfblock = get_facility_halfblock_sprite(f.facility_type.value, "", ZoomLevel.NORMAL)
+        if halfblock is not None:
+            sw = len(halfblock[0]) if halfblock else 0
+            sh = len(halfblock)
+        else:
+            sprite = get_facility_sprite(f.facility_type.value)
+            sw = max(len(line) for line in sprite)
+            sh = len(sprite)
+
+        for dy in range(sh):
+            for dx in range(sw):
                 cell = (f.position_x + dx, f.position_y + dy)
                 assert cell not in occupied, (
                     f"Sprite overlap at {cell} — {f.facility_type.value}"
