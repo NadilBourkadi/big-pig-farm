@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from big_pig_farm.data.config import AUTO_ARRANGE, FARM_TIERS
-from big_pig_farm.data.sprites import get_facility_sprite
+from big_pig_farm.data.sprites import get_facility_halfblock_sprite, get_facility_sprite, ZoomLevel
 from big_pig_farm.entities.facilities import Facility, FacilityType, FACILITY_INFO
 from big_pig_farm.entities.guinea_pig import BehaviorState
 from big_pig_farm.game.state import GameState
@@ -62,7 +62,16 @@ class Placement:
 
 
 def _sprite_size(facility_type: FacilityType) -> tuple[int, int]:
-    """Get the visual sprite dimensions (width, height) for a facility type."""
+    """Get the visual sprite dimensions (width, height) for a facility type.
+
+    Uses the half-block sprite at normal zoom (the actual rendered size),
+    falling back to the ASCII sprite if no half-block art exists.
+    """
+    halfblock = get_facility_halfblock_sprite(facility_type.value, "", ZoomLevel.NORMAL)
+    if halfblock is not None:
+        sh = len(halfblock)
+        sw = len(halfblock[0]) if halfblock else 1
+        return sw, sh
     sprite = get_facility_sprite(facility_type.value)
     sw = max(len(line) for line in sprite) if sprite else 1
     sh = len(sprite) if sprite else 1
