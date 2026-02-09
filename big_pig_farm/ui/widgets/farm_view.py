@@ -88,11 +88,17 @@ class FarmView(Static):
         self._style_buffer = [[None for _ in range(width)] for _ in range(height)]
 
     def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
-        """Draw the terrain/floor."""
+        """Draw the terrain/floor (only visible portion)."""
         farm = self.state.farm
 
-        for world_y in range(farm.height):
-            for world_x in range(farm.width):
+        # Only iterate cells that fall within the viewport
+        y_start = max(0, self._viewport_y - offset_y)
+        y_end = min(farm.height, self._viewport_y - offset_y + height)
+        x_start = max(0, self._viewport_x - offset_x)
+        x_end = min(farm.width, self._viewport_x - offset_x + width)
+
+        for world_y in range(y_start, y_end):
+            for world_x in range(x_start, x_end):
                 screen_x = world_x - self._viewport_x + offset_x
                 screen_y = world_y - self._viewport_y + offset_y
 
