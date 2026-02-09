@@ -227,6 +227,22 @@ FACILITY_SPRITES = {
     ],
 }
 
+# Far-zoom facility icons — compact distinguishable per-type icons
+FAR_FACILITY_SPRITES: dict[str, str] = {
+    "food_bowl": "(●)",
+    "water_bottle": "╤",
+    "hay_rack": "░░",
+    "hideout": "┌─┐",
+    "exercise_wheel": "(◯)",
+    "tunnel": "═══",
+    "play_area": "♦○●",
+    "breeding_den": "♥",
+    "nursery": "☆",
+    "veggie_garden": "♣♣",
+    "grooming_station": "✂",
+    "genetics_lab": "⚗",
+}
+
 # Terrain characters
 TERRAIN = {
     "floor": "·",
@@ -271,13 +287,11 @@ def get_pig_halfblock_sprite(
         zoom: Current zoom level.
 
     Returns:
-        Half-block rows with resolved colors, or None for far-zoom (use dot).
+        Half-block rows with resolved colors for all zoom levels.
     """
-    if zoom == ZoomLevel.FAR:
-        return None  # Far zoom uses a single colored dot
-
     close = zoom == ZoomLevel.CLOSE
-    pixel_grid = get_pig_pixel_sprite(state, direction.value, is_baby, close_zoom=close)
+    far = zoom == ZoomLevel.FAR
+    pixel_grid = get_pig_pixel_sprite(state, direction.value, is_baby, close_zoom=close, far_zoom=far)
     palette = PALETTES.get(base_color, PALETTES["BLACK"])
     return convert_pixels(pixel_grid, palette)
 

@@ -381,6 +381,40 @@ PIG_PIXELS_BABY = {
     ],
 }
 
+# --- Far-zoom adult sprites (6w x 4h pixels -> 6x2 half-block chars) ---
+
+PIG_PIXELS_FAR_ADULT = {
+    "idle_right": [
+        [ T,  "dark","dark","dark","dark", T  ],
+        ["dark","fur", "fur","pupil","fur","dark"],
+        ["dark","fur", "fur", "fur", "fur","dark"],
+        [ T,  "dark","belly","belly","dark", T  ],
+    ],
+    "idle_left": [
+        [ T,  "dark","dark","dark","dark", T  ],
+        ["dark","fur","pupil","fur", "fur","dark"],
+        ["dark","fur", "fur", "fur", "fur","dark"],
+        [ T,  "dark","belly","belly","dark", T  ],
+    ],
+}
+
+# --- Far-zoom baby sprites (4w x 4h pixels -> 4x2 half-block chars) ---
+
+PIG_PIXELS_FAR_BABY = {
+    "idle_right": [
+        [ T,  "dark","dark", T  ],
+        ["dark","fur","pupil","dark"],
+        ["dark","fur", "fur","dark"],
+        [ T,  "dark","dark", T  ],
+    ],
+    "idle_left": [
+        [ T,  "dark","dark", T  ],
+        ["dark","pupil","fur","dark"],
+        ["dark","fur", "fur","dark"],
+        [ T,  "dark","dark", T  ],
+    ],
+}
+
 # fmt: on
 
 
@@ -409,13 +443,21 @@ def get_pig_pixel_sprite(
     direction: str,
     is_baby: bool = False,
     close_zoom: bool = False,
+    far_zoom: bool = False,
 ) -> PixelGrid:
     """Look up the pixel grid for a pig sprite.
 
     Falls back gracefully: missing state -> idle.
     Close zoom auto-scales the normal sprite by 2x.
+    Far zoom returns tiny 6x4 (adult) or 4x4 (baby) sprites.
     """
     key = f"{state}_{direction}"
+
+    if far_zoom:
+        sprites = PIG_PIXELS_FAR_BABY if is_baby else PIG_PIXELS_FAR_ADULT
+        if key not in sprites:
+            key = f"idle_{direction}"
+        return sprites.get(key, sprites["idle_right"])
 
     # Normal zoom
     sprites = PIG_PIXELS_BABY if is_baby else PIG_PIXELS_ADULT

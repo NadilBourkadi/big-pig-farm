@@ -11,6 +11,7 @@ from rich.style import Style
 from big_pig_farm.data.sprites import (
     get_pig_halfblock_sprite,
     get_facility_sprite,
+    FAR_FACILITY_SPRITES,
     TERRAIN,
     Direction,
     ZoomLevel,
@@ -242,13 +243,15 @@ class FarmView(Static):
     def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw all facilities on the farm."""
         if self._zoom == ZoomLevel.FAR:
-            # Simplified: single colored marker per facility
+            # Compact per-type icons at far zoom
             for facility in self.state.get_facilities_list():
                 sx = int((facility.position_x - self._viewport_x) * scale) + offset_x
                 sy = int((facility.position_y - self._viewport_y) * scale) + offset_y
-                if 0 <= sx < width and 0 <= sy < height:
-                    self._char_buffer[sy][sx] = "■"
-                    self._style_buffer[sy][sx] = Style(color="cyan")
+                icon = FAR_FACILITY_SPRITES.get(facility.facility_type.value, "■")
+                for i, ch in enumerate(icon):
+                    if 0 <= sx + i < width and 0 <= sy < height:
+                        self._char_buffer[sy][sx + i] = ch
+                        self._style_buffer[sy][sx + i] = Style(color="cyan")
             return
         for facility in self.state.get_facilities_list():
             self._draw_facility(facility, width, height, offset_x, offset_y, scale)
@@ -308,15 +311,7 @@ class FarmView(Static):
 
         base_color_name = pig.phenotype.base_color.name  # BLACK, CHOCOLATE, etc.
 
-        # --- Far zoom: single colored dot ---
-        if self._zoom == ZoomLevel.FAR:
-            if 0 <= base_x < width and 0 <= base_y < height:
-                dot_color = "yellow" if is_selected else pig.phenotype.ascii_color
-                self._char_buffer[base_y][base_x] = "●"
-                self._style_buffer[base_y][base_x] = Style(color=dot_color, bold=is_selected)
-            return
-
-        # --- Normal / Close zoom: half-block sprite ---
+        # --- All zoom levels: half-block sprite ---
         halfblock = get_pig_halfblock_sprite(
             pig.display_state, direction, base_color_name,
             is_baby=pig.is_baby, zoom=self._zoom,
@@ -331,8 +326,8 @@ class FarmView(Static):
         anchor_x = base_x - sprite_w // 2
         anchor_y = base_y - sprite_h // 2
 
-        # Draw down-arrow indicator above selected pig
-        if is_selected:
+        # Draw down-arrow indicator above selected pig (skip at far zoom — too large)
+        if is_selected and self._zoom != ZoomLevel.FAR:
             indicator_y = anchor_y - 1
             indicator_x = base_x - 1
             indicator_style = Style(color="yellow", bold=True)
@@ -362,16 +357,17 @@ class FarmView(Static):
                 self._char_buffer[screen_y][screen_x] = char
                 self._style_buffer[screen_y][screen_x] = style
 
-        # Draw name below pig
-        name_y = anchor_y + sprite_h
-        if 0 <= name_y < height:
-            name = pig.name[:10]
-            name_x = base_x - len(name) // 2
-            name_style = Style(color="yellow", bold=True) if is_selected else Style(color="white", dim=True)
-            for i, char in enumerate(name):
-                if 0 <= name_x + i < width:
-                    self._char_buffer[name_y][name_x + i] = char
-                    self._style_buffer[name_y][name_x + i] = name_style
+        # Draw name below pig (skip at far zoom — no room)
+        if self._zoom != ZoomLevel.FAR:
+            name_y = anchor_y + sprite_h
+            if 0 <= name_y < height:
+                name = pig.name[:10]
+                name_x = base_x - len(name) // 2
+                name_style = Style(color="yellow", bold=True) if is_selected else Style(color="white", dim=True)
+                for i, char in enumerate(name):
+                    if 0 <= name_x + i < width:
+                        self._char_buffer[name_y][name_x + i] = char
+                        self._style_buffer[name_y][name_x + i] = name_style
 
     # ------------------------------------------------------------------
     # Buffer → Text
