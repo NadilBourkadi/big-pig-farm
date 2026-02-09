@@ -168,10 +168,11 @@ PALETTES: dict[str, dict[str, str]] = {
 
 
 # ---------------------------------------------------------------------------
-# Pig pixel art — normal zoom (9 wide x 8 tall -> 9 x 4 half-block chars)
+# Pig pixel art — normal zoom (14 wide x 8 tall -> 14 x 4 half-block chars)
 #
-# Guinea pigs are potato-shaped: wider than tall, rounded back, tiny ears,
-# small eye near the front, nose at the tip, barely-visible paws.
+# Guinea pigs are potato-shaped: much wider than tall, smooth rounded back,
+# tiny ear nub, prominent dark+gleam eye near the front, nose at the tip,
+# continuous dark outline, barely-visible paws, belly stripe underneath.
 # "right" = facing right (head on the right side of the sprite).
 # ---------------------------------------------------------------------------
 
@@ -179,169 +180,181 @@ PALETTES: dict[str, dict[str, str]] = {
 
 # fmt: off
 
-# --- Adult sprites (9w x 8h pixels) ---
+# --- Adult sprites (14w x 8h pixels) ---
 
 PIG_PIXELS_ADULT = {
     "idle_right": [
-        [ T,  T,  T,  T,  T, "ear","dark", T,  T ],
-        [ T,  T, "dark","dark","fur","fur","fur","dark", T ],
-        [ T, "dark","fur","fur","fur","fur","eye","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","nose","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
+        [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "idle_left": [
-        [ T,  T, "dark","ear", T,  T,  T,  T,  T ],
-        [ T, "dark","fur","fur","fur","dark","dark", T,  T ],
-        ["dark","fur","eye","fur","fur","fur","fur","dark", T ],
-        ["dark","nose","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
+        ["dark","fur","fur","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "walking_right": [
-        [ T,  T,  T,  T,  T, "ear","dark", T,  T ],
-        [ T,  T, "dark","dark","fur","fur","fur","dark", T ],
-        [ T, "dark","fur","fur","fur","fur","eye","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","nose","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T, "paw", T,  T,  T,  T,  T, "paw", T ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
+        [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,  "paw", T,   T,   T,   T,   T,   T,   T,   T,  "paw", T,   T  ],
     ],
     "walking_left": [
-        [ T,  T, "dark","ear", T,  T,  T,  T,  T ],
-        [ T, "dark","fur","fur","fur","dark","dark", T,  T ],
-        ["dark","fur","eye","fur","fur","fur","fur","dark", T ],
-        ["dark","nose","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T, "paw", T,  T,  T,  T,  T, "paw", T ],
+        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
+        ["dark","fur","fur","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,  "paw", T,   T,   T,   T,   T,   T,   T,   T,  "paw", T,   T  ],
     ],
     "eating_right": [
-        [ T,  T,  T,  T,  T, "ear","dark", T,  T ],
-        [ T,  T, "dark","dark","fur","fur","fur","dark", T ],
-        [ T, "dark","fur","fur","fur","fur","dark","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","nose","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
+        [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","dark","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "eating_left": [
-        [ T,  T, "dark","ear", T,  T,  T,  T,  T ],
-        [ T, "dark","fur","fur","fur","dark","dark", T,  T ],
-        ["dark","fur","dark","fur","fur","fur","fur","dark", T ],
-        ["dark","nose","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
+        ["dark","fur","fur","dark","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "sleeping_right": [
-        [ T,  T,  T,  T,  T, "ear","dark", T,  T ],
-        [ T,  T, "dark","dark","fur","fur","fur","dark", T ],
-        [ T, "dark","fur","fur","fur","fur","dark","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
+        [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","dark","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "sleeping_left": [
-        [ T,  T, "dark","ear", T,  T,  T,  T,  T ],
-        [ T, "dark","fur","fur","fur","dark","dark", T,  T ],
-        ["dark","fur","dark","fur","fur","fur","fur","dark", T ],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
+        ["dark","fur","fur","dark","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "happy_right": [
-        [ T,  T,  T,  T,  T, "ear","dark", T,  T ],
-        [ T,  T, "dark","dark","fur","fur","fur","dark", T ],
-        [ T, "dark","fur","fur","fur","eye","eye","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","nose","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
+        [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "happy_left": [
-        [ T,  T, "dark","ear", T,  T,  T,  T,  T ],
-        [ T, "dark","fur","fur","fur","dark","dark", T,  T ],
-        ["dark","fur","eye","eye","fur","fur","fur","dark", T ],
-        ["dark","nose","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
+        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "sad_right": [
-        [ T,  T,  T,  T,  T, "ear","dark", T,  T ],
-        [ T,  T, "dark","dark","fur","fur","fur","dark", T ],
-        [ T, "dark","fur","fur","fur","fur","eye","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","nose","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
+        [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
     "sad_left": [
-        [ T,  T, "dark","ear", T,  T,  T,  T,  T ],
-        [ T, "dark","fur","fur","fur","dark","dark", T,  T ],
-        ["dark","fur","eye","fur","fur","fur","fur","dark", T ],
-        ["dark","nose","fur","fur","fur","fur","fur","fur","dark"],
-        ["dark","fur","fur","fur","fur","fur","fur","fur","dark"],
-        [ T, "dark","fur","fur","fur","fur","fur","dark", T ],
-        [ T, "dark","belly","belly","belly","belly","belly","dark", T ],
-        [ T,  T, "paw", T,  T,  T, "paw", T,  T ],
+        [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
+        ["dark","fur","fur","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,  "paw", T,   T,   T,   T,   T,   T,  "paw", T,   T,   T  ],
     ],
 }
 
-# --- Baby sprites (5w x 4h pixels) ---
+# --- Baby sprites (8w x 6h pixels) ---
 
 PIG_PIXELS_BABY = {
     "idle_right": [
-        [ T,  T, "dark","ear", T ],
-        ["dark","fur","fur","fur","dark"],
-        ["dark","fur","eye","nose","dark"],
-        [ T, "paw", T, "paw", T ],
+        [ T,   T,   T,   T,   T,  "ear","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","dark","eye","fur","dark"],
+        ["dark","fur","fur","fur","fur","fur","nose","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
     "idle_left": [
-        [ T, "ear","dark", T,  T ],
-        ["dark","fur","fur","fur","dark"],
-        ["dark","nose","eye","fur","dark"],
-        [ T, "paw", T, "paw", T ],
+        [ T,  "dark","ear", T,   T,   T,   T,   T  ],
+        ["dark","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","dark","fur","fur","dark", T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
     "walking_right": [
-        [ T,  T, "dark","ear", T ],
-        ["dark","fur","fur","fur","dark"],
-        ["dark","fur","eye","nose","dark"],
-        ["paw", T,  T,  T, "paw"],
+        [ T,   T,   T,   T,   T,  "ear","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","dark","eye","fur","dark"],
+        ["dark","fur","fur","fur","fur","fur","nose","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,  "paw", T,   T,   T,   T,  "paw", T  ],
     ],
     "walking_left": [
-        [ T, "ear","dark", T,  T ],
-        ["dark","fur","fur","fur","dark"],
-        ["dark","nose","eye","fur","dark"],
-        ["paw", T,  T,  T, "paw"],
+        [ T,  "dark","ear", T,   T,   T,   T,   T  ],
+        ["dark","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","dark","fur","fur","dark", T  ],
+        ["dark","nose","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,  "paw", T,   T,   T,   T,  "paw", T  ],
     ],
     "sleeping_right": [
-        [ T,  T, "dark","ear", T ],
-        ["dark","fur","fur","fur","dark"],
-        ["dark","fur","dark","fur","dark"],
-        [ T, "paw", T, "paw", T ],
+        [ T,   T,   T,   T,   T,  "ear","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","dark","dark","fur","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
     "sleeping_left": [
-        [ T, "ear","dark", T,  T ],
-        ["dark","fur","fur","fur","dark"],
-        ["dark","fur","dark","fur","dark"],
-        [ T, "paw", T, "paw", T ],
+        [ T,  "dark","ear", T,   T,   T,   T,   T  ],
+        ["dark","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","dark","dark","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
 }
 
@@ -408,7 +421,7 @@ _R_DARK = "dark"    # outline / shadows
 
 # The 16x16 face template: a front-facing guinea pig head.
 # Guinea pig ears are small petal-shaped flaps on the SIDES of the head,
-# NOT on top like mice/cats.  Eyes are large and set high on the face.
+# NOT on top like mice/cats.  Eyes are large (3x2 dark+gleam) and set high.
 # Uses palette keys directly — pattern/intensity functions mutate them.
 # fmt: off
 _FACE_TEMPLATE: PixelGrid = [
@@ -416,14 +429,14 @@ _FACE_TEMPLATE: PixelGrid = [
     [ T,    T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T    ],  # 0  top of round head
     [ T,    T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T    ],  # 1  upper head
     [ T,    T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T    ],  # 2  forehead
-    [ T,   "ear","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear",  T    ],  # 3  side ears appear
-    ["dark","ear", "fur", "fur","dark","dark","fur", "fur", "fur", "fur","dark","dark","fur", "fur","ear", "dark"],  # 4  ears + eyes upper
-    ["dark","ear", "fur", "fur","dark","eye", "fur", "fur", "fur", "fur","dark","eye", "fur", "fur","ear", "dark"],  # 5  ears + eyes lower (gleam)
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 6  upper cheeks
+    ["ear","ear", "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear", "ear"],  # 3  ears protrude from sides
+    ["ear","dark","fur", "dark","dark","dark","fur", "fur", "fur", "fur","dark","dark","dark","fur", "dark","ear"],  # 4  ears + eyes upper (3px)
+    ["dark","fur", "fur","dark","dark","eye", "fur", "fur", "fur", "fur","dark","dark","eye", "fur", "fur","dark"],  # 5  eyes lower (pupil+gleam)
+    ["dark","fur", "fur", "fur","dark","dark","fur", "fur", "fur", "fur","dark","dark","fur", "fur", "fur","dark"],  # 6  under-eye shadow
     ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 7  cheeks
     ["dark","fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose", "fur", "fur", "fur", "fur", "fur","dark"],  # 8  nose upper
     ["dark","fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose", "fur", "fur", "fur", "fur","dark"],  # 9  nose wider
-    ["dark","fur", "fur", "fur", "fur", "fur","nose", "fur", "fur","nose", "fur", "fur", "fur", "fur", "fur","dark"],  # 10 nostrils
+    ["dark","fur", "fur", "fur", "fur","nose","nose", "fur", "fur","nose","nose", "fur", "fur", "fur", "fur","dark"],  # 10 nostrils
     ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 11 lower cheeks
     [ T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 12 chin
     [ T,    T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T    ],  # 13 lower chin
