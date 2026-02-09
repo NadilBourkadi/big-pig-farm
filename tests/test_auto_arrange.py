@@ -272,6 +272,72 @@ class TestOverflow:
         # Total placed + overflow should equal total facilities
         assert len(placements) + len(overflow) == len(state.get_facilities_list())
 
+    def test_overflow_no_overlap_with_first_pass(self):
+        """Overflow facilities must not land on top of first-pass placements."""
+        state = _make_state(tier=1)
+        # Fill the rest zone with hideouts (3x2) so some overflow into feeding
+        for i in range(8):
+            x = 2 + (i % 4) * 4
+            y = 2 + (i // 4) * 3
+            if x + 3 < state.farm.width - 1 and y + 2 < state.farm.height - 1:
+                _add_facility(state, FacilityType.HIDEOUT, x, y)
+        # Also add food bowls that occupy the feeding zone
+        for i in range(4):
+            x = 2 + i * 4
+            y = 2 + (8 // 4) * 3 + 3
+            if x + 2 < state.farm.width - 1 and y + 1 < state.farm.height - 1:
+                _add_facility(state, FacilityType.FOOD_BOWL, x, y)
+
+        placements, _ = compute_arrangement(state)
+        occupied: set[tuple[int, int]] = set()
+        for p in placements:
+            info = FACILITY_INFO[p.facility.facility_type]
+            for dx in range(info.size.width):
+                for dy in range(info.size.height):
+                    cell = (p.new_x + dx, p.new_y + dy)
+                    assert cell not in occupied, (
+                        f"Overlap at {cell} — {p.facility.facility_type.value}"
+                    )
+                    occupied.add(cell)
+
+    def test_many_mixed_facilities_no_overlap(self):
+        """Realistic mix of many facilities must never overlap."""
+        state = _make_state(tier=3)
+        types_and_positions = [
+            (FacilityType.FOOD_BOWL, 2, 2),
+            (FacilityType.FOOD_BOWL, 5, 2),
+            (FacilityType.FOOD_BOWL, 8, 2),
+            (FacilityType.HAY_RACK, 11, 2),
+            (FacilityType.WATER_BOTTLE, 14, 2),
+            (FacilityType.WATER_BOTTLE, 16, 2),
+            (FacilityType.WATER_BOTTLE, 18, 2),
+            (FacilityType.HIDEOUT, 2, 5),
+            (FacilityType.HIDEOUT, 6, 5),
+            (FacilityType.EXERCISE_WHEEL, 10, 5),
+            (FacilityType.TUNNEL, 13, 5),
+            (FacilityType.PLAY_AREA, 17, 5),
+            (FacilityType.BREEDING_DEN, 2, 9),
+            (FacilityType.NURSERY, 5, 9),
+            (FacilityType.GROOMING_STATION, 9, 9),
+            (FacilityType.VEGGIE_GARDEN, 12, 9),
+        ]
+        for ftype, x, y in types_and_positions:
+            _add_facility(state, ftype, x, y)
+
+        placements, overflow = compute_arrangement(state)
+        assert len(overflow) == 0, f"{len(overflow)} facilities couldn't fit"
+
+        occupied: set[tuple[int, int]] = set()
+        for p in placements:
+            info = FACILITY_INFO[p.facility.facility_type]
+            for dx in range(info.size.width):
+                for dy in range(info.size.height):
+                    cell = (p.new_x + dx, p.new_y + dy)
+                    assert cell not in occupied, (
+                        f"Overlap at {cell} — {p.facility.facility_type.value}"
+                    )
+                    occupied.add(cell)
+
 
 class TestEmptyFarm:
     """Tests for edge cases."""

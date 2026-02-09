@@ -153,8 +153,12 @@ def _place_facilities_in_zone(
     h_gap: int,
     v_gap: int,
     farm_height: int,
+    occupied: set[tuple[int, int]],
 ) -> tuple[list[Placement], list[Facility]]:
     """Place facilities within a zone using greedy left-to-right, top-to-bottom.
+
+    The `occupied` set is shared across all zone placements and is updated
+    in-place to prevent cross-zone and overflow-pass collisions.
 
     Returns (placed, overflow) where overflow couldn't fit in the zone.
     """
@@ -167,9 +171,6 @@ def _place_facilities_in_zone(
 
     placed: list[Placement] = []
     overflow: list[Facility] = []
-
-    # Track occupied cells within the zone
-    occupied: set[tuple[int, int]] = set()
 
     for facility in sorted_facilities:
         info = FACILITY_INFO[facility.facility_type]
@@ -253,28 +254,29 @@ def compute_arrangement(
     all_placed: list[Placement] = []
     all_overflow: list[Facility] = []
 
+    # Single shared set prevents cross-zone and overflow-pass collisions
+    occupied: set[tuple[int, int]] = set()
+
     for zone in zones:
         zone_facs = zone_facilities.get(zone.name, [])
         if not zone_facs:
             continue
         placed, overflow = _place_facilities_in_zone(
-            zone_facs, zone, h_gap, v_gap, farm.height,
+            zone_facs, zone, h_gap, v_gap, farm.height, occupied,
         )
         all_placed.extend(placed)
         all_overflow.extend(overflow)
 
     # Try to place overflow in any zone with remaining space
     if all_overflow:
-        remaining_overflow: list[Facility] = []
         for zone in zones:
             if not all_overflow:
                 break
             placed, still_overflow = _place_facilities_in_zone(
-                all_overflow, zone, h_gap, v_gap, farm.height,
+                all_overflow, zone, h_gap, v_gap, farm.height, occupied,
             )
             all_placed.extend(placed)
             all_overflow = still_overflow
-        all_overflow = remaining_overflow if remaining_overflow else all_overflow
 
     return all_placed, all_overflow
 
