@@ -255,13 +255,13 @@ class SimulationConfig:
 class BehaviorConfig:
     """Configuration for pig AI behavior decisions."""
     # Separation thresholds (must be < blocking threshold for same state)
-    SEPARATION_BOTH_MOVING: float = 1.0   # Both pigs moving
+    SEPARATION_BOTH_MOVING: float = 1.5   # Both pigs moving
     SEPARATION_ONE_MOVING: float = 2.0    # One pig moving
     MIN_PIG_DISTANCE: float = 3.0         # Both stationary
 
     # Movement blocking distances
     BLOCKING_DEFAULT: float = 2.5         # Default (stationary blocks moving)
-    BLOCKING_BOTH_MOVING: float = 1.5     # Both pigs have active paths
+    BLOCKING_BOTH_MOVING: float = 2.0     # Both pigs have active paths
     BLOCKING_FACILITY_USE: float = 1.5    # Reduced blocking for pigs actively using a facility
 
     # Facility co-use separation
