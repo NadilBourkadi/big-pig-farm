@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Optional
 
 from big_pig_farm.data.sprite_pixels import (
+    ANIM_TICKS_PER_FRAME,
     HalfBlockRows,
     convert_pixels,
     get_pig_pixel_sprite,
@@ -276,6 +277,7 @@ def get_pig_halfblock_sprite(
     base_color: str,
     is_baby: bool = False,
     zoom: ZoomLevel = ZoomLevel.NORMAL,
+    frame: int = 0,
 ) -> Optional[HalfBlockRows]:
     """Get a half-block rendered pig sprite with phenotype colors.
 
@@ -285,13 +287,14 @@ def get_pig_halfblock_sprite(
         base_color: Phenotype base color name (BLACK, CHOCOLATE, GOLDEN, CREAM).
         is_baby: Whether this is a baby pig.
         zoom: Current zoom level.
+        frame: Animation frame (0 = base, 1 = alternate). Ignored at far zoom.
 
     Returns:
         Half-block rows with resolved colors for all zoom levels.
     """
     close = zoom == ZoomLevel.CLOSE
     far = zoom == ZoomLevel.FAR
-    pixel_grid = get_pig_pixel_sprite(state, direction.value, is_baby, close_zoom=close, far_zoom=far)
+    pixel_grid = get_pig_pixel_sprite(state, direction.value, is_baby, close_zoom=close, far_zoom=far, frame=frame)
     palette = PALETTES.get(base_color, PALETTES["BLACK"])
     return convert_pixels(pixel_grid, palette)
 
