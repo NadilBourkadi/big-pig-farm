@@ -73,7 +73,7 @@ class PigDetailPanel(Static):
         )
         palette = PALETTES.get(pig.phenotype.base_color.name, PALETTES["BLACK"])
         converted = convert_pixels(grid, palette)
-        return render_to_rich_text(converted, center_width=40)
+        return render_to_rich_text(converted, center_width=38)
 
     def _build_content(self) -> str:
         """Build all pig detail content as a markup string."""
