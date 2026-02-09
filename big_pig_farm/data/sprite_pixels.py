@@ -117,7 +117,8 @@ def render_to_rich_text(
 #   "fur"   — main body color
 #   "dark"  — outline / dark details (ears, back)
 #   "belly" — lighter underside
-#   "eye"   — eye color
+#   "pupil" — eye pupil (always near-black for contrast on any fur color)
+#   "eye"   — eye gleam / highlight (always bright white)
 #   "nose"  — nose / mouth
 #   "ear"   — inner ear
 #   "paw"   — feet
@@ -128,6 +129,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "fur":   "grey23",
         "dark":  "grey15",
         "belly": "grey35",
+        "pupil": "grey70",
         "eye":   "white",
         "nose":  "grey50",
         "ear":   "grey30",
@@ -138,6 +140,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "fur":   "orange4",
         "dark":  "dark_red",
         "belly": "sandy_brown",
+        "pupil": "grey7",
         "eye":   "white",
         "nose":  "rosy_brown",
         "ear":   "indian_red",
@@ -148,6 +151,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "fur":   "gold1",
         "dark":  "dark_goldenrod",
         "belly": "light_goldenrod1",
+        "pupil": "grey7",
         "eye":   "white",
         "nose":  "tan",
         "ear":   "gold3",
@@ -158,6 +162,7 @@ PALETTES: dict[str, dict[str, str]] = {
         "fur":   "wheat1",
         "dark":  "tan",
         "belly": "cornsilk1",
+        "pupil": "grey7",
         "eye":   "white",
         "nose":  "misty_rose1",
         "ear":   "navajo_white1",
@@ -186,7 +191,7 @@ PIG_PIXELS_ADULT = {
     "idle_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -196,7 +201,7 @@ PIG_PIXELS_ADULT = {
     "idle_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -206,7 +211,7 @@ PIG_PIXELS_ADULT = {
     "walking_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -216,7 +221,7 @@ PIG_PIXELS_ADULT = {
     "walking_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -266,7 +271,7 @@ PIG_PIXELS_ADULT = {
     "happy_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -276,7 +281,7 @@ PIG_PIXELS_ADULT = {
     "happy_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -286,7 +291,7 @@ PIG_PIXELS_ADULT = {
     "sad_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -296,7 +301,7 @@ PIG_PIXELS_ADULT = {
     "sad_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -311,7 +316,7 @@ PIG_PIXELS_BABY = {
     "idle_right": [
         [ T,   T,   T,   T,   T,  "ear","dark", T  ],
         [ T,   T,  "dark","dark","fur","fur","fur","dark"],
-        [ T,  "dark","fur","fur","dark","eye","fur","dark"],
+        [ T,  "dark","fur","fur","pupil","eye","fur","dark"],
         ["dark","fur","fur","fur","fur","fur","nose","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
@@ -319,7 +324,7 @@ PIG_PIXELS_BABY = {
     "idle_left": [
         [ T,  "dark","ear", T,   T,   T,   T,   T  ],
         ["dark","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","fur","eye","dark","fur","fur","dark", T  ],
+        ["dark","fur","eye","pupil","fur","fur","dark", T  ],
         ["dark","nose","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
@@ -327,7 +332,7 @@ PIG_PIXELS_BABY = {
     "walking_right": [
         [ T,   T,   T,   T,   T,  "ear","dark", T  ],
         [ T,   T,  "dark","dark","fur","fur","fur","dark"],
-        [ T,  "dark","fur","fur","dark","eye","fur","dark"],
+        [ T,  "dark","fur","fur","pupil","eye","fur","dark"],
         ["dark","fur","fur","fur","fur","fur","nose","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,  "paw", T,   T,   T,   T,  "paw", T  ],
@@ -335,7 +340,7 @@ PIG_PIXELS_BABY = {
     "walking_left": [
         [ T,  "dark","ear", T,   T,   T,   T,   T  ],
         ["dark","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","fur","eye","dark","fur","fur","dark", T  ],
+        ["dark","fur","eye","pupil","fur","fur","dark", T  ],
         ["dark","nose","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,  "paw", T,   T,   T,   T,  "paw", T  ],
@@ -406,42 +411,33 @@ def get_pig_pixel_sprite(
 
 
 # ---------------------------------------------------------------------------
-# Procedural pig portraits  (16 x 16 pixels -> 16 x 8 half-block chars)
+# Procedural pig portraits  (20 x 16 pixels -> 20 x 8 half-block chars)
 # ---------------------------------------------------------------------------
 
-# Semantic region tags used to know WHERE each pixel lives.
-# These are NOT color keys — they are overwritten with color keys below.
-_R_EAR = "ear"      # ear region
-_R_HEAD = "fur"     # head / cheek fur
-_R_FORE = "fur"     # forehead
-_R_CHIN = "fur"     # chin area
-_R_NOSE = "nose"    # nose region
-_R_EYE = "eye"      # eye region
-_R_DARK = "dark"    # outline / shadows
-
-# The 16x16 face template: a front-facing guinea pig head.
-# Guinea pig ears are small petal-shaped flaps on the SIDES of the head,
-# NOT on top like mice/cats.  Eyes are large (3x2 dark+gleam) and set high.
+# The 20x16 face template: a front-facing guinea pig head.
+# Wider than tall = oval face, NOT circular.  Puffy cheeks that barely taper
+# toward the chin = fluffy.  Ears are petal-shaped flaps on the SIDES.
+# Eyes are large 3x2 blocks (dark pupil + gleam) set high on the face.
 # Uses palette keys directly — pattern/intensity functions mutate them.
 # fmt: off
 _FACE_TEMPLATE: PixelGrid = [
-    #  0     1      2      3      4      5      6      7      8      9     10     11     12     13     14     15
-    [ T,    T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T    ],  # 0  top of round head
-    [ T,    T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T    ],  # 1  upper head
-    [ T,    T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T    ],  # 2  forehead
-    ["ear","ear", "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear", "ear"],  # 3  ears protrude from sides
-    ["ear","dark","fur", "dark","dark","dark","fur", "fur", "fur", "fur","dark","dark","dark","fur", "dark","ear"],  # 4  ears + eyes upper (3px)
-    ["dark","fur", "fur","dark","dark","eye", "fur", "fur", "fur", "fur","dark","dark","eye", "fur", "fur","dark"],  # 5  eyes lower (pupil+gleam)
-    ["dark","fur", "fur", "fur","dark","dark","fur", "fur", "fur", "fur","dark","dark","fur", "fur", "fur","dark"],  # 6  under-eye shadow
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 7  cheeks
-    ["dark","fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose", "fur", "fur", "fur", "fur", "fur","dark"],  # 8  nose upper
-    ["dark","fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose", "fur", "fur", "fur", "fur","dark"],  # 9  nose wider
-    ["dark","fur", "fur", "fur", "fur","nose","nose", "fur", "fur","nose","nose", "fur", "fur", "fur", "fur","dark"],  # 10 nostrils
-    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 11 lower cheeks
-    [ T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 12 chin
-    [ T,    T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T    ],  # 13 lower chin
-    [ T,    T,     T,  "dark","dark","fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T    ],  # 14 jaw
-    [ T,    T,     T,    T,     T,  "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T    ],  # 15 bottom outline
+    #  0     1      2      3      4      5      6      7      8      9     10     11     12     13     14     15     16     17     18     19
+    [ T,    T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T    ],  # 0  top of head
+    [ T,    T,     T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,     T    ],  # 1  upper head
+    [ T,    T,     T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T    ],  # 2  forehead
+    [ T,   "ear","ear","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear","ear", T    ],  # 3  ears protrude from sides
+    ["ear","ear","dark","fur", "fur","pupil","pupil","pupil","fur", "fur", "fur", "fur","pupil","pupil","pupil","fur", "fur","dark","ear","ear"],  # 4  eyes upper (3px pupil)
+    ["dark","dark","fur", "fur", "fur","pupil","pupil","eye", "fur", "fur", "fur", "fur","pupil","pupil","eye", "fur", "fur", "fur","dark","dark"],  # 5  eyes lower (pupil+gleam)
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 6  cheeks
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 7  cheeks (widest)
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 8  nose start
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 9  nose wider
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur","nose","nose","fur", "fur","nose","nose","fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 10 nostrils
+    ["dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark"],  # 11 lower cheeks (still wide!)
+    [ T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T    ],  # 12 chin (barely tapers)
+    [ T,    T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T    ],  # 13 lower chin
+    [ T,    T,     T,  "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T    ],  # 14 jaw (still wide = fluffy)
+    [ T,    T,     T,    T,     T,  "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T    ],  # 15 bottom
 ]
 # fmt: on
 
@@ -497,7 +493,7 @@ def _apply_dutch_markings(grid: PixelGrid) -> None:
     """Apply Dutch pattern: white blaze on forehead + white chin."""
     # White blaze: center columns of forehead
     for r, c in _FOREHEAD_PIXELS:
-        if 5 <= c <= 10:  # center area
+        if 7 <= c <= 12:  # center area
             grid[r][c] = "white"
 
     # White chin
@@ -526,7 +522,7 @@ def _apply_roan(grid: PixelGrid, pig_id: str) -> None:
     fur_list = sorted(_FUR_PIXELS)
 
     for r, c in fur_list:
-        if grid[r][c] not in ("white", "eye", "dark", T):
+        if grid[r][c] not in ("white", "eye", "pupil", "dark", T):
             if rng.random() < 0.3:  # 30% of fur pixels turn white
                 grid[r][c] = "white"
 
@@ -538,7 +534,7 @@ def generate_portrait(
     roan: str,
     pig_id: str,
 ) -> PixelGrid:
-    """Generate a 16x16 pixel face portrait from phenotype traits.
+    """Generate a 20x16 pixel face portrait from phenotype traits.
 
     Args:
         base_color_name: "BLACK", "CHOCOLATE", "GOLDEN", or "CREAM"
@@ -548,7 +544,7 @@ def generate_portrait(
         pig_id: UUID string for deterministic randomness
 
     Returns:
-        16x16 pixel grid with palette keys. Use with convert_pixels() + PALETTES.
+        20x16 pixel grid with palette keys. Use with convert_pixels() + PALETTES.
     """
     grid = copy.deepcopy(_FACE_TEMPLATE)
 
