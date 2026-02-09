@@ -479,7 +479,6 @@ for _r, _row in enumerate(_FACE_TEMPLATE):
     for _c, _val in enumerate(_row):
         if _val == "ear":
             _EAR_PIXELS.add((_r, _c))
-            _FUR_PIXELS.add((_r, _c))  # ears are also fur for pattern purposes
         elif _val == "fur":
             _FUR_PIXELS.add((_r, _c))
             if _r <= 7:
