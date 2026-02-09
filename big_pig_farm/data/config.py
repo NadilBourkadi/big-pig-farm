@@ -145,12 +145,12 @@ class FarmTier:
 
 # Farm expansion tiers
 FARM_TIERS: list[FarmTier] = [
-    FarmTier("Starter Hutch", 48, 24, 4, 0, 1),
-    FarmTier("Cozy Enclosure", 60, 30, 8, 500, 2),
-    FarmTier("Family Pen", 78, 39, 14, 2000, 3),
-    FarmTier("Guinea Grove", 96, 48, 24, 8000, 4),
-    FarmTier("Piggy Paradise", 120, 60, 40, 25000, 5),
-    FarmTier("Ultimate Farm", 156, 78, 60, 100000, 6),
+    FarmTier("Starter Hutch", 42, 21, 4, 0, 1),
+    FarmTier("Cozy Enclosure", 54, 27, 8, 500, 2),
+    FarmTier("Family Pen", 70, 35, 14, 2000, 3),
+    FarmTier("Guinea Grove", 86, 43, 24, 8000, 4),
+    FarmTier("Piggy Paradise", 108, 54, 40, 25000, 5),
+    FarmTier("Ultimate Farm", 140, 70, 60, 100000, 6),
 ]
 
 
