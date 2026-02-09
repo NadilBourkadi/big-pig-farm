@@ -381,37 +381,41 @@ PIG_PIXELS_BABY = {
     ],
 }
 
-# --- Far-zoom adult sprites (6w x 4h pixels -> 6x2 half-block chars) ---
+# --- Far-zoom adult sprites (7w x 6h pixels -> 7x3 half-block chars) ---
 
 PIG_PIXELS_FAR_ADULT = {
     "idle_right": [
-        [ T,   T,  "dark","dark","ear","dark"],
-        ["dark","dark","fur","eye","pupil","dark"],
-        ["dark","fur", "fur", "fur", "fur","dark"],
-        [ T,  "dark","belly","belly","dark", T  ],
+        [ T,   T,  "dark","dark","dark","ear","dark"],
+        [ T,  "dark","fur", "fur", "fur","fur","dark"],
+        ["dark","fur", "fur", "fur","eye","pupil","dark"],
+        ["dark","fur", "fur", "fur", "fur","nose","dark"],
+        [ T,  "dark","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,  "paw", T,   T  ],
     ],
     "idle_left": [
-        ["dark","ear","dark","dark", T,   T  ],
-        ["dark","pupil","eye","fur","dark","dark"],
-        ["dark","fur", "fur", "fur", "fur","dark"],
-        [ T,  "dark","belly","belly","dark", T  ],
+        ["dark","ear","dark","dark","dark", T,   T  ],
+        ["dark","fur", "fur", "fur","fur","dark", T  ],
+        ["dark","pupil","eye","fur", "fur", "fur","dark"],
+        ["dark","nose","fur", "fur", "fur", "fur","dark"],
+        [ T,  "dark","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw", T,  "paw", T,   T  ],
     ],
 }
 
-# --- Far-zoom baby sprites (4w x 4h pixels -> 4x2 half-block chars) ---
+# --- Far-zoom baby sprites (5w x 4h pixels -> 5x2 half-block chars) ---
 
 PIG_PIXELS_FAR_BABY = {
     "idle_right": [
-        [ T,  "dark","ear","dark"],
-        ["dark","fur","pupil","dark"],
-        ["dark","fur", "fur","dark"],
-        [ T,  "dark","dark", T  ],
+        [ T,  "dark","dark","ear","dark"],
+        ["dark","fur","eye","pupil","dark"],
+        ["dark","fur", "fur","nose","dark"],
+        [ T,  "dark","belly","dark", T  ],
     ],
     "idle_left": [
-        ["dark","ear","dark", T  ],
-        ["dark","pupil","fur","dark"],
-        ["dark","fur", "fur","dark"],
-        [ T,  "dark","dark", T  ],
+        ["dark","ear","dark","dark", T  ],
+        ["dark","pupil","eye","fur","dark"],
+        ["dark","nose","fur", "fur","dark"],
+        [ T,  "dark","belly","dark", T  ],
     ],
 }
 
