@@ -281,13 +281,33 @@ def compute_arrangement(
     return all_placed, all_overflow
 
 
+def _find_grid_position(farm: FarmGrid, facility: Facility) -> bool:
+    """Scan the grid for any valid position and place the facility there.
+
+    Brute-force fallback for overflow facilities. Mutates facility position
+    and places it on the grid. Returns True if a position was found.
+    """
+    fw = facility.width
+    fh = facility.height
+    for y in range(1, farm.height - fh - 1):
+        for x in range(1, farm.width - fw):
+            facility.position_x = x
+            facility.position_y = y
+            if farm.place_facility(facility):
+                return True
+    return False
+
+
 def apply_arrangement(
     state: GameState,
     placements: list[Placement],
+    overflow: list[Facility],
 ) -> None:
     """Remove all facilities from the grid, reposition, and re-place them.
 
     Preserves facility state (current_amount, level, auto_refill, etc).
+    Overflow facilities that couldn't fit in zones are placed at the first
+    available grid position.
     """
     farm = state.farm
 
@@ -300,7 +320,13 @@ def apply_arrangement(
         facility = placement.facility
         facility.position_x = placement.new_x
         facility.position_y = placement.new_y
-        farm.place_facility(facility)
+        if not farm.place_facility(facility):
+            # Computed position collided — find any valid position
+            _find_grid_position(farm, facility)
+
+    # Place overflow facilities at whatever positions are still free
+    for facility in overflow:
+        _find_grid_position(farm, facility)
 
 
 def clear_pig_navigation(state: GameState) -> None:

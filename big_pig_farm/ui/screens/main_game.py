@@ -343,7 +343,7 @@ class MainGameScreen(Screen):
             if not confirmed:
                 return
             placements, overflow = compute_arrangement(self.state)
-            apply_arrangement(self.state, placements)
+            apply_arrangement(self.state, placements, overflow)
             clear_pig_navigation(self.state)
             self.app.behavior_controller.reset_all_tracking()
 

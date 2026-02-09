@@ -187,8 +187,8 @@ class TestFacilityPlacement:
         facility.level = 2
         facility.auto_refill = True
 
-        placements, _ = compute_arrangement(state)
-        apply_arrangement(state, placements)
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
 
         # Facility should still exist with same state
         f = state.get_facility(facility.id)
@@ -202,8 +202,8 @@ class TestFacilityPlacement:
         state = _make_state(tier=3)
         facility = _add_facility(state, FacilityType.FOOD_BOWL, 5, 3)
 
-        placements, _ = compute_arrangement(state)
-        apply_arrangement(state, placements)
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
 
         p = placements[0]
         # New cells should be marked on grid
@@ -337,6 +337,127 @@ class TestOverflow:
                         f"Overlap at {cell} — {p.facility.facility_type.value}"
                     )
                     occupied.add(cell)
+
+
+def _assert_no_overlap_in_state(state: GameState) -> None:
+    """Assert no two facilities in state share any grid cell."""
+    occupied: set[tuple[int, int]] = set()
+    for f in state.get_facilities_list():
+        for cell in f.cells:
+            assert cell not in occupied, (
+                f"Cell {cell} claimed by {f.facility_type.value} "
+                f"but already occupied"
+            )
+            occupied.add(cell)
+
+
+def _assert_grid_consistent(state: GameState) -> None:
+    """Assert every facility's cells are registered on the grid."""
+    for f in state.get_facilities_list():
+        for cx, cy in f.cells:
+            cell = state.farm.get_cell(cx, cy)
+            assert cell is not None, f"Cell ({cx},{cy}) out of bounds"
+            assert cell.facility_id == f.id, (
+                f"Grid cell ({cx},{cy}) has facility_id={cell.facility_id} "
+                f"but expected {f.id} ({f.facility_type.value})"
+            )
+            assert not cell.is_walkable, (
+                f"Grid cell ({cx},{cy}) should not be walkable "
+                f"(occupied by {f.facility_type.value})"
+            )
+
+
+class TestIntegration:
+    """End-to-end tests: compute + apply + verify state and grid."""
+
+    def test_full_cycle_no_overlap(self):
+        """After compute+apply, no facility cells overlap in state."""
+        state = _make_state(tier=3)
+        for i in range(4):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 3, 3)
+        for i in range(3):
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 2, 7)
+        _add_facility(state, FacilityType.HIDEOUT, 2, 10)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 8, 10)
+        _add_facility(state, FacilityType.BREEDING_DEN, 14, 10)
+
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
+
+        _assert_no_overlap_in_state(state)
+        _assert_grid_consistent(state)
+
+    def test_full_cycle_all_tiers(self):
+        """Auto-arrange works across all farm tiers without overlap."""
+        facility_types = [
+            FacilityType.FOOD_BOWL,
+            FacilityType.WATER_BOTTLE,
+            FacilityType.HIDEOUT,
+            FacilityType.EXERCISE_WHEEL,
+            FacilityType.BREEDING_DEN,
+        ]
+        for tier in range(1, len(FARM_TIERS) + 1):
+            state = _make_state(tier=tier)
+            for i, ftype in enumerate(facility_types):
+                x = 2 + i * 4
+                y = 3
+                if x + 3 < state.farm.width - 1:
+                    _add_facility(state, ftype, x, y)
+
+            placements, overflow = compute_arrangement(state)
+            apply_arrangement(state, placements, overflow)
+
+            _assert_no_overlap_in_state(state)
+            _assert_grid_consistent(state)
+
+    def test_full_cycle_with_overflow(self):
+        """Overflow facilities must still end up on the grid without overlap."""
+        state = _make_state(tier=1)
+        # Pack many hideouts (3x2) to force overflow
+        for i in range(10):
+            x = 2 + (i % 5) * 4
+            y = 2 + (i // 5) * 3
+            if x + 3 < state.farm.width - 1 and y + 2 < state.farm.height - 1:
+                _add_facility(state, FacilityType.HIDEOUT, x, y)
+
+        total = len(state.get_facilities_list())
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
+
+        _assert_no_overlap_in_state(state)
+        _assert_grid_consistent(state)
+        # Every facility must be placed somewhere
+        assert len(state.get_facilities_list()) == total
+
+    def test_full_cycle_16_mixed_facilities(self):
+        """Realistic 16-facility mix: compute + apply + verify."""
+        state = _make_state(tier=3)
+        types_and_positions = [
+            (FacilityType.FOOD_BOWL, 2, 2),
+            (FacilityType.FOOD_BOWL, 5, 2),
+            (FacilityType.FOOD_BOWL, 8, 2),
+            (FacilityType.HAY_RACK, 11, 2),
+            (FacilityType.WATER_BOTTLE, 14, 2),
+            (FacilityType.WATER_BOTTLE, 16, 2),
+            (FacilityType.WATER_BOTTLE, 18, 2),
+            (FacilityType.HIDEOUT, 2, 5),
+            (FacilityType.HIDEOUT, 6, 5),
+            (FacilityType.EXERCISE_WHEEL, 10, 5),
+            (FacilityType.TUNNEL, 13, 5),
+            (FacilityType.PLAY_AREA, 17, 5),
+            (FacilityType.BREEDING_DEN, 2, 9),
+            (FacilityType.NURSERY, 5, 9),
+            (FacilityType.GROOMING_STATION, 9, 9),
+            (FacilityType.VEGGIE_GARDEN, 12, 9),
+        ]
+        for ftype, x, y in types_and_positions:
+            _add_facility(state, ftype, x, y)
+
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
+
+        _assert_no_overlap_in_state(state)
+        _assert_grid_consistent(state)
 
 
 class TestEmptyFarm:
