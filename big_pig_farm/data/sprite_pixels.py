@@ -209,8 +209,8 @@ PIG_PIXELS_ADULT = {
     "idle_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
-        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","pupil","pupil","eye","nose","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -219,8 +219,8 @@ PIG_PIXELS_ADULT = {
     "idle_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
-        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","nose","eye","pupil","pupil","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -229,8 +229,8 @@ PIG_PIXELS_ADULT = {
     "walking_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
-        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","pupil","pupil","eye","nose","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -239,8 +239,8 @@ PIG_PIXELS_ADULT = {
     "walking_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
-        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","nose","eye","pupil","pupil","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -289,8 +289,8 @@ PIG_PIXELS_ADULT = {
     "happy_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
-        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","pupil","pupil","eye","nose","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -299,8 +299,8 @@ PIG_PIXELS_ADULT = {
     "happy_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
-        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","nose","eye","pupil","pupil","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -309,8 +309,8 @@ PIG_PIXELS_ADULT = {
     "sad_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","pupil","eye","eye","fur","dark"],
-        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","pupil","pupil","eye","nose","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -319,8 +319,8 @@ PIG_PIXELS_ADULT = {
     "sad_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
-        ["dark","fur","eye","eye","pupil","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
-        ["dark","nose","eye","pupil","pupil","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
         [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
@@ -334,7 +334,7 @@ PIG_PIXELS_BABY = {
     "idle_right": [
         [ T,   T,   T,   T,   T,  "ear","dark", T  ],
         [ T,  "dark","dark","dark","fur","fur","fur","dark"],
-        [ T,  "dark","fur","fur","pupil","eye","fur","dark"],
+        [ T,  "dark","fur","fur","eye","pupil","fur","dark"],
         ["dark","belly","fur","fur","eye","eye","nose","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
@@ -342,7 +342,7 @@ PIG_PIXELS_BABY = {
     "idle_left": [
         [ T,  "dark","ear", T,   T,   T,   T,   T  ],
         ["dark","fur","fur","fur","dark","dark","dark", T  ],
-        ["dark","fur","eye","pupil","fur","fur","dark", T  ],
+        ["dark","fur","pupil","eye","fur","fur","dark", T  ],
         ["dark","nose","eye","eye","fur","fur","belly","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
@@ -350,7 +350,7 @@ PIG_PIXELS_BABY = {
     "walking_right": [
         [ T,   T,   T,   T,   T,  "ear","dark", T  ],
         [ T,  "dark","dark","dark","fur","fur","fur","dark"],
-        [ T,  "dark","fur","fur","pupil","eye","fur","dark"],
+        [ T,  "dark","fur","fur","eye","pupil","fur","dark"],
         ["dark","belly","fur","fur","eye","eye","nose","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,  "paw", T,   T,   T,   T,  "paw", T  ],
@@ -358,7 +358,7 @@ PIG_PIXELS_BABY = {
     "walking_left": [
         [ T,  "dark","ear", T,   T,   T,   T,   T  ],
         ["dark","fur","fur","fur","dark","dark","dark", T  ],
-        ["dark","fur","eye","pupil","fur","fur","dark", T  ],
+        ["dark","fur","pupil","eye","fur","fur","dark", T  ],
         ["dark","nose","eye","eye","fur","fur","belly","dark"],
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,  "paw", T,   T,   T,   T,  "paw", T  ],
