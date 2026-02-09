@@ -56,6 +56,8 @@ class FarmView(Static):
         self._cursor_y = 5
         # Zoom
         self._zoom = ZoomLevel.NORMAL
+        # Persistent facing direction per pig (avoids oscillation)
+        self._pig_facing: dict[UUID, Direction] = {}
 
     @property
     def zoom(self) -> ZoomLevel:
@@ -296,12 +298,19 @@ class FarmView(Static):
 
     def _draw_pig(self, pig: GuineaPig, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw a single guinea pig using half-block sprites (or dot at far zoom)."""
-        # Determine direction
+        # Determine direction — look ahead in path for meaningful horizontal
+        # movement.  Only update the stored facing when a clear direction is
+        # found, so vertical movement and float-boundary crossings don't cause
+        # rapid left/right flipping.
         if pig.path and len(pig.path) > 0:
-            next_x = pig.path[0][0]
-            direction = Direction.RIGHT if next_x > pig.position.x else Direction.LEFT
-        else:
-            direction = Direction.RIGHT
+            for wx, _wy in pig.path:
+                if wx > pig.position.x + 0.5:
+                    self._pig_facing[pig.id] = Direction.RIGHT
+                    break
+                elif wx < pig.position.x - 0.5:
+                    self._pig_facing[pig.id] = Direction.LEFT
+                    break
+        direction = self._pig_facing.get(pig.id, Direction.RIGHT)
 
         is_selected = pig.id == self.selected_pig_id
 
