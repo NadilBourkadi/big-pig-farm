@@ -463,8 +463,14 @@ _FACE_TEMPLATE: PixelGrid = [
     [ T,     T, T, T,     T,     T,   "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", T,     T,     T,     T, T, T    ],  # 19 jaw + fur cascade
     [ T,     T,     T, T,     T,     T,     T,   "dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark", T,     T,     T,     T,     T, T,     T    ],  # 20 lower jaw + tufts
     [ T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 21 throat
-    [ T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 22 bottom
-    [ T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 23 very bottom
+    [ T,     T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","dark","belly","belly","belly","belly","belly","belly","belly","belly","dark","dark", T,     T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 22 neck (chin outline preserved above)
+    [ T,     T,     T,     T,     T,     T,     T,     T,     T,   "dark","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,     T,     T,     T,     T,     T,     T,     T,     T    ],  # 23 neck widens
+    [ T,     T,     T,     T,     T,     T,     T,     T,   "dark","fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur","dark", T,     T,     T,     T,     T,     T,     T,     T    ],  # 24 upper chest
+    [ T,     T,     T,     T,     T,     T,     T,   "dark","fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur","dark", T,     T,     T,     T,     T,     T,     T    ],  # 25 chest widens
+    [ T,     T,     T,     T,     T,     T,   "dark","fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T,     T    ],  # 26 chest
+    [ T,     T,     T,     T,     T,   "dark","fur", "fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 27 body
+    [ T,     T,     T,     T,     T,   "dark","fur", "fur", "fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 28 body
+    [ T,     T,     T,     T,     T,   "dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark","dark", T,     T,     T,     T,     T    ],  # 29 body bottom
 ]
 # fmt: on
 
