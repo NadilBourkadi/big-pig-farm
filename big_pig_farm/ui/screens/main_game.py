@@ -4,6 +4,7 @@ import datetime
 from pathlib import Path
 
 from textual.app import ComposeResult
+from textual.binding import Binding, _Bindings
 from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer
@@ -15,48 +16,53 @@ from big_pig_farm.economy.currency import add_money
 from big_pig_farm.economy.shop import get_facility_cost
 from big_pig_farm.ui.widgets.status_bar import StatusBar
 from big_pig_farm.ui.widgets.farm_view import FarmView
-from big_pig_farm.ui.widgets.notification import NotificationBar
 from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
 from big_pig_farm.ui.screens.shop import ShopScreen
 from big_pig_farm.ui.screens.pig_list import PigListScreen
 from big_pig_farm.ui.screens.breeding import BreedingScreen
-from big_pig_farm.ui.screens.facilities import FacilitiesScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
-from big_pig_farm.ui.screens.adoption import AdoptionScreen
-from big_pig_farm.ui.screens.pigdex import PigdexScreen
-from big_pig_farm.ui.screens.contracts import ContractsScreen
-from big_pig_farm.ui.screens.event_log import EventLogScreen
+from big_pig_farm.ui.screens.almanac import JournalScreen
 
 
 class MainGameScreen(Screen):
     """The main game screen showing the farm view."""
 
+    # Normal mode bindings (default)
     BINDINGS = [
         ("f", "feed", "Feed"),
         ("s", "open_shop", "Shop"),
-        ("a", "open_adoption", "Adopt"),
         ("p", "open_pigs", "Pigs"),
         ("b", "open_breeding", "Breed"),
-        ("x", "open_pigdex", "Pigdex"),
-        ("c", "open_contracts", "Contracts"),
-        ("l", "open_event_log", "Log"),
+        ("j", "open_journal", "Journal"),
         ("e", "toggle_edit", "Edit"),
-        ("n", "new_game", "New"),
         ("space", "toggle_pause", "Pause"),
         ("plus", "speed_up", "+Spd"),
         ("minus", "slow_down", "-Spd"),
-        ("equal", "speed_up", None),  # Hidden duplicate
-        ("tab", "next_pig", "Next"),
-        ("up", "handle_up", None),  # Hidden - arrow keys are intuitive
+        ("equal", "speed_up", None),
+        ("tab", "next_pig", None),
+        ("n", "new_game", None),
+        ("up", "handle_up", None),
         ("down", "handle_down", None),
         ("left", "handle_left", None),
         ("right", "handle_right", None),
-        ("enter", "handle_enter", None),
-        ("m", "start_move", None),
-        ("r", "remove_facility", None),
-        ("delete", "remove_facility", None),
         ("escape", "handle_escape", "Esc"),
-        ("d", "dump_debug", None),  # Hidden debug dump
+        ("d", "dump_debug", None),
+        ("q", "quit_game", "Quit"),
+    ]
+
+    # Edit mode replaces normal-mode footer with edit-specific bindings
+    _EDIT_BINDINGS = [
+        ("m", "start_move", "Move"),
+        ("r", "remove_facility", "Remove"),
+        ("delete", "remove_facility", None),
+        ("enter", "handle_enter", "Place"),
+        ("e", "toggle_edit", "Edit"),
+        ("up", "handle_up", None),
+        ("down", "handle_down", None),
+        ("left", "handle_left", None),
+        ("right", "handle_right", None),
+        ("escape", "handle_escape", "Esc"),
+        ("d", "dump_debug", None),
         ("q", "quit_game", "Quit"),
     ]
 
@@ -77,10 +83,6 @@ class MainGameScreen(Screen):
         margin: 0 1;
     }
 
-    #notification-container {
-        height: 1;
-        margin: 0 1;
-    }
     """
 
     def __init__(self, state: GameState, **kwargs):
@@ -88,7 +90,6 @@ class MainGameScreen(Screen):
         self.state = state
         self._status_bar: StatusBar | None = None
         self._farm_view: FarmView | None = None
-        self._notification_bar: NotificationBar | None = None
         self._pig_sidebar: PigSidebar | None = None
         self._selected_pig_index = -1
 
@@ -106,11 +107,18 @@ class MainGameScreen(Screen):
             self._pig_sidebar.add_class("hidden")
             yield self._pig_sidebar
 
-        with Container(id="notification-container"):
-            self._notification_bar = NotificationBar()
-            yield self._notification_bar
-
         yield Footer()
+
+    def _refresh_footer(self) -> None:
+        """Rebuild bindings based on edit mode and refresh footer."""
+        is_edit = self._farm_view and self._farm_view.edit_mode
+        bindings = self._EDIT_BINDINGS if is_edit else self.BINDINGS
+        self._bindings = _Bindings(bindings)
+        try:
+            footer = self.query_one(Footer)
+            footer._bindings_changed(None)
+        except Exception:
+            pass
 
     def on_mount(self) -> None:
         """Handle screen mount."""
@@ -134,14 +142,6 @@ class MainGameScreen(Screen):
         if self._pig_sidebar:
             self._pig_sidebar.refresh_content()
 
-        if self._notification_bar and self.state.events:
-            last_event = self.state.events[-1]
-            if not self._notification_bar.messages or \
-               self._notification_bar.messages[-1] != f"🔔 {last_event.message}":
-                self._notification_bar.add_message(
-                    last_event.message,
-                    last_event.event_type,
-                )
 
     def action_toggle_pause(self) -> None:
         """Toggle game pause."""
@@ -229,6 +229,9 @@ class MainGameScreen(Screen):
         """Toggle facility edit mode."""
         if self._farm_view:
             is_edit = self._farm_view.toggle_edit_mode()
+            if self._status_bar:
+                self._status_bar.edit_mode = is_edit
+            self._refresh_footer()
             if is_edit:
                 self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
             else:
@@ -242,6 +245,9 @@ class MainGameScreen(Screen):
                 self.notify("Placement cancelled")
             else:
                 self._farm_view.toggle_edit_mode()
+                if self._status_bar:
+                    self._status_bar.edit_mode = False
+                self._refresh_footer()
                 self.notify("Edit mode off")
         else:
             self._selected_pig_index = -1
@@ -326,10 +332,6 @@ class MainGameScreen(Screen):
         """Open the shop screen."""
         self.app.push_screen(ShopScreen(self.state))
 
-    def action_open_adoption(self) -> None:
-        """Open the adoption center screen."""
-        self.app.push_screen(AdoptionScreen(self.state))
-
     def action_open_pigs(self) -> None:
         """Open the pig list screen."""
         self.app.push_screen(PigListScreen(self.state))
@@ -338,21 +340,9 @@ class MainGameScreen(Screen):
         """Open the breeding screen."""
         self.app.push_screen(BreedingScreen(self.state))
 
-    def action_open_pigdex(self) -> None:
-        """Open the pigdex screen."""
-        self.app.push_screen(PigdexScreen(self.state))
-
-    def action_open_contracts(self) -> None:
-        """Open the contracts screen."""
-        self.app.push_screen(ContractsScreen(self.state))
-
-    def action_open_event_log(self) -> None:
-        """Open the event log screen."""
-        self.app.push_screen(EventLogScreen(self.state))
-
-    def action_open_facilities(self) -> None:
-        """Open the facilities screen."""
-        self.app.push_screen(FacilitiesScreen(self.state))
+    def action_open_journal(self) -> None:
+        """Open the journal (Pigdex, Contracts, Event Log)."""
+        self.app.push_screen(JournalScreen(self.state))
 
     def action_new_game(self) -> None:
         """Start a new game (with confirmation)."""

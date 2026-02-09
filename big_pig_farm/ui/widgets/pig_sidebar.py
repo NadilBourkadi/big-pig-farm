@@ -5,6 +5,7 @@ from textual.reactive import reactive
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.simulation.needs import get_most_urgent_need
+from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
 
 
 class PigSidebar(Static):
@@ -57,13 +58,17 @@ class PigSidebar(Static):
 
         # Needs bars
         lines.append("[dim]Needs:[/]")
-        lines.append(f" Hunger  {self._bar(pig.needs.hunger)}")
-        lines.append(f" Thirst  {self._bar(pig.needs.thirst)}")
-        lines.append(f" Energy  {self._bar(pig.needs.energy)}")
-        lines.append(f" Happy   {self._bar(pig.needs.happiness)}")
-        lines.append(f" Health  {self._bar(pig.needs.health)}")
-        lines.append(f" Social  {self._bar(pig.needs.social)}")
-        lines.append(f" Fun     {self._bar(100 - pig.needs.boredom)}")
+        lines.append(f" Hunger  {format_needs_bar(pig.needs.hunger)}")
+        lines.append(f" Thirst  {format_needs_bar(pig.needs.thirst)}")
+        lines.append(f" Energy  {format_needs_bar(pig.needs.energy)}")
+        lines.append(f" Happy   {format_needs_bar(pig.needs.happiness)}")
+        lines.append(f" Health  {format_needs_bar(pig.needs.health)}")
+        lines.append(f" Social  {format_needs_bar(pig.needs.social)}")
+        lines.append(f" Fun     {format_needs_bar(100 - pig.needs.boredom)}")
+        lines.append("")
+
+        # Breeding status
+        lines.append(f"[dim]Breed:[/] {format_breeding_status(pig)}")
         lines.append("")
 
         # AI State
@@ -91,9 +96,3 @@ class PigSidebar(Static):
 
         self.update("\n".join(lines))
 
-    def _bar(self, value: float, width: int = 10) -> str:
-        """Create a small bar visualization."""
-        filled = int((value / 100) * width)
-        empty = width - filled
-        pct = f"{int(value):3d}%"
-        return "█" * filled + "░" * empty + " " + pct

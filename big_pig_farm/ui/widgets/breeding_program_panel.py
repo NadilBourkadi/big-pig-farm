@@ -46,6 +46,13 @@ _AXES = [
     ("Roan", _ROAN, _ROAN_LABELS),
 ]
 
+# Fixed column width: longest label across all axes (Chinchilla = 10)
+_ITEM_WIDTH = max(
+    len(l)
+    for labels in (_COLOR_LABELS, _PATTERN_LABELS, _INTENSITY_LABELS, _ROAN_LABELS)
+    for l in labels.values()
+)
+
 
 class BreedingProgramPanel(Static, can_focus=True):
     """Panel for configuring the breeding program target and settings."""
@@ -53,15 +60,8 @@ class BreedingProgramPanel(Static, can_focus=True):
     DEFAULT_CSS = """
     BreedingProgramPanel {
         height: auto;
-        max-height: 20;
-        border: solid $accent;
-        padding: 0 1;
+        padding: 1 2;
         background: $surface;
-        margin: 0 1;
-    }
-
-    BreedingProgramPanel.hidden {
-        display: none;
     }
     """
 
@@ -156,46 +156,68 @@ class BreedingProgramPanel(Static, can_focus=True):
             # Enabled toggle
             self.breeding_program.enabled = not self.breeding_program.enabled
 
+    def _fmt_check(self, checked: bool, label: str, is_cursor: bool) -> str:
+        """Format a checkbox item with Rich markup at fixed column width."""
+        icon = "\u25cf" if checked else "\u25cb"
+        inner = f"{icon} {label:<{_ITEM_WIDTH + 2}}"
+        if is_cursor:
+            style = "reverse green" if checked else "reverse"
+            return f" [{style}]{inner}[/]"
+        if checked:
+            return f" [green]{inner}[/]"
+        return f" {inner}"
+
     def refresh_content(self) -> None:
         """Redraw the panel."""
-        lines = ["Breeding Program Target  (arrows + space to toggle, T to close)"]
+        bp = self.breeding_program
+        lines = []
+
+        # Header
+        lines.append("[bold]Breeding Program[/]")
+        lines.append(f"[dim]{'─' * 50}[/]")
+
+        # Target traits section
+        lines.append("[bold]Target Traits[/]  [dim]Select which phenotypes to breed for[/]")
         lines.append("")
 
         for axis_idx, (axis_name, values, labels) in enumerate(_AXES):
             target_set = self._get_set_for_axis(axis_idx)
             items = []
             for item_idx, val in enumerate(values):
-                checked = "x" if val in target_set else " "
-                label = labels[val]
-                if axis_idx == self._cursor_axis and item_idx == self._cursor_item:
-                    items.append(f">\[{checked}] {label}")
-                else:
-                    items.append(f" \[{checked}] {label}")
-            all_empty = len(target_set) == 0
-            suffix = " (any)" if all_empty else ""
-            lines.append(f"  {axis_name}:{suffix}  {'  '.join(items)}")
+                checked = val in target_set
+                is_cursor = axis_idx == self._cursor_axis and item_idx == self._cursor_item
+                items.append(self._fmt_check(checked, labels[val], is_cursor))
 
+            all_empty = len(target_set) == 0
+            any_tag = " [dim](any)[/]" if all_empty else ""
+            lines.append(f"  [bold]{axis_name:<10}[/]{any_tag} {''.join(items)}")
+
+        # Settings section
+        lines.append("")
+        lines.append(f"[dim]{'─' * 50}[/]")
+        lines.append("[bold]Settings[/]")
         lines.append("")
 
         # Keep carriers toggle
-        kc_check = "x" if self.breeding_program.keep_carriers else " "
-        lab_status = " (Lab built)" if self.has_genetics_lab else " (needs Lab)"
-        kc_cursor = ">" if self._cursor_axis == 4 else " "
-        lines.append(f"  {kc_cursor}\[{kc_check}] Keep Carriers{lab_status}")
+        lab_tag = "[green](Lab built)[/]" if self.has_genetics_lab else "[dim](needs Lab)[/]"
+        lines.append(f"  {self._fmt_check(bp.keep_carriers, 'Keep Carriers', self._cursor_axis == 4)}")
+        lines.append(f"       [dim]Don't sell pigs that carry target alleles[/]  {lab_tag}")
 
         # Auto-pair toggle
-        ap_check = "x" if self.breeding_program.auto_pair else " "
-        ap_cursor = ">" if self._cursor_axis == 5 else " "
-        lines.append(f"  {ap_cursor}\[{ap_check}] Auto-Pair")
+        lines.append(f"  {self._fmt_check(bp.auto_pair, 'Auto-Pair', self._cursor_axis == 5)}")
+        lines.append(f"       [dim]Automatically select the best breeding pair[/]")
 
         # Stock limit
-        sl_cursor = ">" if self._cursor_axis == 6 else " "
-        lines.append(f"  {sl_cursor} Stock Limit: < {self.breeding_program.stock_limit} >  (left/right to adjust)")
+        is_sl_cursor = self._cursor_axis == 6
+        if is_sl_cursor:
+            lines.append(f"  [reverse] \u25c4 {bp.stock_limit:>2} \u25ba [/]  Stock Limit")
+        else:
+            lines.append(f"  \u25c4 {bp.stock_limit:>2} \u25ba  Stock Limit")
+        lines.append(f"       [dim]Max adult pigs before surplus are sold  (left/right to adjust)[/]")
 
         # Enabled toggle
-        en_check = "x" if self.breeding_program.enabled else " "
-        en_cursor = ">" if self._cursor_axis == 7 else " "
-        lines.append(f"  {en_cursor}\[{en_check}] Program Enabled")
+        lines.append(f"  {self._fmt_check(bp.enabled, 'Program Enabled', self._cursor_axis == 7)}")
+        lines.append(f"       [dim]Enable or disable the entire breeding program[/]")
 
         self.update("\n".join(lines))
 

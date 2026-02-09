@@ -1,20 +1,168 @@
-"""Detailed view screen for a single guinea pig."""
+"""Pig detail panel widget and standalone detail screen."""
 
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, Footer
 
-from big_pig_farm.economy.market import calculate_pig_value
+from big_pig_farm.economy.market import calculate_pig_value, calculate_pig_value_breakdown
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.genetics import carrier_summary
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.needs import get_most_urgent_need
+from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
+
+
+class PigDetailPanel(Static):
+    """Reusable widget showing detailed info about a single pig.
+
+    Can be embedded in any screen (e.g., the pig list split view).
+    Call refresh_pig() to update content for a new pig.
+    """
+
+    DEFAULT_CSS = """
+    PigDetailPanel {
+        padding: 0 1;
+    }
+
+    PigDetailPanel.no-pig {
+        content-align: center middle;
+    }
+    """
+
+    def __init__(self, state: GameState, pig: GuineaPig | None = None, **kwargs):
+        self.state = state
+        self._pig = pig
+        super().__init__(self._build_content(), **kwargs)
+
+    def refresh_pig(self, pig: GuineaPig | None) -> None:
+        """Update the panel for a different pig."""
+        self._pig = pig
+        self.update(self._build_content())
+
+    def _build_content(self) -> str:
+        """Build all pig detail content as a markup string."""
+        if not self._pig:
+            return "[dim]Select a pig to see details[/]"
+
+        pig = self._pig
+        gender_str = "Male" if pig.gender == Gender.MALE else "Female"
+        gender_icon = "\u2642" if pig.gender == Gender.MALE else "\u2640"
+        lines = []
+
+        # Header
+        lines.append(f"[bold]{pig.name}[/] {gender_icon}  {pig.phenotype.display_name}")
+        lines.append("")
+
+        # Basic Info
+        lines.append("[bold]BASIC INFO[/]")
+        lines.append(f"  Age: {int(pig.age_days)} days ({pig.age_group.value})")
+        lines.append(f"  Gender: {gender_str}")
+        lines.append(f"  Rarity: {pig.phenotype.rarity.value.title()}")
+        if pig.origin_tag:
+            lines.append(f"  Origin: {pig.origin_tag}")
+        breakdown = calculate_pig_value_breakdown(pig, self.state)
+        lines.append(f"  Sale Value: ${breakdown['total']}")
+        if breakdown["rarity_mult"] != 1.0:
+            lines.append(f"    Rarity: x{breakdown['rarity_mult']:.1f}")
+        if breakdown["age_mult"] != 1.0:
+            lines.append(f"    Age: x{breakdown['age_mult']:.1f}")
+        if breakdown["health_mult"] != 1.0:
+            lines.append(f"    Health: x{breakdown['health_mult']:.2f}")
+        if breakdown["grooming_mult"] != 1.0:
+            lines.append(f"    Grooming: x{breakdown['grooming_mult']:.2f}")
+        lines.append("")
+
+        # Personality
+        lines.append("[bold]PERSONALITY[/]")
+        traits = ", ".join(t.value.title() for t in pig.personality)
+        lines.append(f"  Traits: {traits}")
+        lines.append("")
+
+        # Breeding
+        lines.append("[bold]BREEDING[/]")
+        lock_status = "LOCKED" if pig.breeding_locked else "Unlocked"
+        lines.append(f"  Lock: {lock_status}")
+        lines.append(f"  Status: {format_breeding_status(pig, verbose=True)}")
+        if pig.is_baby:
+            mark_str = "Yes" if pig.marked_for_sale else "No"
+            lines.append(f"  Auto-sell: {mark_str}")
+        lines.append("")
+
+        # Family
+        lines.append("[bold]FAMILY[/]")
+        mother = self._get_parent_name(pig.mother_id, pig.mother_name)
+        father = self._get_parent_name(pig.father_id, pig.father_name)
+        lines.append(f"  Mother: {mother}")
+        lines.append(f"  Father: {father}")
+        lines.append("")
+
+        # Genetics (only with Genetics Lab)
+        has_lab = bool(self.state.get_facilities_by_type(FacilityType.GENETICS_LAB))
+        if has_lab:
+            lines.append("[bold]GENETICS[/]")
+            g = pig.genotype
+            lines.append(f"  Genotype: E({g.e_locus[0]}/{g.e_locus[1]}) B({g.b_locus[0]}/{g.b_locus[1]}) S({g.s_locus[0]}/{g.s_locus[1]}) C({g.c_locus[0]}/{g.c_locus[1]}) R({g.r_locus[0]}/{g.r_locus[1]})")
+            summary = carrier_summary(g)
+            lines.append(f"  Carries: {summary if summary != 'None' else 'No hidden alleles'}")
+            lines.append("")
+
+        # Needs
+        lines.append("[bold]NEEDS[/]")
+        needs = pig.needs
+        needs_data = [
+            ("Hunger", needs.hunger),
+            ("Thirst", needs.thirst),
+            ("Energy", needs.energy),
+            ("Happy", needs.happiness),
+            ("Health", needs.health),
+            ("Social", needs.social),
+            ("Fun", 100 - needs.boredom),
+        ]
+        for name, val in needs_data:
+            lines.append(f"  {name:8} {format_needs_bar(val)}")
+        lines.append("")
+
+        # AI State
+        lines.append("[bold]AI STATE[/]")
+        if pig.target_description:
+            lines.append(f"  {pig.target_description}")
+        else:
+            lines.append(f"  {pig.behavior_state.value}")
+        urgent = get_most_urgent_need(pig)
+        lines.append(f"  Need: {urgent}")
+        if pig.path:
+            lines.append(f"  {len(pig.path)} steps away")
+        lines.append("")
+
+        # Behavior Log
+        lines.append("[bold]RECENT ACTIVITY[/]")
+        if pig.behavior_log:
+            for entry in reversed(pig.behavior_log[-5:]):
+                lines.append(f"  \u2022 {entry}")
+        else:
+            lines.append("  (no activity)")
+
+        return "\n".join(lines)
+
+    def _get_parent_name(self, parent_id, stored_name: str = None) -> str:
+        """Get parent name or 'Unknown'."""
+        if parent_id is None:
+            return "Unknown (adopted/starter)"
+        parent = self.state.get_guinea_pig(parent_id)
+        if parent:
+            return parent.name
+        if stored_name:
+            return f"{stored_name} (sold)"
+        return "Unknown (no longer on farm)"
 
 
 class PigDetailScreen(Screen):
-    """Screen showing detailed info about a single pig."""
+    """Standalone screen showing detailed info about a single pig.
+
+    Kept for backwards compatibility but delegates rendering to PigDetailPanel.
+    """
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
@@ -37,20 +185,8 @@ class PigDetailScreen(Screen):
         text-align: center;
     }
 
-    #detail-content {
+    #detail-panel-container {
         height: 1fr;
-        padding: 0 1;
-    }
-
-    .info-section {
-        border: solid $secondary;
-        padding: 1;
-        margin: 0 0 1 0;
-        height: auto;
-    }
-
-    .section-title {
-        text-style: bold;
     }
     """
 
@@ -63,163 +199,9 @@ class PigDetailScreen(Screen):
         """Compose the detail screen."""
         pig = self.pig
         gender = "Male" if pig.gender == Gender.MALE else "Female"
-
         yield Static(f"{pig.name} - {pig.phenotype.display_name} {gender}", id="detail-header")
-
-        with VerticalScroll(id="detail-content"):
-            # Basic Info Section
-            with Vertical(classes="info-section"):
-                yield Static("BASIC INFO", classes="section-title")
-                yield Static(f"  Age: {int(pig.age_days)} days ({pig.age_group.value})")
-                yield Static(f"  Gender: {gender}")
-                yield Static(f"  Color: {pig.phenotype.display_name}")
-                yield Static(f"  Rarity: {pig.phenotype.rarity.value.title()}")
-                if pig.origin_tag:
-                    yield Static(f"  Origin: {pig.origin_tag}")
-                value = calculate_pig_value(pig, self.state)
-                yield Static(f"  Sale Value: ${value}")
-
-            # Personality Section
-            with Vertical(classes="info-section"):
-                yield Static("PERSONALITY", classes="section-title")
-                traits = ", ".join(t.value.title() for t in pig.personality)
-                yield Static(f"  Traits: {traits}")
-
-            # Breeding Section
-            with Vertical(classes="info-section"):
-                yield Static("BREEDING", classes="section-title")
-                lock_status = "LOCKED" if pig.breeding_locked else "Unlocked"
-                yield Static(f"  Breeding Lock: {lock_status} (press L to toggle)")
-
-                if pig.is_pregnant:
-                    days_left = 3 - pig.pregnancy_days
-                    yield Static(f"  Status: Pregnant ({days_left:.1f} days until birth)")
-                elif pig.can_breed:
-                    yield Static(f"  Status: Ready to breed")
-                elif not pig.is_adult:
-                    yield Static(f"  Status: Too young (must be 3+ days)")
-                    if pig.marked_for_sale:
-                        yield Static(f"  Auto-sell: Will be sold at adulthood (press M to cancel)")
-                    else:
-                        yield Static(f"  Auto-sell: Off (press M to mark)")
-                else:
-                    yield Static(f"  Status: Not ready (needs higher happiness)")
-
-            # Family Section
-            with Vertical(classes="info-section"):
-                yield Static("FAMILY", classes="section-title")
-                mother = self._get_parent_name(pig.mother_id, pig.mother_name)
-                father = self._get_parent_name(pig.father_id, pig.father_name)
-                yield Static(f"  Mother: {mother}")
-                yield Static(f"  Father: {father}")
-
-            # Genetics Section (only with Genetics Lab)
-            has_lab = bool(self.state.get_facilities_by_type(FacilityType.GENETICS_LAB))
-            if has_lab:
-                with Vertical(classes="info-section"):
-                    yield Static("GENETICS", classes="section-title")
-                    yield Static(self._format_genetics())
-
-            # Needs Section
-            with Vertical(classes="info-section"):
-                yield Static("NEEDS", classes="section-title")
-                yield Static(self._format_needs())
-
-            # Debug/AI Section
-            with Vertical(classes="info-section"):
-                yield Static("AI STATE", classes="section-title")
-                yield Static(self._format_ai_state())
-
+        yield PigDetailPanel(self.state, pig, id="detail-panel-container")
         yield Footer()
-
-    def _get_parent_name(self, parent_id, stored_name: str = None) -> str:
-        """Get parent name or 'Unknown'."""
-        if parent_id is None:
-            return "Unknown (adopted/starter)"
-        parent = self.state.get_guinea_pig(parent_id)
-        if parent:
-            return parent.name
-        if stored_name:
-            return f"{stored_name} (sold)"
-        return "Unknown (no longer on farm)"
-
-    def _format_genetics(self) -> str:
-        """Format genotype and carrier info."""
-        g = self.pig.genotype
-        lines = []
-
-        # Full genotype notation
-        lines.append(f"  Genotype: E({g.e_locus[0]}/{g.e_locus[1]}) B({g.b_locus[0]}/{g.b_locus[1]}) S({g.s_locus[0]}/{g.s_locus[1]}) C({g.c_locus[0]}/{g.c_locus[1]}) R({g.r_locus[0]}/{g.r_locus[1]})")
-
-        # Carrier summary
-        summary = carrier_summary(g)
-        lines.append(f"  Carries: {summary if summary != 'None' else 'No hidden alleles'}")
-
-        return "\n".join(lines)
-
-    def _format_needs(self) -> str:
-        """Format all needs as text with bars."""
-        needs = self.pig.needs
-        lines = []
-
-        needs_data = [
-            ("Hunger", needs.hunger),
-            ("Thirst", needs.thirst),
-            ("Energy", needs.energy),
-            ("Happiness", needs.happiness),
-            ("Health", needs.health),
-        ]
-
-        for name, value in needs_data:
-            bar = self._make_bar(value, 20)
-            lines.append(f"  {name:10} {bar} {int(value):3}%")
-
-        return "\n".join(lines)
-
-    def _make_bar(self, value: float, width: int = 20) -> str:
-        """Create a bar visualization."""
-        filled = int((value / 100) * width)
-        empty = width - filled
-        return "[" + "#" * filled + "-" * empty + "]"
-
-    def _format_ai_state(self) -> str:
-        """Format AI/behavior debug info."""
-        pig = self.pig
-        lines = []
-
-        # Current behavior
-        lines.append(f"  Behavior: {pig.behavior_state.value}")
-
-        # Position
-        pos = pig.position
-        lines.append(f"  Position: ({pos.x:.1f}, {pos.y:.1f})")
-
-        # Target
-        if pig.target_position:
-            target = pig.target_position
-            lines.append(f"  Target: ({target.x:.1f}, {target.y:.1f})")
-        else:
-            lines.append(f"  Target: None")
-
-        # Path info
-        if pig.path:
-            lines.append(f"  Path: {len(pig.path)} steps remaining")
-        else:
-            lines.append(f"  Path: None")
-
-        # Most urgent need
-        urgent = get_most_urgent_need(pig)
-        lines.append(f"  Urgent need: {urgent}")
-
-        # Behavior log (recent entries)
-        if pig.behavior_log:
-            lines.append("")
-            lines.append("  Recent activity:")
-            # Show last 5 entries, newest first
-            for entry in reversed(pig.behavior_log[-5:]):
-                lines.append(f"    • {entry}")
-
-        return "\n".join(lines)
 
     def action_go_back(self) -> None:
         """Go back to pig list."""
@@ -227,9 +209,7 @@ class PigDetailScreen(Screen):
 
     def action_follow_pig(self) -> None:
         """Follow this pig on the main screen."""
-        # Store pig to follow and pop back to main screen
         self.app.pig_to_follow = self.pig
-        # Pop back to main screen (may be multiple screens deep)
         while len(self.app.screen_stack) > 1:
             self.app.pop_screen()
 

@@ -384,20 +384,29 @@ def carrier_summary(genotype: Genotype) -> str:
     return ", ".join(carriers) if carriers else "None"
 
 
-def predict_offspring_probabilities(
+def predict_offspring_phenotypes(
     parent1: Genotype, parent2: Genotype
-) -> dict[str, float]:
-    """Predict probability of offspring phenotypes using Punnett squares."""
-    phenotype_counts: dict[str, int] = {}
+) -> list[tuple[Phenotype, float]]:
+    """Predict offspring phenotype probabilities, returning Phenotype objects.
+
+    Returns a list of (Phenotype, probability) tuples sorted by probability descending.
+    Uses the same Monte Carlo sampling as predict_offspring_probabilities.
+    """
+    phenotype_counts: dict[str, tuple[Phenotype, int]] = {}
     total = 1000
 
     for _ in range(total):
         result = breed(parent1, parent2)
         phenotype = calculate_phenotype(result.genotype)
         name = phenotype.display_name
-        phenotype_counts[name] = phenotype_counts.get(name, 0) + 1
+        if name in phenotype_counts:
+            phenotype_counts[name] = (phenotype_counts[name][0], phenotype_counts[name][1] + 1)
+        else:
+            phenotype_counts[name] = (phenotype, 1)
 
-    return {name: count / total for name, count in phenotype_counts.items()}
+    results = [(pheno, count / total) for pheno, count in phenotype_counts.values()]
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
 
 
 def calculate_target_probability(

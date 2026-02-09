@@ -1,5 +1,6 @@
-"""Shop screen for purchasing facilities and items."""
+"""Shop screen for purchasing facilities, items, and adopting pigs."""
 
+import random
 from typing import Optional
 
 from textual.app import ComposeResult
@@ -19,7 +20,12 @@ from big_pig_farm.economy.shop import (
 )
 from big_pig_farm.economy.currency import format_money
 from big_pig_farm.entities.facilities import FACILITY_INFO
+from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
+from big_pig_farm.entities.bloodlines import BLOODLINES
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.breeding import register_pig_in_pigdex
+from big_pig_farm.ui.screens.adoption import calculate_adoption_cost, generate_adoption_pig
+from big_pig_farm.ui.utils import format_facility_bonuses
 
 
 class ShopItemWidget(ListItem):
@@ -37,8 +43,26 @@ class ShopItemWidget(ListItem):
         self.can_afford = can_afford
 
 
+class AdoptionPigWidget(ListItem):
+    """Widget displaying a guinea pig available for adoption."""
+
+    def __init__(self, pig: GuineaPig, cost: int, can_afford: bool):
+        gender_symbol = "M" if pig.gender == Gender.MALE else "F"
+        rarity = pig.phenotype.rarity.value.title()
+        color = pig.phenotype.display_name
+        afford_str = "" if can_afford else " (!)"
+        bloodline_str = f"  [{pig.origin_tag}]" if pig.origin_tag else ""
+
+        label = f"{pig.name:18} {gender_symbol} | {color:12} ({rarity:10}) | ${cost:>4}{afford_str}{bloodline_str}"
+
+        super().__init__(Label(label))
+        self.pig = pig
+        self.cost = cost
+        self.can_afford = can_afford
+
+
 class ShopScreen(Screen):
-    """Screen for the in-game shop."""
+    """Screen for the in-game shop and adoption center."""
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
@@ -46,6 +70,8 @@ class ShopScreen(Screen):
         ("f", "category_facilities", "Facilities"),
         ("d", "category_food", "Food"),
         ("u", "category_upgrades", "Upgrades"),
+        ("a", "category_adoption", "Adopt"),
+        ("r", "refresh_adoption", "Refresh"),
         ("tab", "cycle_category", "Switch"),
         ("enter", "purchase", "Buy"),
     ]
@@ -80,7 +106,7 @@ class ShopScreen(Screen):
     }
 
     #item-detail {
-        height: 7;
+        height: 8;
         padding: 1;
         border: solid $secondary;
         margin: 1;
@@ -112,6 +138,8 @@ class ShopScreen(Screen):
         super().__init__(**kwargs)
         self.state = state
         self._is_upgrade_selected = False
+        self._available_pigs: list[GuineaPig] = []
+        self._selected_pig: Optional[GuineaPig] = None
 
     def compose(self) -> ComposeResult:
         """Compose the shop screen."""
@@ -122,6 +150,7 @@ class ShopScreen(Screen):
                 yield Button("Facilities [F]", id="cat-facilities", classes="category-btn")
                 yield Button("Food [D]", id="cat-food", classes="category-btn")
                 yield Button("Upgrades [U]", id="cat-upgrades", classes="category-btn")
+                yield Button("Adopt [A]", id="cat-adoption", classes="category-btn")
 
             yield ListView(id="item-list")
 
@@ -129,10 +158,15 @@ class ShopScreen(Screen):
 
         yield Footer()
 
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        """Show refresh binding only in adoption category."""
+        if action == "refresh_adoption":
+            return self.current_category == ShopCategory.ADOPTION
+        return True
+
     def on_mount(self) -> None:
         """Handle mount event."""
         self._refresh_items()
-        # Focus the list view so arrow keys and enter work
         list_view = self.query_one("#item-list", ListView)
         list_view.focus()
 
@@ -145,9 +179,16 @@ class ShopScreen(Screen):
 
         list_view.clear()
         self._is_upgrade_selected = False
+        self._selected_pig = None
 
-        if self.current_category == ShopCategory.UPGRADES:
-            # Show farm upgrade option
+        if self.current_category == ShopCategory.ADOPTION:
+            if not self._available_pigs:
+                self._generate_available_pigs()
+            for pig in self._available_pigs:
+                cost = calculate_adoption_cost(pig)
+                can_afford = self.state.money >= cost
+                list_view.append(AdoptionPigWidget(pig, cost, can_afford))
+        elif self.current_category == ShopCategory.UPGRADES:
             upgrade_info = get_farm_upgrade_info(self.state)
             if upgrade_info:
                 can_afford = self.state.money >= upgrade_info["cost"]
@@ -165,30 +206,75 @@ class ShopScreen(Screen):
                 widget = ShopItemWidget(item, can_afford)
                 list_view.append(widget)
 
+    def _generate_available_pigs(self) -> None:
+        """Generate a new set of pigs available for adoption."""
+        existing_names = {p.name for p in self.state.get_pigs_list()}
+        for pig in self._available_pigs:
+            existing_names.add(pig.name)
+
+        self._available_pigs = []
+        num_pigs = random.randint(3, 5)
+        farm_tier = self.state.farm.tier
+
+        for _ in range(num_pigs):
+            pig = generate_adoption_pig(existing_names, farm_tier=farm_tier)
+            self._available_pigs.append(pig)
+            existing_names.add(pig.name)
+
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         """Handle item highlight (when navigating with arrows)."""
-        if isinstance(event.item, ShopItemWidget):
+        if isinstance(event.item, AdoptionPigWidget):
+            self._selected_pig = event.item.pig
+            self.selected_item = None
+            self._is_upgrade_selected = False
+            self._update_detail()
+        elif isinstance(event.item, ShopItemWidget):
             self.selected_item = event.item.item
+            self._selected_pig = None
             self._is_upgrade_selected = False
             self._update_detail()
         elif self.current_category == ShopCategory.UPGRADES:
             self.selected_item = None
+            self._selected_pig = None
             self._is_upgrade_selected = True
             self._update_detail()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle item selection (when pressing enter)."""
-        if isinstance(event.item, ShopItemWidget):
+        if isinstance(event.item, AdoptionPigWidget):
+            self._selected_pig = event.item.pig
+            self._update_detail()
+        elif isinstance(event.item, ShopItemWidget):
             self.selected_item = event.item.item
             self._update_detail()
-        # Trigger purchase on enter for any item (including farm upgrade)
         self.action_purchase()
 
     def _update_detail(self) -> None:
         """Update the detail panel."""
         detail = self.query_one("#item-detail", Static)
 
-        if self._is_upgrade_selected:
+        if self._selected_pig:
+            pig = self._selected_pig
+            cost = calculate_adoption_cost(pig)
+            can_afford = "Yes" if self.state.money >= cost else "No"
+            gender = "Male" if pig.gender == Gender.MALE else "Female"
+            traits = ", ".join(t.value.title() for t in pig.personality)
+            rarity = pig.phenotype.rarity.value.title()
+            bloodline_line = ""
+            if pig.origin_tag:
+                for bloodline in BLOODLINES.values():
+                    if bloodline.display_name == pig.origin_tag:
+                        bloodline_line = f"\nBloodline: {pig.origin_tag} - {bloodline.description}"
+                        break
+
+            capacity_str = f"Farm: {self.state.pig_count}/{self.state.capacity} pigs"
+            detail.update(
+                f"{pig.name} - ${cost}\n"
+                f"Gender: {gender} | Color: {pig.phenotype.display_name}\n"
+                f"Rarity: {rarity} | Personality: {traits}\n"
+                f"Can afford: {can_afford} | {capacity_str}{bloodline_line}"
+            )
+        elif self._is_upgrade_selected:
             upgrade_info = get_farm_upgrade_info(self.state)
             if upgrade_info:
                 can_afford = "Yes" if self.state.money >= upgrade_info["cost"] else "No"
@@ -205,11 +291,16 @@ class ShopScreen(Screen):
             can_afford = "Yes" if self.state.money >= item.cost else "No"
             unlocked = "Yes" if item.unlocked else f"Requires Tier {item.required_tier}"
 
-            detail.update(
-                f"{item.name} - ${item.cost}\n"
-                f"{item.description}\n"
-                f"Can afford: {can_afford} | Available: {unlocked}"
-            )
+            lines = [
+                f"{item.name} - ${item.cost}",
+                f"{item.description}",
+                f"Can afford: {can_afford} | Available: {unlocked}",
+            ]
+            if item.facility_type:
+                bonuses = format_facility_bonuses(item.facility_type)
+                if bonuses:
+                    lines.append(f"Bonuses: {bonuses}")
+            detail.update("\n".join(lines))
         else:
             detail.update("Select an item to see details")
 
@@ -221,11 +312,14 @@ class ShopScreen(Screen):
             self.action_category_food()
         elif event.button.id == "cat-upgrades":
             self.action_category_upgrades()
+        elif event.button.id == "cat-adoption":
+            self.action_category_adoption()
 
     def action_category_facilities(self) -> None:
         """Switch to facilities category."""
         self.current_category = ShopCategory.FACILITIES
         self._refresh_items()
+        self._refresh_footer()
         self.notify("Facilities")
         self.query_one("#item-list", ListView).focus()
 
@@ -233,6 +327,7 @@ class ShopScreen(Screen):
         """Switch to food category."""
         self.current_category = ShopCategory.FOOD
         self._refresh_items()
+        self._refresh_footer()
         self.notify("Food & Supplies")
         self.query_one("#item-list", ListView).focus()
 
@@ -240,24 +335,50 @@ class ShopScreen(Screen):
         """Switch to upgrades category."""
         self.current_category = ShopCategory.UPGRADES
         self._refresh_items()
+        self._refresh_footer()
         self.notify("Farm Upgrades")
+        self.query_one("#item-list", ListView).focus()
+
+    def action_category_adoption(self) -> None:
+        """Switch to adoption category."""
+        self.current_category = ShopCategory.ADOPTION
+        self._refresh_items()
+        self._refresh_footer()
+        self.notify("Adoption Center")
         self.query_one("#item-list", ListView).focus()
 
     def action_cycle_category(self) -> None:
         """Cycle through categories."""
-        if self.current_category == ShopCategory.FACILITIES:
-            self.action_category_food()
-        elif self.current_category == ShopCategory.FOOD:
-            self.action_category_upgrades()
-        else:
-            self.action_category_facilities()
+        cycle = [
+            ShopCategory.FACILITIES,
+            ShopCategory.FOOD,
+            ShopCategory.UPGRADES,
+            ShopCategory.ADOPTION,
+        ]
+        idx = cycle.index(self.current_category)
+        next_cat = cycle[(idx + 1) % len(cycle)]
+        getattr(self, f"action_category_{next_cat.value}")()
+
+    def action_refresh_adoption(self) -> None:
+        """Generate a new set of available pigs."""
+        if self.current_category != ShopCategory.ADOPTION:
+            return
+        self._available_pigs = []
+        self._generate_available_pigs()
+        self._refresh_items()
+        self.notify("New pigs available!")
 
     def action_go_back(self) -> None:
         """Go back to main screen."""
         self.app.pop_screen()
 
     def action_purchase(self) -> None:
-        """Attempt to purchase selected item."""
+        """Attempt to purchase selected item or adopt selected pig."""
+        # Handle adoption
+        if self.current_category == ShopCategory.ADOPTION:
+            self._adopt_pig()
+            return
+
         # Handle farm upgrade purchase
         if self._is_upgrade_selected:
             upgrade_info = get_farm_upgrade_info(self.state)
@@ -304,6 +425,61 @@ class ShopScreen(Screen):
                 self._refresh_items()
                 self._update_header()
 
+    def _adopt_pig(self) -> None:
+        """Adopt the selected pig."""
+        if not self._selected_pig:
+            self.notify("Select a pig first!", severity="warning")
+            return
+
+        if self.state.is_at_capacity:
+            self.notify("Farm is at capacity! Upgrade or sell pigs.", severity="error")
+            return
+
+        pig = self._selected_pig
+        cost = calculate_adoption_cost(pig)
+
+        if self.state.money < cost:
+            self.notify("Not enough money!", severity="error")
+            return
+
+        position = self._find_spawn_position()
+        if position is None:
+            self.notify("No space for new pig!", severity="error")
+            return
+
+        pig.position = Position(x=float(position[0]), y=float(position[1]))
+        self.state.spend_money(cost)
+        self.state.add_guinea_pig(pig)
+
+        register_pig_in_pigdex(self.state, pig)
+
+        self.state.log_event(
+            f"Adopted {pig.name} ({pig.phenotype.display_name}) for {cost} Squeaks",
+            event_type="adoption",
+        )
+
+        self.notify(f"Welcome home, {pig.name}!")
+
+        self._available_pigs.remove(pig)
+        self._selected_pig = None
+        self._refresh_items()
+        self._update_header()
+
+    def _find_spawn_position(self) -> Optional[tuple[int, int]]:
+        """Find a valid spawn position for an adopted pig."""
+        farm = self.state.farm
+
+        for _ in range(100):
+            x = random.randint(2, farm.width - 3)
+            y = random.randint(2, farm.height - 3)
+
+            if farm.is_walkable(x, y):
+                cell = farm.get_cell(x, y)
+                if cell and not cell.facility_id:
+                    return (x, y)
+
+        return None
+
     def _find_placement_position(self, item: ShopItem) -> Optional[tuple[int, int]]:
         """Find a valid position to place a facility."""
         if not item.facility_type:
@@ -340,3 +516,7 @@ class ShopScreen(Screen):
         """Update the header with current balance."""
         header = self.query_one("#shop-header", Static)
         header.update(f"SHOP - Balance: ${format_money(self.state.money)}")
+
+    def _refresh_footer(self) -> None:
+        """Refresh footer to reflect context-sensitive bindings."""
+        self.set_focus(self.focused)

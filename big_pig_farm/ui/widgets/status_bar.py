@@ -1,6 +1,5 @@
 """Status bar widget showing resources and time."""
 
-from textual.app import ComposeResult
 from textual.widgets import Static
 from textual.reactive import reactive
 
@@ -10,7 +9,7 @@ from big_pig_farm.entities.facilities import FacilityType
 
 
 class StatusBar(Static):
-    """Top status bar showing game resources and time."""
+    """Top status bar showing game resources and time (2 lines)."""
 
     day: reactive[int] = reactive(1)
     time_display: reactive[str] = reactive("8:00 AM")
@@ -23,6 +22,7 @@ class StatusBar(Static):
     is_paused: reactive[bool] = reactive(False)
     speed: reactive[int] = reactive(1)
     warning: reactive[str] = reactive("")
+    edit_mode: reactive[bool] = reactive(False)
 
     DEFAULT_CSS = """
     StatusBar {
@@ -35,32 +35,31 @@ class StatusBar(Static):
     """
 
     def render(self) -> str:
-        """Render the status bar content."""
-        # Time icon based on time of day
-        time_icon = "☀" if self.time_of_day in ("Morning", "Afternoon") else "☽"
-
+        """Render the single-line status bar."""
         # Pause/speed indicator
         if self.is_paused:
-            speed_str = "⏸ PAUSED"
+            speed_str = "\u23f8 PAUSED"
         elif self.speed > GameSpeed.NORMAL.value:
-            speed_str = f"▶▶ {SPEED_DISPLAY.get(GameSpeed(self.speed), f'{self.speed}x')}"
+            speed_str = f"\u25b6\u25b6 {SPEED_DISPLAY.get(GameSpeed(self.speed), f'{self.speed}x')}"
         else:
-            speed_str = "▶"
+            speed_str = "\u25b6"
 
-        # Format components
         parts = [
             f"Day {self.day}",
-            f"{time_icon} {self.time_of_day}",
             f"${format_money(self.money)}",
-            f"🐹 {self.pig_count}/{self.capacity}",
-            f"🥗{self.food_level}% 💧{self.water_level}%",
+            f"\U0001f439 {self.pig_count}/{self.capacity}",
+            f"\U0001f957 {self.food_level}%",
+            f"\U0001f4a7 {self.water_level}%",
             speed_str,
         ]
 
         if self.warning:
-            parts.append(f"⚠ {self.warning}")
+            parts.append(f"\u26a0 {self.warning}")
 
-        return " │ ".join(parts)
+        if self.edit_mode:
+            parts.append("[bold reverse] EDIT [/]")
+
+        return " \u2502 ".join(parts)
 
     def update_from_state(self, state) -> None:
         """Update all values from game state."""
