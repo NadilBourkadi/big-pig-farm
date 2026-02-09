@@ -4,7 +4,8 @@ import pytest
 
 from big_pig_farm.data.config import FARM_TIERS
 from big_pig_farm.entities.facilities import Facility, FacilityType, FACILITY_INFO
-from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Position, Genotype, Phenotype, Gender
+from big_pig_farm.entities.genetics import Genotype, calculate_phenotype
+from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Position, Gender
 from big_pig_farm.game.auto_arrange import (
     calculate_zones,
     compute_arrangement,
@@ -36,10 +37,12 @@ def _add_facility(state: GameState, ftype: FacilityType, x: int = 5, y: int = 3)
 
 def _make_pig(x: float = 5.0, y: float = 5.0) -> GuineaPig:
     """Create a pig at a given position."""
+    genotype = Genotype.random()
+    phenotype = calculate_phenotype(genotype)
     return GuineaPig(
         name="TestPig",
-        genotype=Genotype(),
-        phenotype=Phenotype(),
+        genotype=genotype,
+        phenotype=phenotype,
         gender=Gender.MALE,
         position=Position(x=x, y=y),
     )
