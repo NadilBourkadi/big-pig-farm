@@ -596,17 +596,13 @@ class BehaviorController:
         """Clamp pig position to stay within the walkable area of the farm.
 
         Walls occupy the outermost ring (row/col 0 and height-1/width-1).
-        We keep pigs at least 1.5 cells inside to prevent sprites from
-        visually overlapping the walls.
+        The first walkable cells are at (1, 1), so we clamp to [1.0, w-2]
+        and [1.0, h-2] — just enough to keep pigs off wall cells without
+        blocking valid pathfinding waypoints along the border.
         """
         farm = self.game_state.farm
-        margin = 1.5
-        min_x = margin
-        min_y = margin
-        max_x = farm.width - 1 - margin
-        max_y = farm.height - 1 - margin
-        pig.position.x = max(min_x, min(pig.position.x, max_x))
-        pig.position.y = max(min_y, min(pig.position.y, max_y))
+        pig.position.x = max(1.0, min(pig.position.x, float(farm.width - 2)))
+        pig.position.y = max(1.0, min(pig.position.y, float(farm.height - 2)))
 
     def _is_cell_occupied_by_pig(self, x: int, y: int, exclude_pig: Optional[GuineaPig] = None) -> bool:
         """Check if a cell is occupied by another guinea pig."""
