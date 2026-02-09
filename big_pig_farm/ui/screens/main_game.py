@@ -15,6 +15,7 @@ from big_pig_farm.game.state import GameState
 from big_pig_farm.economy.currency import add_money
 from big_pig_farm.economy.shop import get_facility_cost
 from big_pig_farm.ui.widgets.status_bar import StatusBar
+from big_pig_farm.data.sprites import ZoomLevel
 from big_pig_farm.ui.widgets.farm_view import FarmView
 from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
 from big_pig_farm.ui.screens.shop import ShopScreen
@@ -40,6 +41,8 @@ class MainGameScreen(Screen):
         ("plus", "speed_up", "+Spd"),
         ("minus", "slow_down", "-Spd"),
         ("equal", "speed_up", None),
+        ("right_square_bracket", "zoom_in", "Zoom+"),
+        ("left_square_bracket", "zoom_out", "Zoom-"),
         ("tab", "next_pig", None),
         ("n", "new_game", None),
         ("up", "handle_up", None),
@@ -196,6 +199,20 @@ class MainGameScreen(Screen):
         if self._pig_sidebar:
             self._pig_sidebar.set_pig(pig)
         self.notify(f"Following: {pig.name}")
+
+    def action_zoom_in(self) -> None:
+        """Zoom in one level."""
+        if self._farm_view:
+            new = self._farm_view.cycle_zoom(1)
+            labels = {ZoomLevel.FAR: "Far", ZoomLevel.NORMAL: "Normal", ZoomLevel.CLOSE: "Close"}
+            self.notify(f"Zoom: {labels[new]}")
+
+    def action_zoom_out(self) -> None:
+        """Zoom out one level."""
+        if self._farm_view:
+            new = self._farm_view.cycle_zoom(-1)
+            labels = {ZoomLevel.FAR: "Far", ZoomLevel.NORMAL: "Normal", ZoomLevel.CLOSE: "Close"}
+            self.notify(f"Zoom: {labels[new]}")
 
     def action_feed(self) -> None:
         """Refill all food and water facilities."""
