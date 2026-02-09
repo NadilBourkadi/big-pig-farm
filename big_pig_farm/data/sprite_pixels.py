@@ -186,7 +186,7 @@ PIG_PIXELS_ADULT = {
     "idle_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","fur","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -196,7 +196,7 @@ PIG_PIXELS_ADULT = {
     "idle_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","fur","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -206,7 +206,7 @@ PIG_PIXELS_ADULT = {
     "walking_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","fur","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -216,7 +216,7 @@ PIG_PIXELS_ADULT = {
     "walking_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","fur","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -286,7 +286,7 @@ PIG_PIXELS_ADULT = {
     "sad_right": [
         [ T,   T,   T,   T,   T,   T,   T,   T,   T,   T,  "ear","dark", T,   T  ],
         [ T,   T,   T,   T,  "dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
-        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","fur","fur","dark"],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","dark","eye","eye","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","nose","dark"],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
@@ -296,7 +296,7 @@ PIG_PIXELS_ADULT = {
     "sad_left": [
         [ T,   T,  "dark","ear", T,   T,   T,   T,   T,   T,   T,   T,   T,   T  ],
         [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark", T,   T,   T,   T  ],
-        ["dark","fur","fur","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","fur","eye","eye","dark","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
         ["dark","nose","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
         ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
         [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
