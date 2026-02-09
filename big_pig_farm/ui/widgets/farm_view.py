@@ -9,6 +9,7 @@ from rich.text import Text
 from rich.style import Style
 
 from big_pig_farm.data.sprites import (
+    ANIM_TICKS_PER_FRAME,
     get_pig_halfblock_sprite,
     get_facility_sprite,
     FAR_FACILITY_SPRITES,
@@ -58,6 +59,8 @@ class FarmView(Static):
         self._zoom = ZoomLevel.NORMAL
         # Persistent facing direction per pig (avoids oscillation)
         self._pig_facing: dict[UUID, Direction] = {}
+        # Animation tick counter (incremented every render call)
+        self._render_tick: int = 0
 
     @property
     def zoom(self) -> ZoomLevel:
@@ -94,6 +97,7 @@ class FarmView(Static):
 
     def render(self) -> Text:
         """Render the farm view."""
+        self._render_tick += 1
         width = self.size.width
         height = self.size.height
 
@@ -321,9 +325,12 @@ class FarmView(Static):
         base_color_name = pig.phenotype.base_color.name  # BLACK, CHOCOLATE, etc.
 
         # --- All zoom levels: half-block sprite ---
+        tpf = ANIM_TICKS_PER_FRAME.get(pig.display_state)
+        frame = (self._render_tick // tpf) % 2 if tpf else 0
+
         halfblock = get_pig_halfblock_sprite(
             pig.display_state, direction, base_color_name,
-            is_baby=pig.is_baby, zoom=self._zoom,
+            is_baby=pig.is_baby, zoom=self._zoom, frame=frame,
         )
         if halfblock is None:
             return
