@@ -143,6 +143,7 @@ PALETTES: dict[str, dict[str, str]] = {
          T:  "grey23",
         "tooth": "white",
         "white": "grey82",
+        "blush": "indian_red",
     },
     "CHOCOLATE": {
         "fur":   "orange4",
@@ -156,6 +157,7 @@ PALETTES: dict[str, dict[str, str]] = {
          T:  "orange4",
         "tooth": "white",
         "white": "grey82",
+        "blush": "light_coral",
     },
     "GOLDEN": {
         "fur":   "gold1",
@@ -169,6 +171,7 @@ PALETTES: dict[str, dict[str, str]] = {
          T:  "gold1",
         "tooth": "white",
         "white": "grey82",
+        "blush": "light_coral",
     },
     "CREAM": {
         "fur":   "wheat1",
@@ -182,6 +185,7 @@ PALETTES: dict[str, dict[str, str]] = {
          T:  "wheat1",
         "tooth": "white",
         "white": "grey82",
+        "blush": "hot_pink",
     },
 }
 
@@ -447,11 +451,11 @@ _FACE_TEMPLATE: PixelGrid = [
     [ T,     T,     T,     T,     T,    "dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 3  forehead
     [ T,     T,     T,    "dark","ear", "ear","dark", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","ear", "ear","dark", T,     T,     T    ],  # 4  ears start
     [ T,     T,    "dark","ear", "ear", "ear","dark", "fur", "fur","dark","dark","dark","dark","dark","fur", "fur", "fur", "fur","dark","dark","dark","dark","dark","fur", "fur","dark","ear", "ear", "ear","dark", T,     T    ],  # 5  above eyes (outline top)
-    [ T,    "dark","ear", "ear", "ear","dark","fur",  "fur","dark", "eye","pupil","pupil","dark", "fur", "fur", "fur", "fur", "fur","dark", "eye","pupil","pupil","dark", "fur", "fur", "fur","dark","ear", "ear", "ear","dark", T    ],  # 6  eyes top (pupil 2x2 upper)
+    [ T,    "dark","ear", "ear", "ear","dark","fur",  "fur","dark", "eye", "eye","pupil","dark", "fur", "fur", "fur", "fur", "fur","dark", "eye", "eye","pupil","dark", "fur", "fur", "fur","dark","ear", "ear", "ear","dark", T    ],  # 6  eyes top (gleam + pupil)
     [ T,    "dark","ear", "ear","dark","dark","fur",  "fur","dark", "eye","pupil","pupil","dark", "fur", "fur", "fur", "fur", "fur","dark", "eye","pupil","pupil","dark", "fur", "fur", "fur","dark","dark","ear", "ear","dark", T    ],  # 7  eyes mid (pupil 2x2 lower)
     [ T,   "dark","dark","dark", T,   "dark","fur",  "fur","dark", "eye", "eye", "eye","dark", "fur", "fur", "fur", "fur", "fur","dark", "eye", "eye", "eye","dark", "fur", "fur", "fur","dark", T,   "dark","dark","dark", T    ],  # 8  eyes bottom (sclera + outline)
     [ T,     T,     T,     T,     T,   "dark","fur",  "fur", "fur","dark","dark","dark","dark", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 9  below eyes (outline bottom)
-    [ T, T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T],  # 10 cheeks + nose top
+    [ T, T,     T,     T,    "dark","fur", "fur","blush","blush","fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur","blush","blush","fur", "fur","dark", T,     T,     T,     T],  # 10 cheeks + blush + nose top
     [ T, T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T],  # 11 nose pad
     [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","dark","fur", "fur","dark","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 12 nostrils
     [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 13 below nose
