@@ -1,6 +1,28 @@
 """ASCII art definitions for guinea pigs and facilities."""
 
 from enum import Enum
+from typing import Optional
+
+from big_pig_farm.data.sprite_pixels import (
+    HalfBlockRows,
+    convert_pixels,
+    get_pig_pixel_sprite,
+    PALETTES,
+)
+
+
+class ZoomLevel(Enum):
+    """Farm viewport zoom levels."""
+    FAR = "far"
+    NORMAL = "normal"
+    CLOSE = "close"
+
+
+ZOOM_SCALES: dict[ZoomLevel, float] = {
+    ZoomLevel.FAR: 0.5,
+    ZoomLevel.NORMAL: 1.0,
+    ZoomLevel.CLOSE: 2.0,
+}
 
 
 class Direction(Enum):
@@ -230,6 +252,34 @@ def get_pig_sprite(state: str, direction: Direction, is_baby: bool = False) -> l
     # Fallback to idle
     fallback = f"idle_{direction.value}"
     return sprites.get(fallback, sprites["idle_right"])
+
+
+def get_pig_halfblock_sprite(
+    state: str,
+    direction: Direction,
+    base_color: str,
+    is_baby: bool = False,
+    zoom: ZoomLevel = ZoomLevel.NORMAL,
+) -> Optional[HalfBlockRows]:
+    """Get a half-block rendered pig sprite with phenotype colors.
+
+    Args:
+        state: Pig display state (idle, walking, eating, sleeping, happy, sad).
+        direction: LEFT or RIGHT.
+        base_color: Phenotype base color name (BLACK, CHOCOLATE, GOLDEN, CREAM).
+        is_baby: Whether this is a baby pig.
+        zoom: Current zoom level.
+
+    Returns:
+        Half-block rows with resolved colors, or None for far-zoom (use dot).
+    """
+    if zoom == ZoomLevel.FAR:
+        return None  # Far zoom uses a single colored dot
+
+    close = zoom == ZoomLevel.CLOSE
+    pixel_grid = get_pig_pixel_sprite(state, direction.value, is_baby, close_zoom=close)
+    palette = PALETTES.get(base_color, PALETTES["BLACK"])
+    return convert_pixels(pixel_grid, palette)
 
 
 def get_facility_sprite(facility_type: str, state: str = "") -> list[str]:
