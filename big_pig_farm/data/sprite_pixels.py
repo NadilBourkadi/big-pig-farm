@@ -25,6 +25,15 @@ HalfBlockRows = list[HalfBlockRow]
 # Transparent sentinel
 T = None
 
+# Animation timing: ticks per frame for each animated display state.
+# States not listed here are static (single frame).
+ANIM_TICKS_PER_FRAME: dict[str, int] = {
+    "walking": 3,
+    "eating": 4,
+    "happy": 3,
+    "sleeping": 10,
+}
+
 
 def convert_pixels(
     grid: PixelGrid,
@@ -448,12 +457,13 @@ def get_pig_pixel_sprite(
     is_baby: bool = False,
     close_zoom: bool = False,
     far_zoom: bool = False,
+    frame: int = 0,
 ) -> PixelGrid:
     """Look up the pixel grid for a pig sprite.
 
-    Falls back gracefully: missing state -> idle.
+    Falls back gracefully: missing state -> idle, missing frame -> frame 0.
     Close zoom auto-scales the normal sprite by 2x.
-    Far zoom returns tiny 6x4 (adult) or 4x4 (baby) sprites.
+    Far zoom returns tiny 6x4 (adult) or 4x4 (baby) sprites (no animation).
     """
     key = f"{state}_{direction}"
 
@@ -465,6 +475,16 @@ def get_pig_pixel_sprite(
 
     # Normal zoom
     sprites = PIG_PIXELS_BABY if is_baby else PIG_PIXELS_ADULT
+
+    # Try animated frame variant first
+    if frame > 0:
+        anim_key = f"{key}_{frame}"
+        if anim_key in sprites:
+            grid = sprites[anim_key]
+            if close_zoom:
+                return scale_pixel_grid(grid, 2)
+            return grid
+
     if key not in sprites:
         key = f"idle_{direction}"
     grid = sprites.get(key, sprites["idle_right"])
