@@ -14,6 +14,10 @@ from big_pig_farm.data.sprites import (
     get_facility_sprite,
     get_facility_halfblock_sprite,
     FAR_FACILITY_SPRITES,
+    FLOOR_CHARS,
+    FLOOR_CHARS_FAR,
+    FLOOR_COLORS,
+    FLOOR_COLORS_FAR,
     TERRAIN,
     Direction,
     ZoomLevel,
@@ -154,6 +158,15 @@ class FarmView(Static):
     # Terrain
     # ------------------------------------------------------------------
 
+    def _floor_texture(self, wx: int, wy: int, far: bool = False) -> tuple[str, Style]:
+        """Return a deterministic hay/straw character and style for a floor cell."""
+        h = (wx * 7 + wy * 13) & 0xFFFF
+        chars = FLOOR_CHARS_FAR if far else FLOOR_CHARS
+        colors = FLOOR_COLORS_FAR if far else FLOOR_COLORS
+        char = chars[h % len(chars)]
+        color = colors[(h >> 4) % len(colors)]
+        return char, Style(color=color, bgcolor="#4a3d28")
+
     def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
         """Draw the terrain/floor."""
         farm = self.state.farm
@@ -193,8 +206,7 @@ class FarmView(Static):
                     char = TERRAIN["grass"]
                     style = Style(color="green")
                 else:
-                    char = TERRAIN["floor"]
-                    style = Style(color="grey37")
+                    char, style = self._floor_texture(world_x, world_y)
 
                 self._char_buffer[screen_y][screen_x] = char
                 self._style_buffer[screen_y][screen_x] = style
@@ -218,7 +230,6 @@ class FarmView(Static):
         """
         farm = self.state.farm
         wall_style = Style(color="bright_white")
-        floor_style = Style(color="grey37")
 
         # Screen extents of the farm rectangle
         x0 = int((0 - self._viewport_x) * scale) + offset_x
@@ -226,11 +237,15 @@ class FarmView(Static):
         x1 = int(((farm.width - 1) - self._viewport_x) * scale) + offset_x
         y1 = int(((farm.height - 1) - self._viewport_y) * scale) + offset_y
 
-        # Fill interior with floor
+        # Fill interior with textured floor
+        inv_scale = 1.0 / scale
         for sy in range(max(0, y0 + 1), min(height, y1)):
+            wy = int((sy - offset_y) * inv_scale) + self._viewport_y
             for sx in range(max(0, x0 + 1), min(width, x1)):
-                self._char_buffer[sy][sx] = TERRAIN["floor"]
-                self._style_buffer[sy][sx] = floor_style
+                wx = int((sx - offset_x) * inv_scale) + self._viewport_x
+                char, style = self._floor_texture(wx, wy, far=True)
+                self._char_buffer[sy][sx] = char
+                self._style_buffer[sy][sx] = style
 
         # Draw horizontal walls (top + bottom)
         for sx in range(max(0, x0), min(width, x1 + 1)):
@@ -435,11 +450,19 @@ class FarmView(Static):
                 if char == " " and fg is None and bg is None:
                     continue  # Transparent pixel — don't overwrite background
 
+                # For semi-transparent edge cells, inherit the bg from
+                # whatever is already drawn (terrain/facility) so the
+                # pig blends with the background instead of showing black.
+                effective_bg = bg
+                if effective_bg is None:
+                    existing = self._style_buffer[screen_y][screen_x]
+                    if existing is not None:
+                        effective_bg = existing.bgcolor
+
                 if is_selected:
-                    # Tint toward yellow for selection highlight
-                    style = Style(color="yellow", bgcolor=bg, bold=True)
+                    style = Style(color="yellow", bgcolor=effective_bg, bold=True)
                 else:
-                    style = Style(color=fg, bgcolor=bg)
+                    style = Style(color=fg, bgcolor=effective_bg)
 
                 self._char_buffer[screen_y][screen_x] = char
                 self._style_buffer[screen_y][screen_x] = style
