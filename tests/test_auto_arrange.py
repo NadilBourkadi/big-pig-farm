@@ -301,8 +301,8 @@ class TestOverflow:
                     occupied.add(cell)
 
     def test_many_mixed_facilities_no_overlap(self):
-        """Realistic mix of many facilities must never overlap."""
-        state = _make_state(tier=3)
+        """Realistic mix of many facilities: grid cells must never overlap."""
+        state = _make_state(tier=4)  # Tier 4 (60x30) has room for 16 facilities
         types_and_positions = [
             (FacilityType.FOOD_BOWL, 2, 2),
             (FacilityType.FOOD_BOWL, 5, 2),
@@ -337,6 +337,22 @@ class TestOverflow:
                         f"Overlap at {cell} — {p.facility.facility_type.value}"
                     )
                     occupied.add(cell)
+
+
+def _assert_no_sprite_overlap(state: GameState) -> None:
+    """Assert no two facilities' sprites visually overlap."""
+    from big_pig_farm.data.sprites import get_facility_sprite
+
+    occupied: set[tuple[int, int]] = set()
+    for f in state.get_facilities_list():
+        sprite = get_facility_sprite(f.facility_type.value)
+        for dy, line in enumerate(sprite):
+            for dx in range(len(line)):
+                cell = (f.position_x + dx, f.position_y + dy)
+                assert cell not in occupied, (
+                    f"Sprite overlap at {cell} — {f.facility_type.value}"
+                )
+                occupied.add(cell)
 
 
 def _assert_no_overlap_in_state(state: GameState) -> None:
@@ -386,6 +402,7 @@ class TestIntegration:
 
         _assert_no_overlap_in_state(state)
         _assert_grid_consistent(state)
+        _assert_no_sprite_overlap(state)
 
     def test_full_cycle_all_tiers(self):
         """Auto-arrange works across all farm tiers without overlap."""
@@ -411,7 +428,7 @@ class TestIntegration:
             _assert_grid_consistent(state)
 
     def test_full_cycle_with_overflow(self):
-        """Overflow facilities must still end up on the grid without overlap."""
+        """Overflow facilities must still end up on the grid without grid overlap."""
         state = _make_state(tier=1)
         # Pack many hideouts (3x2) to force overflow
         for i in range(10):
@@ -426,12 +443,13 @@ class TestIntegration:
 
         _assert_no_overlap_in_state(state)
         _assert_grid_consistent(state)
-        # Every facility must be placed somewhere
+        # Note: sprite overlap may occur on very crowded small farms
+        # (last-resort grid-only fallback), but grid integrity must hold
         assert len(state.get_facilities_list()) == total
 
     def test_full_cycle_16_mixed_facilities(self):
         """Realistic 16-facility mix: compute + apply + verify."""
-        state = _make_state(tier=3)
+        state = _make_state(tier=4)  # Tier 4 (60x30) — tier 3 too small for 16 sprites
         types_and_positions = [
             (FacilityType.FOOD_BOWL, 2, 2),
             (FacilityType.FOOD_BOWL, 5, 2),
@@ -458,6 +476,7 @@ class TestIntegration:
 
         _assert_no_overlap_in_state(state)
         _assert_grid_consistent(state)
+        _assert_no_sprite_overlap(state)
 
 
 class TestEmptyFarm:

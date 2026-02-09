@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 from big_pig_farm.data.config import AUTO_ARRANGE, FARM_TIERS
+from big_pig_farm.data.sprites import get_facility_sprite
 from big_pig_farm.entities.facilities import Facility, FacilityType, FACILITY_INFO
 from big_pig_farm.entities.guinea_pig import BehaviorState
 from big_pig_farm.game.state import GameState
@@ -58,6 +59,14 @@ class Placement:
     facility: Facility
     new_x: int
     new_y: int
+
+
+def _sprite_size(facility_type: FacilityType) -> tuple[int, int]:
+    """Get the visual sprite dimensions (width, height) for a facility type."""
+    sprite = get_facility_sprite(facility_type.value)
+    sw = max(len(line) for line in sprite) if sprite else 1
+    sh = len(sprite) if sprite else 1
+    return sw, sh
 
 
 def _is_small_farm(farm: FarmGrid) -> bool:
@@ -162,10 +171,10 @@ def _place_facilities_in_zone(
 
     Returns (placed, overflow) where overflow couldn't fit in the zone.
     """
-    # Sort largest-first (by area, then by width for tie-breaking)
+    # Sort largest-first by sprite area (visual footprint determines packing)
     sorted_facilities = sorted(
         facilities,
-        key=lambda f: (f.width * f.height, f.width),
+        key=lambda f: (_sprite_size(f.facility_type)[0] * _sprite_size(f.facility_type)[1]),
         reverse=True,
     )
 
@@ -179,6 +188,9 @@ def _place_facilities_in_zone(
         # Interaction point is at position_y + height, must be inside walls
         interaction_row = fh  # relative offset
 
+        # Sprite dimensions determine visual footprint (much larger than grid)
+        sw, sh = _sprite_size(facility.facility_type)
+
         placement_found = False
 
         # Scan top-to-bottom, left-to-right
@@ -191,10 +203,10 @@ def _place_facilities_in_zone(
 
             x = zone.x1
             while x + fw - 1 <= zone.x2 and not placement_found:
-                # Check if all cells are free
+                # Check the sprite footprint is clear (not just grid cells)
                 cells_ok = True
-                for dx in range(fw):
-                    for dy in range(fh):
+                for dx in range(sw):
+                    for dy in range(sh):
                         if (x + dx, y + dy) in occupied:
                             cells_ok = False
                             break
@@ -204,9 +216,9 @@ def _place_facilities_in_zone(
                 if cells_ok:
                     # Place it
                     placed.append(Placement(facility, x, y))
-                    # Mark cells as occupied (facility cells + gap)
-                    for dx in range(-1, fw + h_gap):
-                        for dy in range(-1, fh + v_gap):
+                    # Mark sprite footprint + gap as occupied
+                    for dx in range(-1, sw + h_gap):
+                        for dy in range(-1, sh + v_gap):
                             occupied.add((x + dx, y + dy))
                     placement_found = True
 
@@ -281,19 +293,53 @@ def compute_arrangement(
     return all_placed, all_overflow
 
 
-def _find_grid_position(farm: FarmGrid, facility: Facility) -> bool:
-    """Scan the grid for any valid position and place the facility there.
+def _find_grid_position(
+    farm: FarmGrid,
+    facility: Facility,
+    occupied: set[tuple[int, int]],
+) -> bool:
+    """Scan the grid for a position that is valid on the grid AND sprite-clear.
 
-    Brute-force fallback for overflow facilities. Mutates facility position
-    and places it on the grid. Returns True if a position was found.
+    Brute-force fallback for overflow facilities. Uses tight packing (no gap)
+    to maximize chances of fitting. If sprite-aware placement fails entirely,
+    falls back to grid-only placement as a last resort.
+    Updates `occupied` in-place on success. Returns True if placed.
     """
     fw = facility.width
     fh = facility.height
+    sw, sh = _sprite_size(facility.facility_type)
+
+    # First pass: sprite-aware (tight, no gap)
+    for y in range(1, farm.height - fh - 1):
+        for x in range(1, farm.width - fw):
+            sprite_ok = True
+            for dx in range(sw):
+                for dy in range(sh):
+                    if (x + dx, y + dy) in occupied:
+                        sprite_ok = False
+                        break
+                if not sprite_ok:
+                    break
+            if not sprite_ok:
+                continue
+
+            facility.position_x = x
+            facility.position_y = y
+            if farm.place_facility(facility):
+                for dx in range(sw):
+                    for dy in range(sh):
+                        occupied.add((x + dx, y + dy))
+                return True
+
+    # Last resort: grid-only (visual overlap possible, but facility is placed)
     for y in range(1, farm.height - fh - 1):
         for x in range(1, farm.width - fw):
             facility.position_x = x
             facility.position_y = y
             if farm.place_facility(facility):
+                for dx in range(sw):
+                    for dy in range(sh):
+                        occupied.add((x + dx, y + dy))
                 return True
     return False
 
@@ -307,26 +353,51 @@ def apply_arrangement(
 
     Preserves facility state (current_amount, level, auto_refill, etc).
     Overflow facilities that couldn't fit in zones are placed at the first
-    available grid position.
+    available grid position, respecting sprite-level spacing.
     """
     farm = state.farm
+    is_small = _is_small_farm(farm)
+
+    if is_small:
+        h_gap = AUTO_ARRANGE.SMALL_HORIZONTAL_GAP
+        v_gap = AUTO_ARRANGE.SMALL_VERTICAL_GAP
+    else:
+        h_gap = AUTO_ARRANGE.HORIZONTAL_GAP
+        v_gap = AUTO_ARRANGE.VERTICAL_GAP
 
     # Remove all facilities from the grid (but keep in state.facilities dict)
     for facility in state.get_facilities_list():
         farm.remove_facility(facility)
+
+    # Build sprite-aware occupied set from computed placements
+    occupied: set[tuple[int, int]] = set()
 
     # Apply new positions and re-place on grid
     for placement in placements:
         facility = placement.facility
         facility.position_x = placement.new_x
         facility.position_y = placement.new_y
-        if not farm.place_facility(facility):
+        sw, sh = _sprite_size(facility.facility_type)
+
+        # Verify sprite footprint is still clear (a prior fallback placement
+        # may have occupied cells near this computed position)
+        sprite_clear = all(
+            (placement.new_x + dx, placement.new_y + dy) not in occupied
+            for dx in range(sw) for dy in range(sh)
+        )
+
+        if sprite_clear and farm.place_facility(facility):
+            # Mark sprite footprint + gap as occupied
+            for dx in range(-1, sw + h_gap):
+                for dy in range(-1, sh + v_gap):
+                    occupied.add((placement.new_x + dx, placement.new_y + dy))
+        else:
             # Computed position collided — find any valid position
-            _find_grid_position(farm, facility)
+            _find_grid_position(farm, facility, occupied)
 
     # Place overflow facilities at whatever positions are still free
     for facility in overflow:
-        _find_grid_position(farm, facility)
+        _find_grid_position(farm, facility, occupied)
 
 
 def clear_pig_navigation(state: GameState) -> None:
