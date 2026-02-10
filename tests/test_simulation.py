@@ -270,7 +270,7 @@ class TestStuckTimer:
         # Patch _try_dodge to always fail (simulating a narrow corridor)
         # and _try_alternative_facility to always "succeed" (resets _blocked_timers)
         with patch.object(controller, '_try_dodge', return_value=False), \
-             patch.object(controller, '_try_alternative_facility', return_value=True), \
+             patch.object(controller.facility_manager, 'try_alternative_facility', return_value=True), \
              patch.object(controller, '_give_up_and_fallback', side_effect=tracking_fallback):
 
             # Simulate 6 seconds of being blocked at the same position (in 0.1s steps)
@@ -316,7 +316,7 @@ class TestStuckTimer:
 
         # Simulate being blocked for 4 seconds (just under threshold)
         with patch.object(controller, '_try_dodge', return_value=False), \
-             patch.object(controller, '_try_alternative_facility', return_value=True):
+             patch.object(controller.facility_manager, 'try_alternative_facility', return_value=True):
             for _ in range(40):
                 controller._update_movement(pig, 0.1)
                 if not pig.path:
