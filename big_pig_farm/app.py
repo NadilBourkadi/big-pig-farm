@@ -11,7 +11,7 @@ from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.engine import GameEngine
-from big_pig_farm.game.save_manager import SaveManager
+from big_pig_farm.game.save_manager_v2 import CombinedSaveManager
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.breeding import register_pig_in_pigdex
@@ -33,7 +33,7 @@ class BigPigFarmApp(App):
 
     def __init__(self, debug: bool = False):
         super().__init__()
-        self.save_manager = SaveManager()
+        self.save_manager = CombinedSaveManager()
         self.pig_to_follow: GuineaPig | None = None  # Set by pig list/detail screens
 
         # Try to load existing save
