@@ -877,7 +877,7 @@ def generate_background(width: int, height: int) -> PixelGrid:
         elif y < 18:
             color = SCENE_BG_COLORS["grass_light"]
         else:
-            color = SCENE_BG_COLORS["grass"]
+            color = SCENE_BG_COLORS["grass_dark" if y % 2 == 0 else "grass"]
         grid.append([color] * width)
     return grid
 
