@@ -132,6 +132,9 @@ class PigdexPanel(Static):
 
         return "\n".join(lines)
 
+    def refresh_content(self) -> None:
+        self.update(self._build_content())
+
 
 class ContractsPanel(Static):
     """Panel showing active breeding contracts."""
@@ -171,6 +174,9 @@ class ContractsPanel(Static):
             parts.append(f"  Tip: {contract.breeding_hint}")
         return "\n".join(parts)
 
+    def refresh_content(self) -> None:
+        self.update(self._build_content())
+
 
 class EventLogPanel(Static):
     """Panel showing scrollable event history."""
@@ -193,6 +199,9 @@ class EventLogPanel(Static):
                 lines.append(f"{icon} Day {event.game_day} | {event.message}")
 
         return "\n".join(lines)
+
+    def refresh_content(self) -> None:
+        self.update(self._build_content())
 
 
 class JournalScreen(Screen):
@@ -254,6 +263,11 @@ class JournalScreen(Screen):
         """Set VerticalScroll heights inline to ensure scrolling works."""
         for vs in self.query(VerticalScroll):
             vs.styles.height = "1fr"
+
+    def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
+        """Refresh panel content when switching tabs."""
+        for panel in event.pane.query(".journal-panel"):
+            panel.refresh_content()
 
     def _get_active_scroll(self) -> VerticalScroll | None:
         """Get the VerticalScroll in the currently active tab."""
