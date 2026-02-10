@@ -13,7 +13,7 @@ from textual.widgets import Footer
 from big_pig_farm.data.config import GameSpeed, SPEED_DISPLAY
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
-from big_pig_farm.economy.currency import add_money
+from big_pig_farm.economy.currency import add_money, format_currency
 from big_pig_farm.economy.shop import get_facility_cost
 from big_pig_farm.ui.widgets.status_bar import StatusBar
 from big_pig_farm.data.sprites import ZoomLevel
@@ -355,7 +355,7 @@ class MainGameScreen(Screen):
                 farm_view.remove_selected_facility()
                 add_money(self.state, refund, f"Removed {facility.facility_type.display_name}")
                 name = facility.facility_type.display_name
-                self.notify(f"Removed: {name} (+${refund})", severity="information")
+                self.notify(f"Removed: {name} (+{format_currency(refund)})", severity="information")
             else:
                 self.notify("Select a facility first (Enter)", severity="warning")
 

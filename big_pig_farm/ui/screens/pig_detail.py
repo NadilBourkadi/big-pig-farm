@@ -12,6 +12,7 @@ from big_pig_farm.data.sprite_pixels import (
     render_to_rich_text,
     PALETTES,
 )
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.market import calculate_pig_value, calculate_pig_value_breakdown
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
@@ -97,7 +98,7 @@ class PigDetailPanel(Static):
         if pig.origin_tag:
             lines.append(f"  Origin: {pig.origin_tag}")
         breakdown = calculate_pig_value_breakdown(pig, self.state)
-        lines.append(f"  Sale Value: ${breakdown['total']}")
+        lines.append(f"  Sale Value: {format_currency(breakdown['total'])}")
         if breakdown["rarity_mult"] != 1.0:
             lines.append(f"    Rarity: x{breakdown['rarity_mult']:.1f}")
         if breakdown["age_mult"] != 1.0:

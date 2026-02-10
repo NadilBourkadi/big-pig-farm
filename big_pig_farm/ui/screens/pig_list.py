@@ -8,6 +8,7 @@ from textual.screen import Screen
 from textual.containers import Container
 from textual.widgets import Static, DataTable, Footer
 
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
 from big_pig_farm.game.state import GameState
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
@@ -115,7 +116,7 @@ class PigListScreen(Screen):
                 pig.phenotype.display_name,
                 happiness_bar,
                 breed_status,
-                f"${value}",
+                format_currency(value),
                 key=str(pig.id),
             )
 
@@ -177,16 +178,16 @@ class PigListScreen(Screen):
             result = sell_pig(self.state, sell_pig_obj)
             if result.contract_bonus > 0:
                 self.notify(
-                    f"Sold {pig.name} for ${result.base_value} + ${result.contract_bonus} contract bonus!",
+                    f"Sold {pig.name} for {format_currency(result.base_value)} + {format_currency(result.contract_bonus)} contract bonus!",
                     severity="information",
                 )
             else:
-                self.notify(f"Sold {pig.name} for ${result.total}!", severity="information")
+                self.notify(f"Sold {pig.name} for {format_currency(result.total)}!", severity="information")
             self._refresh_table()
             self._update_header()
 
         self.app.push_screen(
-            ConfirmScreen(f"Sell {pig.name} for ${value}?"),
+            ConfirmScreen(f"Sell {pig.name} for {format_currency(value)}?"),
             handle_confirm,
         )
 

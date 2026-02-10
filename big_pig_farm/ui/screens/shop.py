@@ -18,7 +18,7 @@ from big_pig_farm.economy.shop import (
     ShopCategory,
     ShopItem,
 )
-from big_pig_farm.economy.currency import format_money
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.entities.facilities import FACILITY_INFO
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.bloodlines import BLOODLINES
@@ -33,7 +33,7 @@ class ShopItemWidget(ListItem):
 
     def __init__(self, item: ShopItem, can_afford: bool):
         # Build the display string
-        cost_str = f"${item.cost}"
+        cost_str = format_currency(item.cost)
         lock_str = f" [Tier {item.required_tier}]" if not item.unlocked else ""
         afford_str = "" if can_afford else " (!)"
         label = f"{item.name:20} {cost_str:>8}{lock_str}{afford_str}"
@@ -53,7 +53,7 @@ class AdoptionPigWidget(ListItem):
         afford_str = "" if can_afford else " (!)"
         bloodline_str = f"  [{pig.origin_tag}]" if pig.origin_tag else ""
 
-        label = f"{pig.name:18} {gender_symbol} | {color:12} ({rarity:10}) | ${cost:>4}{afford_str}{bloodline_str}"
+        label = f"{pig.name:18} {gender_symbol} | {color:12} ({rarity:10}) | {format_currency(cost):>8}{afford_str}{bloodline_str}"
 
         super().__init__(Label(label))
         self.pig = pig
@@ -143,7 +143,7 @@ class ShopScreen(Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the shop screen."""
-        yield Static(f"SHOP - Balance: ${format_money(self.state.money)}", id="shop-header")
+        yield Static(f"SHOP - Balance: {format_currency(self.state.money)}", id="shop-header")
 
         with Container(id="shop-content"):
             with Horizontal(id="category-bar"):
@@ -192,7 +192,7 @@ class ShopScreen(Screen):
             upgrade_info = get_farm_upgrade_info(self.state)
             if upgrade_info:
                 can_afford = self.state.money >= upgrade_info["cost"]
-                label = f"Expand to {upgrade_info['name']:15} ${upgrade_info['cost']:>6}"
+                label = f"Expand to {upgrade_info['name']:15} {format_currency(upgrade_info['cost']):>10}"
                 if not can_afford:
                     label += " (!)"
                 list_view.append(ListItem(Label(label), id="farm-upgrade"))
@@ -269,7 +269,7 @@ class ShopScreen(Screen):
 
             capacity_str = f"Farm: {self.state.pig_count}/{self.state.capacity} pigs"
             detail.update(
-                f"{pig.name} - ${cost}\n"
+                f"{pig.name} - {format_currency(cost)}\n"
                 f"Gender: {gender} | Color: {pig.phenotype.display_name}\n"
                 f"Rarity: {rarity} | Personality: {traits}\n"
                 f"Can afford: {can_afford} | {capacity_str}{bloodline_line}"
@@ -280,7 +280,7 @@ class ShopScreen(Screen):
                 can_afford = "Yes" if self.state.money >= upgrade_info["cost"] else "No"
                 current_tier = self.state.farm.tier
                 detail.update(
-                    f"Upgrade to {upgrade_info['name']} - ${upgrade_info['cost']}\n"
+                    f"Upgrade to {upgrade_info['name']} - {format_currency(upgrade_info['cost'])}\n"
                     f"Size: {upgrade_info['width']}x{upgrade_info['height']} | Capacity: {upgrade_info['capacity']} pigs\n"
                     f"Can afford: {can_afford} | Current tier: {current_tier}"
                 )
@@ -292,7 +292,7 @@ class ShopScreen(Screen):
             unlocked = "Yes" if item.unlocked else f"Requires Tier {item.required_tier}"
 
             lines = [
-                f"{item.name} - ${item.cost}",
+                f"{item.name} - {format_currency(item.cost)}",
                 f"{item.description}",
                 f"Can afford: {can_afford} | Available: {unlocked}",
             ]
@@ -515,7 +515,7 @@ class ShopScreen(Screen):
     def _update_header(self) -> None:
         """Update the header with current balance."""
         header = self.query_one("#shop-header", Static)
-        header.update(f"SHOP - Balance: ${format_money(self.state.money)}")
+        header.update(f"SHOP - Balance: {format_currency(self.state.money)}")
 
     def _refresh_footer(self) -> None:
         """Refresh footer to reflect context-sensitive bindings."""

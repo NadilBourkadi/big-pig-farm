@@ -25,9 +25,14 @@ def can_afford(state: GameState, amount: int) -> bool:
 
 
 def format_money(amount: int) -> str:
-    """Format money amount for display."""
+    """Format money amount for display (number only, no prefix)."""
     if amount >= 1000000:
         return f"{amount / 1000000:.1f}M"
     elif amount >= 1000:
         return f"{amount / 1000:.1f}K"
     return str(amount)
+
+
+def format_currency(amount: int) -> str:
+    """Format money with Sq prefix for compact UI display."""
+    return f"Sq{format_money(amount)}"
