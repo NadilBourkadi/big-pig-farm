@@ -448,7 +448,7 @@ class MainGameScreen(Screen):
         for pig in self.state.get_pigs_list():
             decision_timer = controller._decision_timers.get(pig.id, 0)
             blocked_timer = controller._blocked_timers.get(pig.id, 0)
-            failed = controller._failed_facilities.get(pig.id, set())
+            failed = controller.facility_manager.get_failed_facilities(pig.id)
             failed_names = []
             for fid in failed:
                 fac = self.state.get_facility(fid)
