@@ -7,7 +7,7 @@ from textual.widgets import Static, Footer
 from rich.text import Text
 
 from big_pig_farm.data.sprite_pixels import (
-    generate_portrait,
+    generate_portrait_with_scene,
     convert_pixels,
     render_to_rich_text,
     PALETTES,
@@ -64,7 +64,7 @@ class PigDetailPanel(Static):
 
     def _build_portrait_text(self, pig: GuineaPig) -> Text:
         """Render a half-block portrait for the given pig."""
-        grid = generate_portrait(
+        grid = generate_portrait_with_scene(
             pig.phenotype.base_color.name,
             pig.phenotype.pattern.value,
             pig.phenotype.intensity.value,
