@@ -41,10 +41,9 @@ def _make_pig(
 
     if intensity == ColorIntensity.HIMALAYAN:
         c_locus = ("ch", "ch")
+    elif intensity == ColorIntensity.CHINCHILLA:
+        c_locus = ("C", "ch")
     else:
-        # FULL and CHINCHILLA both map to C/C since C is dominant.
-        # Note: CHINCHILLA can't currently be produced by the genotype system
-        # (C/ch has dominant C -> FULL, ch/ch -> HIMALAYAN).
         c_locus = ("C", "C")
 
     r_locus = ("R", "r") if roan == RoanType.ROAN else ("r", "r")

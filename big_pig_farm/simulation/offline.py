@@ -119,8 +119,21 @@ def _auto_use_facilities(pig, state: GameState) -> None:
                 break
 
     # Auto-sleep if tired (instant recovery for offline)
-    if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
-        pig.needs.energy += 30
+    if pig.needs.energy < NEEDS.LOW_THRESHOLD:
+        pig.needs.energy += NEEDS.OFFLINE_ENERGY_RECOVERY
+
+    # Auto-play if bored and play facility exists
+    play_types = [FacilityType.PLAY_AREA, FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL]
+    has_play = any(state.get_facilities_by_type(ft) for ft in play_types)
+    if has_play and pig.needs.boredom > NEEDS.LOW_THRESHOLD:
+        pig.needs.boredom -= NEEDS.OFFLINE_PLAY_BOREDOM_RECOVERY
+        pig.needs.happiness += NEEDS.OFFLINE_PLAY_HAPPINESS_RECOVERY
+
+    # Auto-socialize if other pigs exist
+    pig_count = len(state.get_pigs_list())
+    if pig_count > 1 and pig.needs.social < NEEDS.LOW_THRESHOLD:
+        pig.needs.social += NEEDS.OFFLINE_SOCIAL_RECOVERY
+        pig.needs.happiness += NEEDS.OFFLINE_SOCIAL_HAPPINESS_RECOVERY
 
     pig.needs.clamp_all()
 

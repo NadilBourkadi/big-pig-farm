@@ -42,6 +42,7 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
     pig_count = len(game_state.get_pigs_list())
     if pig_count <= BREEDING.MIN_BREEDING_POPULATION:
         pig.needs.happiness += NEEDS.LOW_POP_HAPPINESS_BOOST * hours
+        pig.needs.boredom -= NEEDS.LOW_POP_BOREDOM_RECOVERY * hours
 
     # Social need decay - reduced if near other pigs
     nearby_pigs = _count_nearby_pigs(pig, game_state, radius=NEEDS.SOCIAL_RADIUS)
