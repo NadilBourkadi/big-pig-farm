@@ -237,6 +237,20 @@ class PigDetailScreen(Screen):
         yield PigDetailPanel(self.state, pig, id="detail-panel-container")
         yield Footer()
 
+    def on_mount(self) -> None:
+        """Start periodic refresh of pig details."""
+        self.set_interval(1.0, self._refresh_pig)
+
+    def _refresh_pig(self) -> None:
+        """Re-fetch pig data and update the panel."""
+        pig = self.state.get_guinea_pig(self.pig.id)
+        if pig is None:
+            self.app.pop_screen()
+            return
+        self.pig = pig
+        panel = self.query_one("#detail-panel-container", PigDetailPanel)
+        panel.refresh_pig(pig)
+
     def action_go_back(self) -> None:
         """Go back to pig list."""
         self.app.pop_screen()
