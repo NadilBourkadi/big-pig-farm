@@ -38,7 +38,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="food_bowl",
         name="Food Bowl",
-        description="Feeds pigs to reduce hunger. Capacity: 100 units. Size: 2x1. Refill cost: 5 coins.",
+        description="Feeds pigs to reduce hunger. Capacity: 100 units. Size: 2x1. Refill cost: 5 Squeaks.",
         cost=ECONOMY.FOOD_BOWL_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.FOOD_BOWL,
@@ -47,7 +47,7 @@ SHOP_ITEMS: list[ShopItem] = [
     ShopItem(
         id="water_bottle",
         name="Water Bottle",
-        description="Hydrates pigs to reduce thirst. Capacity: 100 units. Size: 1x2. Refill cost: 2 coins.",
+        description="Hydrates pigs to reduce thirst. Capacity: 100 units. Size: 1x2. Refill cost: 2 Squeaks.",
         cost=ECONOMY.WATER_BOTTLE_COST,
         category=ShopCategory.FACILITIES,
         facility_type=FacilityType.WATER_BOTTLE,
