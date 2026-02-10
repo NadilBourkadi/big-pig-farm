@@ -67,7 +67,7 @@ class PigListScreen(Screen):
         """Compose the pig list screen with split detail panel."""
         count = self.state.pig_count
         capacity = self.state.capacity
-        yield Static(f"Guinea Pigs ({count}/{capacity})", id="pig-header")
+        yield Static(f"GUINEA PIGS ({count}/{capacity})", id="pig-header")
 
         with Container(id="pig-split"):
             yield DataTable(id="pig-table")
@@ -223,4 +223,4 @@ class PigListScreen(Screen):
         header = self.query_one("#pig-header", Static)
         count = self.state.pig_count
         capacity = self.state.capacity
-        header.update(f"Guinea Pigs ({count}/{capacity})")
+        header.update(f"GUINEA PIGS ({count}/{capacity})")

@@ -144,7 +144,7 @@ class BreedingScreen(Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the breeding screen."""
-        yield Static("Breeding Planner", id="breeding-header")
+        yield Static("BREEDING", id="breeding-header")
         yield Static("", id="breeding-status")
 
         with TabbedContent(id="breeding-tabs"):
