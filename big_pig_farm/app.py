@@ -15,6 +15,7 @@ from big_pig_farm.game.save_manager_v2 import CombinedSaveManager
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.breeding import register_pig_in_pigdex
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.simulation.runner import SimulationRunner
 from big_pig_farm.ui.screens.main_game import MainGameScreen
 
@@ -135,4 +136,4 @@ class BigPigFarmApp(App):
 
     def _on_pig_auto_sold(self, pig_name: str, total: int, pig_id: UUID) -> None:
         """Callback when a pig is auto-sold by the simulation runner."""
-        self.notify(f"{pig_name} grew up and was auto-sold for ${total}!")
+        self.notify(f"{pig_name} grew up and was auto-sold for {format_currency(total)}!")
