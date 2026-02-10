@@ -368,9 +368,9 @@ class TestLowPopHappinessBoost:
 
         update_all_needs(pig, 60.0, state)  # 1 game hour
 
-        # With base decay of 2.0/hr + boredom penalty, but +3.0/hr boost,
+        # With base decay of 2.0/hr + boredom penalty, but +5.0/hr boost,
         # happiness should be higher than (50 - 2.0 - 1.0) = 47.0
-        # The boost gives +3.0 so net is roughly +0.0 to +1.0 depending on boredom
+        # The boost gives +5.0 so net is roughly +2.0/hr depending on boredom
         assert pig.needs.happiness > 45.0
 
     def test_no_boost_when_population_above_threshold(self):
@@ -402,3 +402,59 @@ class TestLowPopHappinessBoost:
         # Without boost, happiness should drop (base decay 2.0/hr + boredom)
         # Pig is far from others so no social boost to offset
         assert pig.needs.happiness < 50.0
+
+    def test_boredom_recovery_when_population_low(self):
+        """Boredom should decrease when pig count <= MIN_BREEDING_POPULATION."""
+        state = GameState()
+        pig = GuineaPig.create(
+            name="Bored",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.boredom = 80.0
+        state.add_guinea_pig(pig)
+
+        other = GuineaPig.create(
+            name="Friend",
+            gender=Gender.FEMALE,
+            position=Position(x=20.0, y=20.0),
+            age_days=5.0,
+        )
+        state.add_guinea_pig(other)
+
+        assert len(state.get_pigs_list()) <= BREEDING.MIN_BREEDING_POPULATION
+
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Boredom gains +2.0/hr (decay) but loses -3.0/hr (low-pop recovery)
+        # Net: -1.0/hr, so boredom should drop from 80
+        assert pig.needs.boredom < 80.0
+
+    def test_no_boredom_recovery_when_population_above_threshold(self):
+        """Boredom should NOT get low-pop recovery when pig count > MIN_BREEDING_POPULATION."""
+        state = GameState()
+        pig = GuineaPig.create(
+            name="Bored",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.boredom = 50.0
+        state.add_guinea_pig(pig)
+
+        for i in range(BREEDING.MIN_BREEDING_POPULATION):
+            other = GuineaPig.create(
+                name=f"Other{i}",
+                gender=Gender.FEMALE,
+                position=Position(x=20.0, y=20.0),
+                age_days=5.0,
+            )
+            state.add_guinea_pig(other)
+
+        assert len(state.get_pigs_list()) > BREEDING.MIN_BREEDING_POPULATION
+
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Without low-pop recovery, boredom should increase (base +2.0/hr)
+        assert pig.needs.boredom > 50.0
