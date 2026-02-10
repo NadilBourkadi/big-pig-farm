@@ -4,7 +4,8 @@ import datetime
 from pathlib import Path
 
 from textual.app import ComposeResult
-from textual.binding import Binding, _Bindings
+from textual.binding import _Bindings
+from textual.css.query import NoMatches
 from textual.screen import Screen
 from textual.containers import Container, Horizontal
 from textual.widgets import Footer
@@ -93,36 +94,35 @@ class MainGameScreen(Screen):
     def __init__(self, state: GameState, **kwargs):
         super().__init__(**kwargs)
         self.state = state
-        self._status_bar: StatusBar | None = None
-        self._farm_view: FarmView | None = None
-        self._pig_sidebar: PigSidebar | None = None
         self._selected_pig_index = -1
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
-        self._status_bar = StatusBar()
-        yield self._status_bar
+        yield StatusBar(id="status-bar")
 
         with Horizontal(id="main-content"):
             with Container(id="farm-container"):
-                self._farm_view = FarmView(self.state)
-                yield self._farm_view
+                yield FarmView(self.state, id="farm-view")
 
-            self._pig_sidebar = PigSidebar(self.state)
-            self._pig_sidebar.add_class("hidden")
-            yield self._pig_sidebar
+            sidebar = PigSidebar(self.state, id="pig-sidebar")
+            sidebar.add_class("hidden")
+            yield sidebar
 
         yield Footer()
 
     def _refresh_footer(self) -> None:
         """Rebuild bindings based on edit mode and refresh footer."""
-        is_edit = self._farm_view and self._farm_view.edit_mode
+        try:
+            farm_view = self.query_one("#farm-view", FarmView)
+            is_edit = farm_view.edit_mode
+        except NoMatches:
+            is_edit = False
         bindings = self._EDIT_BINDINGS if is_edit else self.BINDINGS
         self._bindings = _Bindings(bindings)
         try:
             footer = self.query_one(Footer)
             footer._bindings_changed(None)
-        except Exception:
+        except NoMatches:
             pass
 
     def on_mount(self) -> None:
@@ -132,6 +132,10 @@ class MainGameScreen(Screen):
 
     def update_display(self) -> None:
         """Update all display elements."""
+        farm_view = self.query_one("#farm-view", FarmView)
+        status_bar = self.query_one("#status-bar", StatusBar)
+        pig_sidebar = self.query_one("#pig-sidebar", PigSidebar)
+
         # Check if we should follow a pig (set by pig list/detail screens)
         if self.app.pig_to_follow:
             pig = self.app.pig_to_follow
@@ -139,21 +143,16 @@ class MainGameScreen(Screen):
             self._follow_pig(pig)
 
         # Continuous follow cam — re-center on selected pig every tick
-        if self._farm_view and self._farm_view.selected_pig_id:
-            pig = self.state.get_guinea_pig(self._farm_view.selected_pig_id)
+        if farm_view.selected_pig_id:
+            pig = self.state.get_guinea_pig(farm_view.selected_pig_id)
             if pig:
-                self._farm_view.center_on_pig(pig)
+                farm_view.center_on_pig(pig)
             else:
                 self._stop_following()
 
-        if self._status_bar:
-            self._status_bar.update_from_state(self.state)
-
-        if self._farm_view:
-            self._farm_view.refresh()
-
-        if self._pig_sidebar:
-            self._pig_sidebar.refresh_content()
+        status_bar.update_from_state(self.state)
+        farm_view.refresh()
+        pig_sidebar.refresh_content()
 
 
     def action_toggle_pause(self) -> None:
@@ -179,11 +178,11 @@ class MainGameScreen(Screen):
 
     def _stop_following(self) -> None:
         """Stop following the currently selected pig."""
-        if self._farm_view and self._farm_view.selected_pig_id:
-            self._farm_view.select_pig(None)
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.selected_pig_id:
+            farm_view.select_pig(None)
             self._selected_pig_index = -1
-            if self._pig_sidebar:
-                self._pig_sidebar.set_pig(None)
+            self.query_one("#pig-sidebar", PigSidebar).set_pig(None)
 
     def _follow_pig(self, pig) -> None:
         """Start following a specific pig."""
@@ -194,25 +193,23 @@ class MainGameScreen(Screen):
                 self._selected_pig_index = i
                 break
 
-        if self._farm_view:
-            self._farm_view.select_pig(pig.id)
-        if self._pig_sidebar:
-            self._pig_sidebar.set_pig(pig)
+        self.query_one("#farm-view", FarmView).select_pig(pig.id)
+        self.query_one("#pig-sidebar", PigSidebar).set_pig(pig)
         self.notify(f"Following: {pig.name}")
 
     def action_zoom_in(self) -> None:
         """Zoom in one level."""
-        if self._farm_view:
-            new = self._farm_view.cycle_zoom(1)
-            labels = {ZoomLevel.FAR: "Far", ZoomLevel.NORMAL: "Normal", ZoomLevel.CLOSE: "Close"}
-            self.notify(f"Zoom: {labels[new]}")
+        farm_view = self.query_one("#farm-view", FarmView)
+        new = farm_view.cycle_zoom(1)
+        labels = {ZoomLevel.FAR: "Far", ZoomLevel.NORMAL: "Normal", ZoomLevel.CLOSE: "Close"}
+        self.notify(f"Zoom: {labels[new]}")
 
     def action_zoom_out(self) -> None:
         """Zoom out one level."""
-        if self._farm_view:
-            new = self._farm_view.cycle_zoom(-1)
-            labels = {ZoomLevel.FAR: "Far", ZoomLevel.NORMAL: "Normal", ZoomLevel.CLOSE: "Close"}
-            self.notify(f"Zoom: {labels[new]}")
+        farm_view = self.query_one("#farm-view", FarmView)
+        new = farm_view.cycle_zoom(-1)
+        labels = {ZoomLevel.FAR: "Far", ZoomLevel.NORMAL: "Normal", ZoomLevel.CLOSE: "Close"}
+        self.notify(f"Zoom: {labels[new]}")
 
     def action_feed(self) -> None:
         """Refill all food and water facilities."""
@@ -254,89 +251,85 @@ class MainGameScreen(Screen):
         self._selected_pig_index = (self._selected_pig_index + 1) % len(pigs)
         pig = pigs[self._selected_pig_index]
 
-        if self._farm_view:
-            self._farm_view.select_pig(pig.id)
-        if self._pig_sidebar:
-            self._pig_sidebar.set_pig(pig)
+        self.query_one("#farm-view", FarmView).select_pig(pig.id)
+        self.query_one("#pig-sidebar", PigSidebar).set_pig(pig)
         self.notify(f"Selected: {pig.name}")
 
     def action_toggle_edit(self) -> None:
         """Toggle facility edit mode."""
-        if self._farm_view:
-            is_edit = self._farm_view.toggle_edit_mode()
-            if self._status_bar:
-                self._status_bar.edit_mode = is_edit
-            self._refresh_footer()
-            if is_edit:
-                self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
-            else:
-                self.notify("Edit mode off")
+        farm_view = self.query_one("#farm-view", FarmView)
+        is_edit = farm_view.toggle_edit_mode()
+        self.query_one("#status-bar", StatusBar).edit_mode = is_edit
+        self._refresh_footer()
+        if is_edit:
+            self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
+        else:
+            self.notify("Edit mode off")
 
     def action_handle_escape(self) -> None:
         """Handle escape - exit edit mode or deselect."""
-        if self._farm_view and self._farm_view.edit_mode:
-            if self._farm_view.moving_facility:
-                self._farm_view.confirm_placement()
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            if farm_view.moving_facility:
+                farm_view.confirm_placement()
                 self.notify("Placement cancelled")
             else:
-                self._farm_view.toggle_edit_mode()
-                if self._status_bar:
-                    self._status_bar.edit_mode = False
+                farm_view.toggle_edit_mode()
+                self.query_one("#status-bar", StatusBar).edit_mode = False
                 self._refresh_footer()
                 self.notify("Edit mode off")
         else:
             self._selected_pig_index = -1
-            if self._farm_view:
-                self._farm_view.select_pig(None)
-            if self._pig_sidebar:
-                self._pig_sidebar.set_pig(None)
+            farm_view.select_pig(None)
+            self.query_one("#pig-sidebar", PigSidebar).set_pig(None)
 
     def action_handle_up(self) -> None:
         """Handle up arrow."""
-        if self._farm_view:
-            if self._farm_view.edit_mode:
-                self._farm_view.move_cursor(0, -1)
-            else:
-                self._stop_following()
-                self._farm_view.scroll(0, -2)
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            farm_view.move_cursor(0, -1)
+        else:
+            self._stop_following()
+            farm_view.scroll(0, -2)
 
     def action_handle_down(self) -> None:
         """Handle down arrow."""
-        if self._farm_view:
-            if self._farm_view.edit_mode:
-                self._farm_view.move_cursor(0, 1)
-            else:
-                self._stop_following()
-                self._farm_view.scroll(0, 2)
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            farm_view.move_cursor(0, 1)
+        else:
+            self._stop_following()
+            farm_view.scroll(0, 2)
 
     def action_handle_left(self) -> None:
         """Handle left arrow."""
-        if self._farm_view:
-            if self._farm_view.edit_mode:
-                self._farm_view.move_cursor(-1, 0)
-            else:
-                self._stop_following()
-                self._farm_view.scroll(-2, 0)
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            farm_view.move_cursor(-1, 0)
+        else:
+            self._stop_following()
+            farm_view.scroll(-2, 0)
 
     def action_handle_right(self) -> None:
         """Handle right arrow."""
-        if self._farm_view:
-            if self._farm_view.edit_mode:
-                self._farm_view.move_cursor(1, 0)
-            else:
-                self._stop_following()
-                self._farm_view.scroll(2, 0)
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            farm_view.move_cursor(1, 0)
+        else:
+            self._stop_following()
+            farm_view.scroll(2, 0)
 
     def action_handle_enter(self) -> None:
         """Handle enter key."""
-        if not self._farm_view or not self._farm_view.edit_mode:
+        farm_view = self.query_one("#farm-view", FarmView)
+        if not farm_view.edit_mode:
             return
 
-        if self._farm_view.moving_facility:
-            self._farm_view.confirm_placement()
+        if farm_view.moving_facility:
+            farm_view.confirm_placement()
             self.notify("Facility placed!")
         else:
-            facility = self._farm_view.select_facility_at_cursor()
+            facility = farm_view.select_facility_at_cursor()
             if facility:
                 name = facility.facility_type.display_name
                 self.notify(f"Selected: {name} (M to move, R to remove)")
@@ -345,22 +338,21 @@ class MainGameScreen(Screen):
 
     def action_start_move(self) -> None:
         """Start moving selected facility."""
-        if self._farm_view and self._farm_view.edit_mode:
-            if self._farm_view.start_moving_facility():
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            if farm_view.start_moving_facility():
                 self.notify("Moving facility - arrows to move, Enter to place")
             else:
                 self.notify("Select a facility first (Enter)")
 
     def action_remove_facility(self) -> None:
         """Remove the selected facility and refund its cost."""
-        if self._farm_view and self._farm_view.edit_mode:
-            facility = self._farm_view.get_selected_facility()
+        farm_view = self.query_one("#farm-view", FarmView)
+        if farm_view.edit_mode:
+            facility = farm_view.get_selected_facility()
             if facility:
-                # Get refund amount before removing
                 refund = get_facility_cost(facility.facility_type)
-                # Remove the facility
-                self._farm_view.remove_selected_facility()
-                # Add refund
+                farm_view.remove_selected_facility()
                 add_money(self.state, refund, f"Removed {facility.facility_type.display_name}")
                 name = facility.facility_type.display_name
                 self.notify(f"Removed: {name} (+${refund})")
@@ -369,7 +361,8 @@ class MainGameScreen(Screen):
 
     def action_auto_arrange(self) -> None:
         """Auto-arrange all facilities into logical zones."""
-        if not self._farm_view or not self._farm_view.edit_mode:
+        farm_view = self.query_one("#farm-view", FarmView)
+        if not farm_view.edit_mode:
             return
 
         if not self.state.get_facilities_list():
