@@ -1,10 +1,12 @@
 """Tests for SaveManagerV2 (JSON blob) and CombinedSaveManager (v1 fallback)."""
 
+import sqlite3
+
 import pytest
 from pathlib import Path
 
 from big_pig_farm.game.save_manager import SaveManager
-from big_pig_farm.game.save_manager_v2 import SaveManagerV2, CombinedSaveManager
+from big_pig_farm.game.save_manager_v2 import SaveManagerV2, CombinedSaveManager, SCHEMA_VERSION
 from big_pig_farm.game.state import GameState
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.facilities import Facility, FacilityType
@@ -140,6 +142,20 @@ class TestSaveManagerV2:
 
         backup = tmp_save_path.with_suffix(".db.bak")
         assert backup.exists()
+
+    def test_load_corrupted_json_returns_none(self, tmp_save_path):
+        """Corrupted JSON blob in the database should return None, not crash."""
+        mgr = SaveManagerV2(tmp_save_path)
+        # Init the database schema, then insert garbage JSON
+        conn = sqlite3.connect(str(tmp_save_path))
+        conn.execute(
+            "INSERT OR REPLACE INTO game_state_v2 (id, schema_version, json_blob) VALUES (1, ?, ?)",
+            (SCHEMA_VERSION, "{not valid json!!!"),
+        )
+        conn.commit()
+        conn.close()
+
+        assert mgr.load() is None
 
 
 class TestCombinedSaveManager:
