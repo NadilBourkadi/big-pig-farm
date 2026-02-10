@@ -10,6 +10,7 @@ from textual.widgets import Static, DataTable, Footer
 
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
 from big_pig_farm.game.state import GameState
+from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.pig_detail import PigDetailPanel
 from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
 
@@ -162,8 +163,18 @@ class PigListScreen(Screen):
     def action_sell_pig(self) -> None:
         """Sell the selected pig."""
         pig = self._get_selected_pig()
-        if pig:
-            result = sell_pig(self.state, pig)
+        if not pig:
+            return
+        value = calculate_pig_value(pig, self.state)
+        pig_id = pig.id
+
+        def handle_confirm(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            sell_pig_obj = self.state.get_guinea_pig(pig_id)
+            if not sell_pig_obj:
+                return
+            result = sell_pig(self.state, sell_pig_obj)
             if result.contract_bonus > 0:
                 self.notify(
                     f"Sold {pig.name} for ${result.base_value} + ${result.contract_bonus} contract bonus!"
@@ -172,6 +183,11 @@ class PigListScreen(Screen):
                 self.notify(f"Sold {pig.name} for ${result.total}!")
             self._refresh_table()
             self._update_header()
+
+        self.app.push_screen(
+            ConfirmScreen(f"Sell {pig.name} for ${value}?"),
+            handle_confirm,
+        )
 
     def action_toggle_breeding_lock(self) -> None:
         """Toggle breeding lock on the selected pig."""
