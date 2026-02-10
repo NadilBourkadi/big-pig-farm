@@ -12,6 +12,7 @@ from big_pig_farm.data.sprite_pixels import (
     render_to_rich_text,
     PALETTES,
 )
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.market import calculate_pig_value, calculate_pig_value_breakdown
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
@@ -97,7 +98,7 @@ class PigDetailPanel(Static):
         if pig.origin_tag:
             lines.append(f"  Origin: {pig.origin_tag}")
         breakdown = calculate_pig_value_breakdown(pig, self.state)
-        lines.append(f"  Sale Value: ${breakdown['total']}")
+        lines.append(f"  Sale Value: {format_currency(breakdown['total'])}")
         if breakdown["rarity_mult"] != 1.0:
             lines.append(f"    Rarity: x{breakdown['rarity_mult']:.1f}")
         if breakdown["age_mult"] != 1.0:
@@ -200,7 +201,7 @@ class PigDetailScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("f", "follow_pig", "Follow"),
         ("l", "toggle_lock", "Lock"),
         ("m", "toggle_mark_sale", "Mark"),
@@ -236,6 +237,20 @@ class PigDetailScreen(Screen):
         yield Static(f"{pig.name} - {pig.phenotype.display_name} {gender}", id="detail-header")
         yield PigDetailPanel(self.state, pig, id="detail-panel-container")
         yield Footer()
+
+    def on_mount(self) -> None:
+        """Start periodic refresh of pig details."""
+        self.set_interval(1.0, self._refresh_pig)
+
+    def _refresh_pig(self) -> None:
+        """Re-fetch pig data and update the panel."""
+        pig = self.state.get_guinea_pig(self.pig.id)
+        if pig is None:
+            self.app.pop_screen()
+            return
+        self.pig = pig
+        panel = self.query_one("#detail-panel-container", PigDetailPanel)
+        panel.refresh_pig(pig)
 
     def action_go_back(self) -> None:
         """Go back to pig list."""

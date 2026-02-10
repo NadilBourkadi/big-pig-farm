@@ -8,8 +8,10 @@ from textual.screen import Screen
 from textual.containers import Container
 from textual.widgets import Static, DataTable, Footer
 
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
 from big_pig_farm.game.state import GameState
+from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.pig_detail import PigDetailPanel
 from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
 
@@ -19,7 +21,7 @@ class PigListScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("f", "follow_pig", "Follow"),
         ("s", "sell_pig", "Sell"),
         ("l", "toggle_breeding_lock", "Lock"),
@@ -66,7 +68,7 @@ class PigListScreen(Screen):
         """Compose the pig list screen with split detail panel."""
         count = self.state.pig_count
         capacity = self.state.capacity
-        yield Static(f"Guinea Pigs ({count}/{capacity})", id="pig-header")
+        yield Static(f"GUINEA PIGS ({count}/{capacity})", id="pig-header")
 
         with Container(id="pig-split"):
             yield DataTable(id="pig-table")
@@ -114,7 +116,7 @@ class PigListScreen(Screen):
                 pig.phenotype.display_name,
                 happiness_bar,
                 breed_status,
-                f"${value}",
+                format_currency(value),
                 key=str(pig.id),
             )
 
@@ -162,11 +164,32 @@ class PigListScreen(Screen):
     def action_sell_pig(self) -> None:
         """Sell the selected pig."""
         pig = self._get_selected_pig()
-        if pig:
-            result = sell_pig(self.state, pig)
-            self.notify(f"Sold {pig.name} for ${result.total}!")
+        if not pig:
+            return
+        value = calculate_pig_value(pig, self.state)
+        pig_id = pig.id
+
+        def handle_confirm(confirmed: bool) -> None:
+            if not confirmed:
+                return
+            sell_pig_obj = self.state.get_guinea_pig(pig_id)
+            if not sell_pig_obj:
+                return
+            result = sell_pig(self.state, sell_pig_obj)
+            if result.contract_bonus > 0:
+                self.notify(
+                    f"Sold {sell_pig_obj.name} for {format_currency(result.base_value)} + {format_currency(result.contract_bonus)} contract bonus!",
+                    severity="information",
+                )
+            else:
+                self.notify(f"Sold {sell_pig_obj.name} for {format_currency(result.total)}!", severity="information")
             self._refresh_table()
             self._update_header()
+
+        self.app.push_screen(
+            ConfirmScreen(f"Sell {pig.name} for {format_currency(value)}?"),
+            handle_confirm,
+        )
 
     def action_toggle_breeding_lock(self) -> None:
         """Toggle breeding lock on the selected pig."""
@@ -202,4 +225,4 @@ class PigListScreen(Screen):
         header = self.query_one("#pig-header", Static)
         count = self.state.pig_count
         capacity = self.state.capacity
-        header.update(f"Guinea Pigs ({count}/{capacity})")
+        header.update(f"GUINEA PIGS ({count}/{capacity})")

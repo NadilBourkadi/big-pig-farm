@@ -47,14 +47,14 @@ class BreedingScreen(Screen):
     # here so they fall through to BreedingProgramPanel.on_key
     BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("t", "switch_tab", "Pair"),
     ]
 
     # Pair tab bindings
     _PAIR_BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("t", "switch_tab", "Program"),
         ("tab", "switch_panel", "M/F"),
         ("m", "focus_males", None),
@@ -144,7 +144,7 @@ class BreedingScreen(Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the breeding screen."""
-        yield Static("Breeding Planner", id="breeding-header")
+        yield Static("BREEDING", id="breeding-header")
         yield Static("", id="breeding-status")
 
         with TabbedContent(id="breeding-tabs"):

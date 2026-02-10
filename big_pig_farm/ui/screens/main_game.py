@@ -13,7 +13,7 @@ from textual.widgets import Footer
 from big_pig_farm.data.config import GameSpeed, SPEED_DISPLAY
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
-from big_pig_farm.economy.currency import add_money
+from big_pig_farm.economy.currency import add_money, format_currency
 from big_pig_farm.economy.shop import get_facility_cost
 from big_pig_farm.ui.widgets.status_bar import StatusBar
 from big_pig_farm.data.sprites import ZoomLevel
@@ -239,13 +239,13 @@ class MainGameScreen(Screen):
         if parts:
             self.notify(f"Refilled: {', '.join(parts)}")
         else:
-            self.notify("No facilities to refill")
+            self.notify("No facilities to refill", severity="warning")
 
     def action_next_pig(self) -> None:
         """Select the next guinea pig."""
         pigs = self.state.get_pigs_list()
         if not pigs:
-            self.notify("No guinea pigs!")
+            self.notify("No guinea pigs!", severity="warning")
             return
 
         self._selected_pig_index = (self._selected_pig_index + 1) % len(pigs)
@@ -262,7 +262,7 @@ class MainGameScreen(Screen):
         self.query_one("#status-bar", StatusBar).edit_mode = is_edit
         self._refresh_footer()
         if is_edit:
-            self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
+            self.notify("Edit mode on")
         else:
             self.notify("Edit mode off")
 
@@ -327,14 +327,14 @@ class MainGameScreen(Screen):
 
         if farm_view.moving_facility:
             farm_view.confirm_placement()
-            self.notify("Facility placed!")
+            self.notify("Facility placed!", severity="information")
         else:
             facility = farm_view.select_facility_at_cursor()
             if facility:
                 name = facility.facility_type.display_name
                 self.notify(f"Selected: {name} (M to move, R to remove)")
             else:
-                self.notify("No facility here")
+                self.notify("No facility here", severity="warning")
 
     def action_start_move(self) -> None:
         """Start moving selected facility."""
@@ -343,7 +343,7 @@ class MainGameScreen(Screen):
             if farm_view.start_moving_facility():
                 self.notify("Moving facility - arrows to move, Enter to place")
             else:
-                self.notify("Select a facility first (Enter)")
+                self.notify("Select a facility first (Enter)", severity="warning")
 
     def action_remove_facility(self) -> None:
         """Remove the selected facility and refund its cost."""
@@ -355,9 +355,9 @@ class MainGameScreen(Screen):
                 farm_view.remove_selected_facility()
                 add_money(self.state, refund, f"Removed {facility.facility_type.display_name}")
                 name = facility.facility_type.display_name
-                self.notify(f"Removed: {name} (+${refund})")
+                self.notify(f"Removed: {name} (+{format_currency(refund)})", severity="information")
             else:
-                self.notify("Select a facility first (Enter)")
+                self.notify("Select a facility first (Enter)", severity="warning")
 
     def action_auto_arrange(self) -> None:
         """Auto-arrange all facilities into logical zones."""
@@ -390,7 +390,8 @@ class MainGameScreen(Screen):
         self.app.push_screen(
             ConfirmScreen(
                 "Auto-arrange all facilities?\n"
-                "Positions will be reorganized into zones."
+                "Positions will be reorganized into zones.",
+                destructive=False,
             ),
             handle_confirm,
         )

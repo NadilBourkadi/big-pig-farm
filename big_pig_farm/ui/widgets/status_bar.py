@@ -4,7 +4,7 @@ from textual.widgets import Static
 from textual.reactive import reactive
 
 from big_pig_farm.data.config import SPEED_DISPLAY, GameSpeed, BREEDING
-from big_pig_farm.economy.currency import format_money
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.entities.facilities import FacilityType
 
 
@@ -46,7 +46,7 @@ class StatusBar(Static):
 
         parts = [
             f"Day {self.day}",
-            f"${format_money(self.money)}",
+            format_currency(self.money),
             f"\U0001f439 {self.pig_count}/{self.capacity}",
             f"\U0001f957 {self.food_level}%",
             f"\U0001f4a7 {self.water_level}%",
