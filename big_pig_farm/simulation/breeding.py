@@ -426,8 +426,8 @@ def sell_marked_adults(game_state) -> list[tuple[str, int, UUID]]:
         if pig.marked_for_sale and not pig.is_baby:
             name = pig.name
             pig_id = pig.id
-            total = sell_pig(game_state, pig)
-            sold.append((name, total, pig_id))
+            result = sell_pig(game_state, pig)
+            sold.append((name, result.total, pig_id))
     return sold
 
 
