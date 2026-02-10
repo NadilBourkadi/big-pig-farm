@@ -1,7 +1,14 @@
-"""Guinea pig valuation and selling."""
+"""Guinea pig valuation and selling.
+
+Functions accept GameState directly. Domain facades (EconomyFacade,
+PopulationFacade) can be used by future callers — the duck-typed
+interface is compatible.
+"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional, Union
 
 from big_pig_farm.data.config import ECONOMY
 from big_pig_farm.economy.currency import add_money
@@ -9,6 +16,9 @@ from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.genetics import Rarity
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
+
+if TYPE_CHECKING:
+    from big_pig_farm.game.facades import PopulationFacade
 
 
 @dataclass
@@ -35,12 +45,12 @@ def get_rarity_multiplier(rarity: Rarity) -> float:
     return multipliers.get(rarity, 1.0)
 
 
-def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> int:
+def calculate_pig_value(pig: GuineaPig, state: Optional[Union[GameState, PopulationFacade]] = None) -> int:
     """Calculate the sale value of a guinea pig."""
     return calculate_pig_value_breakdown(pig, state)["total"]
 
 
-def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[GameState] = None) -> dict:
+def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[Union[GameState, PopulationFacade]] = None) -> dict:
     """Calculate sale value with individual multiplier breakdown.
 
     Returns dict with: base, rarity_mult, age_mult, health_mult, grooming_mult, total
