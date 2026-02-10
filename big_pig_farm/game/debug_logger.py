@@ -73,7 +73,7 @@ class DebugLogger:
             target = pig.target_description or "None"
             fac_id = pig.target_facility_id.hex[:8] if pig.target_facility_id else "-"
             blocked = controller._blocked_timers.get(pig.id, 0)
-            failed = controller._failed_facilities.get(pig.id, set())
+            failed = controller.facility_manager.get_failed_facilities(pig.id)
             failed_str = ",".join(
                 _facility_short_name(state, fid) for fid in failed
             ) if failed else "-"

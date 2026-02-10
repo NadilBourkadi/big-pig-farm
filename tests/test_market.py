@@ -91,9 +91,12 @@ class TestSellPig:
         state.add_guinea_pig(pig)
         initial_money = state.money
 
-        total = sell_pig(state, pig)
-        assert state.money == initial_money + total
-        assert total > 0
+        result = sell_pig(state, pig)
+        assert state.money == initial_money + result.total
+        assert result.total > 0
+        assert result.base_value > 0
+        assert result.contract_bonus == 0
+        assert result.matched_contract is None
 
     def test_sell_increments_sold_counter(self):
         state = GameState()

@@ -144,7 +144,7 @@ class PigListScreen(Screen):
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
         """Update detail panel when cursor moves to a new row."""
-        if event.row_key.value is None:
+        if event.row_key is None or event.row_key.value is None:
             self._update_detail_panel(None)
             return
         pig_id = UUID(str(event.row_key.value))
@@ -163,8 +163,8 @@ class PigListScreen(Screen):
         """Sell the selected pig."""
         pig = self._get_selected_pig()
         if pig:
-            value = sell_pig(self.state, pig)
-            self.notify(f"Sold {pig.name} for ${value}!")
+            result = sell_pig(self.state, pig)
+            self.notify(f"Sold {pig.name} for ${result.total}!")
             self._refresh_table()
             self._update_header()
 

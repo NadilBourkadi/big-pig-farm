@@ -1,6 +1,14 @@
-"""Guinea pig valuation and selling."""
+"""Guinea pig valuation and selling.
 
-from typing import Optional
+Functions accept GameState directly. Domain facades (EconomyFacade,
+PopulationFacade) can be used by future callers — the duck-typed
+interface is compatible.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Optional, Union
 
 from big_pig_farm.data.config import ECONOMY
 from big_pig_farm.economy.currency import add_money
@@ -8,6 +16,21 @@ from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.genetics import Rarity
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.game.state import GameState
+
+if TYPE_CHECKING:
+    from big_pig_farm.game.facades import PopulationFacade
+
+
+@dataclass
+class SaleResult:
+    """Result of selling a guinea pig."""
+    base_value: int
+    contract_bonus: int
+    matched_contract: Optional[object]
+
+    @property
+    def total(self) -> int:
+        return self.base_value + self.contract_bonus
 
 
 def get_rarity_multiplier(rarity: Rarity) -> float:
@@ -22,12 +45,12 @@ def get_rarity_multiplier(rarity: Rarity) -> float:
     return multipliers.get(rarity, 1.0)
 
 
-def calculate_pig_value(pig: GuineaPig, state: Optional[GameState] = None) -> int:
+def calculate_pig_value(pig: GuineaPig, state: Optional[Union[GameState, PopulationFacade]] = None) -> int:
     """Calculate the sale value of a guinea pig."""
     return calculate_pig_value_breakdown(pig, state)["total"]
 
 
-def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[GameState] = None) -> dict:
+def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[Union[GameState, PopulationFacade]] = None) -> dict:
     """Calculate sale value with individual multiplier breakdown.
 
     Returns dict with: base, rarity_mult, age_mult, health_mult, grooming_mult, total
@@ -64,8 +87,8 @@ def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[GameState] = N
     }
 
 
-def sell_pig(state: GameState, pig: GuineaPig) -> int:
-    """Sell a guinea pig. Returns the total sale price (including contract bonus)."""
+def sell_pig(state: GameState, pig: GuineaPig) -> SaleResult:
+    """Sell a guinea pig. Returns a SaleResult with value breakdown."""
     value = calculate_pig_value(pig, state)
 
     # Check for contract fulfillment
@@ -75,19 +98,23 @@ def sell_pig(state: GameState, pig: GuineaPig) -> int:
         contract_bonus = matched_contract.reward
         state.contract_board.remove_fulfilled()
 
-    total = value + contract_bonus
+    result = SaleResult(
+        base_value=value,
+        contract_bonus=contract_bonus,
+        matched_contract=matched_contract,
+    )
 
     # Remove pig from game
     state.remove_guinea_pig(pig.id)
     state.total_pigs_sold += 1
 
     # Add money
-    add_money(state, total, f"Sold {pig.name}")
+    add_money(state, result.total, f"Sold {pig.name}")
 
     # Log event
     if contract_bonus > 0:
         state.log_event(
-            f"Rehomed {pig.name} ({pig.phenotype.display_name}) for {value} + {contract_bonus} contract bonus = {total} Squeaks",
+            f"Rehomed {pig.name} ({pig.phenotype.display_name}) for {value} + {contract_bonus} contract bonus = {result.total} Squeaks",
             event_type="sale",
         )
         state.log_event(
@@ -100,7 +127,7 @@ def sell_pig(state: GameState, pig: GuineaPig) -> int:
             event_type="sale",
         )
 
-    return total
+    return result
 
 
 def get_market_info(state: GameState) -> dict:
