@@ -390,7 +390,8 @@ class MainGameScreen(Screen):
         self.app.push_screen(
             ConfirmScreen(
                 "Auto-arrange all facilities?\n"
-                "Positions will be reorganized into zones."
+                "Positions will be reorganized into zones.",
+                destructive=False,
             ),
             handle_confirm,
         )

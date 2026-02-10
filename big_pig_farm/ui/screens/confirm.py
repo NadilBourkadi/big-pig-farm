@@ -40,16 +40,18 @@ class ConfirmScreen(ModalScreen[bool]):
     }
     """
 
-    def __init__(self, message: str, **kwargs):
+    def __init__(self, message: str, destructive: bool = True, **kwargs):
         super().__init__(**kwargs)
         self.message = message
+        self.destructive = destructive
 
     def compose(self) -> ComposeResult:
         """Compose the confirmation dialog."""
+        yes_variant = "error" if self.destructive else "success"
         with Container(id="confirm-dialog"):
             yield Static(self.message, id="confirm-message")
             with Horizontal(id="confirm-buttons"):
-                yield Button("Yes", id="yes-btn", variant="error")
+                yield Button("Yes", id="yes-btn", variant=yes_variant)
                 yield Button("No", id="no-btn", variant="primary")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
