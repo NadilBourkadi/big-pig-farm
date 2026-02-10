@@ -75,7 +75,15 @@ class NeedsConfig:
     EATING_HAPPINESS_BOOST: float = 2.0
 
     # Low-population happiness boost (per game hour, when colony is tiny)
-    LOW_POP_HAPPINESS_BOOST: float = 3.0
+    LOW_POP_HAPPINESS_BOOST: float = 5.0
+    LOW_POP_BOREDOM_RECOVERY: float = 3.0
+
+    # Offline recovery
+    OFFLINE_PLAY_BOREDOM_RECOVERY: float = 10.0
+    OFFLINE_PLAY_HAPPINESS_RECOVERY: float = 5.0
+    OFFLINE_SOCIAL_RECOVERY: float = 5.0
+    OFFLINE_SOCIAL_HAPPINESS_RECOVERY: float = 3.0
+    OFFLINE_ENERGY_RECOVERY: float = 30.0
 
     # Happiness multipliers when needs are critical
     HUNGER_CRITICAL_HAPPINESS_MULT: float = 1.5
