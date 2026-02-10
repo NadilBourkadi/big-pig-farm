@@ -889,17 +889,12 @@ def generate_portrait_with_scene(
     roan: str,
     pig_id: str,
 ) -> PixelGrid:
-    """Generate a portrait composited over a sky + grass background.
-
-    The background is 4 rows taller than the portrait (26 total), adding
-    a visible grass strip below the pig body.
-    """
+    """Generate a portrait composited over a sky + grass background."""
     portrait = generate_portrait(base_color_name, pattern, intensity, roan, pig_id)
     p_height = len(portrait)
     p_width = max(len(row) for row in portrait)
 
-    bg_height = p_height + 4
-    bg = generate_background(p_width, bg_height)
+    bg = generate_background(p_width, p_height)
 
     # Composite portrait over background — portrait pixels replace bg where non-None
     for y in range(p_height):
