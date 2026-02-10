@@ -161,20 +161,24 @@ class Phenotype(BaseModel):
         return color_map.get(self.base_color, "white")
 
 
+def _determine_base_color(has_E: bool, has_B: bool) -> BaseColor:
+    """Determine base coat color from E and B locus dominance."""
+    if has_E and has_B:
+        return BaseColor.BLACK
+    elif has_E and not has_B:
+        return BaseColor.CHOCOLATE
+    elif not has_E and has_B:
+        return BaseColor.GOLDEN
+    else:
+        return BaseColor.CREAM
+
+
 def calculate_phenotype(genotype: Genotype) -> Phenotype:
     """Calculate the observable phenotype from a genotype."""
     # Base color from E and B loci
     has_E = genotype.has_dominant(genotype.e_locus, "E")
     has_B = genotype.has_dominant(genotype.b_locus, "B")
-
-    if has_E and has_B:
-        base_color = BaseColor.BLACK
-    elif has_E and not has_B:
-        base_color = BaseColor.CHOCOLATE
-    elif not has_E and has_B:
-        base_color = BaseColor.GOLDEN
-    else:
-        base_color = BaseColor.CREAM
+    base_color = _determine_base_color(has_E, has_B)
 
     # Pattern from S locus
     if genotype.is_homozygous_dominant(genotype.s_locus, "S"):
@@ -472,14 +476,7 @@ def _color_probability(
         for b_alleles, b_prob in b_outcomes.items():
             has_B = _has_dominant_allele(b_alleles, "B")
 
-            if has_E and has_B:
-                color = BaseColor.BLACK
-            elif has_E and not has_B:
-                color = BaseColor.CHOCOLATE
-            elif not has_E and has_B:
-                color = BaseColor.GOLDEN
-            else:
-                color = BaseColor.CREAM
+            color = _determine_base_color(has_E, has_B)
 
             if color in targets:
                 prob += e_prob * b_prob
