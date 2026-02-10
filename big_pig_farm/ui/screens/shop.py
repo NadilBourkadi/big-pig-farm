@@ -66,7 +66,7 @@ class ShopScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("f", "category_facilities", "Facilities"),
         ("d", "category_food", "Food"),
         ("u", "category_upgrades", "Upgrades"),

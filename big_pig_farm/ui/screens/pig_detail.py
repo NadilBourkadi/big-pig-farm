@@ -200,7 +200,7 @@ class PigDetailScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("f", "follow_pig", "Follow"),
         ("l", "toggle_lock", "Lock"),
         ("m", "toggle_mark_sale", "Mark"),

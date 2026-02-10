@@ -200,7 +200,7 @@ class JournalScreen(Screen):
 
     BINDINGS = [
         ("escape", "go_back", "Back"),
-        ("q", "go_back", "Back"),
+        ("q", "go_back", None),
         ("up", "scroll_up", None),
         ("down", "scroll_down", None),
         ("pageup", "page_up", None),
