@@ -693,14 +693,14 @@ _FACE_TEMPLATE: PixelGrid = [
     [ T,    "dark","ear", "ear","dark","dark","fur",  "fur","dark", "eye","pupil","pupil","dark", "fur", "fur", "fur", "fur", "fur","dark", "eye","pupil","pupil","dark", "fur", "fur", "fur","dark","dark","ear", "ear","dark", T    ],  # 7  eyes mid (pupil 2x2 lower)
     [ T,   "dark","dark","dark", T,   "dark","fur",  "fur","dark", "eye", "eye", "eye","dark", "fur", "fur", "fur", "fur", "fur","dark", "eye", "eye", "eye","dark", "fur", "fur", "fur","dark", T,   "dark","dark","dark", T    ],  # 8  eyes bottom (sclera + outline)
     [ T,     T,     T,     T,     T,   "dark","fur",  "fur", "fur","dark","dark","dark","dark", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark", "fur", "fur", "fur","dark", T,     T,     T,     T,     T    ],  # 9  below eyes (outline bottom)
-    [ T, T,     T,     T,    "dark","fur", "fur","blush","blush","fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur","blush","blush","fur", "fur","dark", T,     T,     T,     T],  # 10 cheeks + blush + nose top
-    [ T, T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T],  # 11 nose pad
-    [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","nose","dark","fur", "fur","dark","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 12 nostrils
-    [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 13 below nose
-    [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","tooth","tooth","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 14 mouth + teeth
-    [ T,     T,     T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 15 lower lip
-    [ T,     T,     T,   "dark","fur",  "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,     T,     T    ],  # 16 lower cheeks widen
-    [ T,   "dark","fur",  "fur", "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", "fur", "fur", "fur","dark", T,     T    ],  # 17 chin outline + body starts
+    [ T, T,     T,    "dark","dark","fur", "fur","blush","blush","fur", "fur", "fur", "fur", "fur", "fur","nose","nose","fur", "fur", "fur", "fur", "fur", "fur","blush","blush","fur", "fur","dark","dark", T,     T,     T],  # 10 cheeks + blush + nose top
+    [ T,     T,    "dark","fur","dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","nose","nose","nose","nose","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","fur","dark", T,     T    ],  # 11 nose pad + cheek tufts
+    [ T,    "dark","fur", "fur","dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","fur","dark","nose","nose","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","fur", "fur","dark", T    ],  # 12 nostrils
+    ["dark","fur", "fur","dark","dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","fur", "fur","dark"],  # 13 below nose + cheek tufts
+    ["dark","fur", "fur", "fur","dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","tooth","tooth","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","fur", "fur", "fur","dark"],  # 14 mouth + teeth + cheek tufts
+    ["dark","fur",  T,     T,    "dark","fur", "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark", T,     T,    "fur","dark"],  # 15 lower lip + tuft bridge
+    ["dark","fur","dark","dark","fur",  "fur",  "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","fur","dark", T    ],  # 16 lower cheeks + small tufts
+    ["dark","dark","fur",  "fur", "dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur","dark","dark", "fur", "fur", "fur","dark","dark","dark"],  # 17 chin outline + body starts
     ["dark","fur",  "fur",  "fur", "fur", "fur","dark","dark","dark","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","dark","dark","dark", "fur", "fur", "fur", "fur", "fur","dark"],  # 18 chin curves into body
     ["fur",  "fur",  "fur", "fur", "fur", "fur", "fur", "fur","dark","dark","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","dark","dark","fur", "fur", "fur", "fur", "fur", "fur", "fur", "fur"],  # 19 chin bottom merges
     ["fur",  "fur",  "fur", "fur", "fur", "fur", "belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","belly","fur", "fur", "fur", "fur", "fur", "fur"],  # 20 body extends past edges
@@ -847,3 +847,59 @@ def generate_portrait(
         _apply_roan(grid, pig_id)
 
     return grid
+
+
+# ---------------------------------------------------------------------------
+# Scene background for pig portraits
+# ---------------------------------------------------------------------------
+
+SCENE_BG_COLORS: dict[str, str] = {
+    "sky_light": "#87ceeb",
+    "sky_dark": "#6bb3d9",
+    "grass_light": "#6abf4b",
+    "grass": "#4a9e2f",
+    "grass_dark": "#3b8125",
+}
+
+
+def generate_background(width: int, height: int) -> PixelGrid:
+    """Build a sky + grass background grid of literal hex color strings.
+
+    Rows 0-9: light sky, 10-15: darker sky, 16-17: light grass (horizon),
+    18+: grass with occasional dark grass variation.
+    """
+    grid: PixelGrid = []
+    for y in range(height):
+        if y < 10:
+            color = SCENE_BG_COLORS["sky_light"]
+        elif y < 16:
+            color = SCENE_BG_COLORS["sky_dark"]
+        elif y < 18:
+            color = SCENE_BG_COLORS["grass_light"]
+        else:
+            color = SCENE_BG_COLORS["grass_dark" if y % 2 == 0 else "grass"]
+        grid.append([color] * width)
+    return grid
+
+
+def generate_portrait_with_scene(
+    base_color_name: str,
+    pattern: str,
+    intensity: str,
+    roan: str,
+    pig_id: str,
+) -> PixelGrid:
+    """Generate a portrait composited over a sky + grass background."""
+    portrait = generate_portrait(base_color_name, pattern, intensity, roan, pig_id)
+    p_height = len(portrait)
+    p_width = max(len(row) for row in portrait)
+
+    bg = generate_background(p_width, p_height)
+
+    # Composite portrait over background — portrait pixels replace bg where non-None
+    for y in range(p_height):
+        for x in range(len(portrait[y])):
+            if portrait[y][x] is not None:
+                bg[y][x] = portrait[y][x]
+
+    return bg
