@@ -262,7 +262,7 @@ class MainGameScreen(Screen):
         self.query_one("#status-bar", StatusBar).edit_mode = is_edit
         self._refresh_footer()
         if is_edit:
-            self.notify("EDIT MODE: Arrows move cursor, Enter selects, M moves, R removes, Esc exits")
+            self.notify("Edit mode on")
         else:
             self.notify("Edit mode off")
 
