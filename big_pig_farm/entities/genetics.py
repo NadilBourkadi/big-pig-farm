@@ -189,12 +189,12 @@ def calculate_phenotype(genotype: Genotype) -> Phenotype:
         pattern = Pattern.DUTCH
 
     # Intensity from C locus
-    if genotype.has_dominant(genotype.c_locus, "C"):
-        intensity = ColorIntensity.FULL
-    elif genotype.is_homozygous_recessive(genotype.c_locus, "ch"):
+    if genotype.is_homozygous_recessive(genotype.c_locus, "ch"):
         intensity = ColorIntensity.HIMALAYAN
-    else:
+    elif "ch" in genotype.c_locus:
         intensity = ColorIntensity.CHINCHILLA
+    else:
+        intensity = ColorIntensity.FULL
 
     # Roan from R locus
     if genotype.has_dominant(genotype.r_locus, "R"):
