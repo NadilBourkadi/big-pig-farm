@@ -177,10 +177,11 @@ class PigListScreen(Screen):
             result = sell_pig(self.state, sell_pig_obj)
             if result.contract_bonus > 0:
                 self.notify(
-                    f"Sold {pig.name} for ${result.base_value} + ${result.contract_bonus} contract bonus!"
+                    f"Sold {pig.name} for ${result.base_value} + ${result.contract_bonus} contract bonus!",
+                    severity="information",
                 )
             else:
-                self.notify(f"Sold {pig.name} for ${result.total}!")
+                self.notify(f"Sold {pig.name} for ${result.total}!", severity="information")
             self._refresh_table()
             self._update_header()
 
