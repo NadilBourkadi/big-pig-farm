@@ -184,6 +184,11 @@ class BehaviorController:
             self._seek_facility_for_need(pig, urgent_need)
             return
 
+        if urgent_need == "happiness":
+            pig.log_behavior(f"Unhappy ({pig.needs.happiness:.0f}%), seeking play")
+            self._seek_play(pig)
+            return
+
         if urgent_need == "social" and not pig.has_trait(Personality.SHY):
             pig.log_behavior("Lonely, seeking social interaction")
             self._seek_social_interaction(pig)

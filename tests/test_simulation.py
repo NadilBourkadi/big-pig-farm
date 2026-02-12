@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch
-from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG, BEHAVIOR, BREEDING
+from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG, BEHAVIOR
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Needs, Position
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import (
@@ -340,121 +340,69 @@ class TestStuckTimer:
         assert pig.id not in controller._stuck_timers
 
 
-class TestLowPopHappinessBoost:
-    """Tests for the low-population happiness boost."""
+class TestContentmentModel:
+    """Tests for the needs-derived contentment happiness model."""
 
-    def test_happiness_boost_when_population_low(self):
-        """Happiness boost should apply when pig count <= MIN_BREEDING_POPULATION."""
+    def test_happiness_recovers_when_needs_met(self):
+        """Happiness should increase when all basic needs are above LOW_THRESHOLD."""
         state = GameState()
-        # Add only 2 pigs (below MIN_BREEDING_POPULATION)
         pig = GuineaPig.create(
-            name="Lonely",
+            name="Content",
             gender=Gender.MALE,
             position=Position(x=5.0, y=5.0),
             age_days=5.0,
         )
         pig.needs.happiness = 50.0
+        pig.needs.hunger = 80.0
+        pig.needs.thirst = 80.0
+        pig.needs.energy = 80.0
+        pig.needs.boredom = 0.0  # No boredom penalty
         state.add_guinea_pig(pig)
-
-        other = GuineaPig.create(
-            name="Friend",
-            gender=Gender.FEMALE,
-            position=Position(x=20.0, y=20.0),
-            age_days=5.0,
-        )
-        state.add_guinea_pig(other)
-
-        assert len(state.get_pigs_list()) <= BREEDING.MIN_BREEDING_POPULATION
 
         update_all_needs(pig, 60.0, state)  # 1 game hour
 
-        # With base decay of 2.0/hr + boredom penalty, but +5.0/hr boost,
-        # happiness should be higher than (50 - 2.0 - 1.0) = 47.0
-        # The boost gives +5.0 so net is roughly +2.0/hr depending on boredom
-        assert pig.needs.happiness > 45.0
+        # Contentment recovery of +2.0/hr should increase happiness
+        assert pig.needs.happiness > 50.0
 
-    def test_no_boost_when_population_above_threshold(self):
-        """Happiness boost should NOT apply when pig count > MIN_BREEDING_POPULATION."""
+    def test_happiness_drains_when_needs_critical(self):
+        """Happiness should decrease when basic needs are below CRITICAL_THRESHOLD."""
         state = GameState()
         pig = GuineaPig.create(
-            name="Test",
+            name="Suffering",
             gender=Gender.MALE,
             position=Position(x=5.0, y=5.0),
             age_days=5.0,
         )
         pig.needs.happiness = 50.0
+        pig.needs.hunger = 5.0   # Critical
+        pig.needs.thirst = 5.0   # Critical
+        pig.needs.energy = 5.0   # Critical
         state.add_guinea_pig(pig)
-
-        # Add enough other pigs to exceed MIN_BREEDING_POPULATION
-        for i in range(BREEDING.MIN_BREEDING_POPULATION):
-            other = GuineaPig.create(
-                name=f"Other{i}",
-                gender=Gender.FEMALE,
-                position=Position(x=20.0, y=20.0),
-                age_days=5.0,
-            )
-            state.add_guinea_pig(other)
-
-        assert len(state.get_pigs_list()) > BREEDING.MIN_BREEDING_POPULATION
 
         update_all_needs(pig, 60.0, state)  # 1 game hour
 
-        # Without boost, happiness should drop (base decay 2.0/hr + boredom)
-        # Pig is far from others so no social boost to offset
+        # All three critical: -2.0 - 2.5 - 1.5 = -6.0/hr drain
         assert pig.needs.happiness < 50.0
 
-    def test_boredom_recovery_when_population_low(self):
-        """Boredom should decrease when pig count <= MIN_BREEDING_POPULATION."""
+    def test_no_happiness_change_when_needs_moderate(self):
+        """Happiness should stay roughly stable when needs are between critical and low."""
         state = GameState()
         pig = GuineaPig.create(
-            name="Bored",
+            name="Moderate",
             gender=Gender.MALE,
             position=Position(x=5.0, y=5.0),
             age_days=5.0,
         )
-        pig.needs.boredom = 80.0
+        pig.needs.happiness = 50.0
+        pig.needs.hunger = 30.0   # Above critical, below low threshold
+        pig.needs.thirst = 30.0
+        pig.needs.energy = 30.0
+        pig.needs.boredom = 0.0
         state.add_guinea_pig(pig)
-
-        other = GuineaPig.create(
-            name="Friend",
-            gender=Gender.FEMALE,
-            position=Position(x=20.0, y=20.0),
-            age_days=5.0,
-        )
-        state.add_guinea_pig(other)
-
-        assert len(state.get_pigs_list()) <= BREEDING.MIN_BREEDING_POPULATION
 
         update_all_needs(pig, 60.0, state)  # 1 game hour
 
-        # Boredom gains +2.0/hr (decay) but loses -3.0/hr (low-pop recovery)
-        # Net: -1.0/hr, so boredom should drop from 80
-        assert pig.needs.boredom < 80.0
-
-    def test_no_boredom_recovery_when_population_above_threshold(self):
-        """Boredom should NOT get low-pop recovery when pig count > MIN_BREEDING_POPULATION."""
-        state = GameState()
-        pig = GuineaPig.create(
-            name="Bored",
-            gender=Gender.MALE,
-            position=Position(x=5.0, y=5.0),
-            age_days=5.0,
-        )
-        pig.needs.boredom = 50.0
-        state.add_guinea_pig(pig)
-
-        for i in range(BREEDING.MIN_BREEDING_POPULATION):
-            other = GuineaPig.create(
-                name=f"Other{i}",
-                gender=Gender.FEMALE,
-                position=Position(x=20.0, y=20.0),
-                age_days=5.0,
-            )
-            state.add_guinea_pig(other)
-
-        assert len(state.get_pigs_list()) > BREEDING.MIN_BREEDING_POPULATION
-
-        update_all_needs(pig, 60.0, state)  # 1 game hour
-
-        # Without low-pop recovery, boredom should increase (base +2.0/hr)
-        assert pig.needs.boredom > 50.0
+        # Not critical (no drain) and not satisfied (no recovery) — should stay ~50
+        # Only boredom extra drain could change it, but boredom starts at 0
+        # After 1hr boredom rises to ~2.0 which is below the 70 threshold
+        assert 48.0 < pig.needs.happiness < 52.0
