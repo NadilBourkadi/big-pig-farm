@@ -48,6 +48,9 @@ _FACILITY_LABELS: dict[str, str] = {
 }
 
 
+VIEWPORT_PADDING = 4  # world cells of extra scroll beyond farm edges
+
+
 class FarmView(Static):
     """Widget that renders the farm grid with guinea pigs and facilities."""
 
@@ -104,10 +107,19 @@ class FarmView(Static):
             return
         farm = self.state.farm
         scale = self._scale()
-        max_x = max(0, int(farm.width - width / scale))
-        max_y = max(0, int(farm.height - height / scale))
-        self._viewport_x = max(0, min(self._viewport_x, max_x))
-        self._viewport_y = max(0, min(self._viewport_y, max_y))
+
+        max_x_base = int(farm.width - width / scale)
+        max_y_base = int(farm.height - height / scale)
+
+        if max_x_base > 0:
+            self._viewport_x = max(-VIEWPORT_PADDING, min(self._viewport_x, max_x_base + VIEWPORT_PADDING))
+        else:
+            self._viewport_x = 0
+
+        if max_y_base > 0:
+            self._viewport_y = max(-VIEWPORT_PADDING, min(self._viewport_y, max_y_base + VIEWPORT_PADDING))
+        else:
+            self._viewport_y = 0
 
     def _scale(self) -> float:
         return ZOOM_SCALES[self._zoom]
@@ -140,12 +152,12 @@ class FarmView(Static):
         self._init_buffers(width, height)
 
         # Draw layers
-        self._draw_terrain(width, height, offset_x, offset_y, scale)
-        self._draw_facilities(width, height, offset_x, offset_y, scale)
-        self._draw_guinea_pigs(width, height, offset_x, offset_y, scale)
+        self._draw_terrain(width, height, offset_x, offset_y)
+        self._draw_facilities(width, height, offset_x, offset_y)
+        self._draw_guinea_pigs(width, height, offset_x, offset_y)
 
         if self.edit_mode:
-            self._draw_cursor(width, height, offset_x, offset_y, scale)
+            self._draw_cursor(width, height, offset_x, offset_y)
 
         return self._buffer_to_text()
 
@@ -171,13 +183,17 @@ class FarmView(Static):
         color = colors[(h >> 4) % len(colors)]
         return char, Style(color=color, bgcolor="#4a3d28")
 
-    def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw the terrain/floor."""
         farm = self.state.farm
+        scale = self._scale()
 
         if scale < 1.0:
-            self._draw_terrain_far(width, height, offset_x, offset_y, scale)
+            self._draw_terrain_far(width, height, offset_x, offset_y)
             return
+
+        cell_w = max(1, int(scale))
+        cell_h = max(1, int(scale))
 
         for world_y in range(farm.height):
             for world_x in range(farm.width):
@@ -212,22 +228,16 @@ class FarmView(Static):
                 else:
                     char, style = self._floor_texture(world_x, world_y)
 
-                self._char_buffer[screen_y][screen_x] = char
-                self._style_buffer[screen_y][screen_x] = style
-                self._terrain_bg_buffer[screen_y][screen_x] = style
+                for dy in range(cell_h):
+                    for dx in range(cell_w):
+                        sx = screen_x + dx
+                        sy = screen_y + dy
+                        if 0 <= sx < width and 0 <= sy < height:
+                            self._char_buffer[sy][sx] = char
+                            self._style_buffer[sy][sx] = style
+                            self._terrain_bg_buffer[sy][sx] = style
 
-                # At close zoom, fill the 2x2 block for this world cell
-                if scale >= 2.0:
-                    for dy in range(2):
-                        for dx in range(2):
-                            sx = screen_x + dx
-                            sy = screen_y + dy
-                            if 0 <= sx < width and 0 <= sy < height:
-                                self._char_buffer[sy][sx] = char
-                                self._style_buffer[sy][sx] = style
-                                self._terrain_bg_buffer[sy][sx] = style
-
-    def _draw_terrain_far(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_terrain_far(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Simplified terrain for far zoom — explicit border + floor fill.
 
         At sub-1x scales, world→screen mapping is lossy (multiple world cells
@@ -235,6 +245,7 @@ class FarmView(Static):
         being overwritten by adjacent floor cells.
         """
         farm = self.state.farm
+        scale = self._scale()
         wall_style = Style(color="bright_white")
 
         # Screen extents of the farm rectangle
@@ -285,13 +296,15 @@ class FarmView(Static):
     # Facilities
     # ------------------------------------------------------------------
 
-    def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_facilities(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw all facilities on the farm."""
         for facility in self.state.get_facilities_list():
-            self._draw_facility(facility, width, height, offset_x, offset_y, scale)
+            self._draw_facility(facility, width, height, offset_x, offset_y)
 
-    def _draw_facility(self, facility: Facility, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_facility(self, facility: Facility, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw a single facility using half-block sprites (with ASCII fallback)."""
+        scale = self._scale()
+
         # Determine state for consumable facilities
         if facility.is_empty:
             state = "empty"
@@ -367,28 +380,33 @@ class FarmView(Static):
         else:
             color = "cyan"
 
+        cell_w = max(1, int(scale))
         for dy, line in enumerate(sprite):
             for dx, char in enumerate(line):
                 screen_x = int((facility.position_x + dx - self._viewport_x) * scale) + offset_x
                 screen_y = int((facility.position_y + dy - self._viewport_y) * scale) + offset_y
 
-                if 0 <= screen_x < width and 0 <= screen_y < height:
-                    if char != " ":
-                        self._char_buffer[screen_y][screen_x] = char
-                        self._style_buffer[screen_y][screen_x] = Style(color=color)
+                if 0 <= screen_y < height and char != " ":
+                    for cx in range(cell_w):
+                        sx = screen_x + cx
+                        if 0 <= sx < width:
+                            self._char_buffer[screen_y][sx] = char
+                            self._style_buffer[screen_y][sx] = Style(color=color)
 
     # ------------------------------------------------------------------
     # Guinea pigs
     # ------------------------------------------------------------------
 
-    def _draw_guinea_pigs(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_guinea_pigs(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw all guinea pigs, sorted by Y so lower pigs draw on top."""
         pigs = sorted(self.state.get_pigs_list(), key=lambda p: p.position.y)
         for pig in pigs:
-            self._draw_pig(pig, width, height, offset_x, offset_y, scale)
+            self._draw_pig(pig, width, height, offset_x, offset_y)
 
-    def _draw_pig(self, pig: GuineaPig, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_pig(self, pig: GuineaPig, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw a single guinea pig using half-block sprites (or dot at far zoom)."""
+        scale = self._scale()
+
         # Determine direction — look ahead in path for meaningful horizontal
         # movement.  Only update the stored facing when a clear direction is
         # found, so vertical movement and float-boundary crossings don't cause
@@ -515,19 +533,13 @@ class FarmView(Static):
         farm = self.state.farm
         scale = self._scale()
 
-        scaled_w = int(farm.width * scale)
-        scaled_h = int(farm.height * scale)
-
-        if scaled_w > width:
+        if int(farm.width * scale) > width:
             self._viewport_x = int(pig.position.x) - int(width / scale) // 2
-            max_vx = int(farm.width - width / scale)
-            self._viewport_x = max(0, min(self._viewport_x, max_vx))
 
-        if scaled_h > height:
+        if int(farm.height * scale) > height:
             self._viewport_y = int(pig.position.y) - int(height / scale) // 2
-            max_vy = int(farm.height - height / scale)
-            self._viewport_y = max(0, min(self._viewport_y, max_vy))
 
+        self._clamp_viewport()
         self.refresh()
 
     def select_pig(self, pig_id: Optional[UUID]) -> None:
@@ -543,34 +555,28 @@ class FarmView(Static):
 
     def scroll(self, dx: int, dy: int) -> None:
         """Scroll the viewport."""
-        width = self.size.width
-        height = self.size.height
-        farm = self.state.farm
-        scale = self._scale()
-
         self._viewport_x += dx
         self._viewport_y += dy
-
-        max_x = max(0, int(farm.width - width / scale))
-        max_y = max(0, int(farm.height - height / scale))
-
-        self._viewport_x = max(0, min(self._viewport_x, max_x))
-        self._viewport_y = max(0, min(self._viewport_y, max_y))
-
+        self._clamp_viewport()
         self.refresh()
 
     # ------------------------------------------------------------------
     # Edit mode (unchanged)
     # ------------------------------------------------------------------
 
-    def _draw_cursor(self, width: int, height: int, offset_x: int, offset_y: int, scale: float) -> None:
+    def _draw_cursor(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw the edit mode cursor."""
+        scale = self._scale()
         screen_x = int((self._cursor_x - self._viewport_x) * scale) + offset_x
         screen_y = int((self._cursor_y - self._viewport_y) * scale) + offset_y
 
-        if 0 <= screen_x < width and 0 <= screen_y < height:
-            self._char_buffer[screen_y][screen_x] = "█"
-            self._style_buffer[screen_y][screen_x] = Style(color="bright_magenta", bold=True)
+        cell_w = max(1, int(scale))
+        if 0 <= screen_y < height:
+            for cx in range(cell_w):
+                sx = screen_x + cx
+                if 0 <= sx < width:
+                    self._char_buffer[screen_y][sx] = "█"
+                    self._style_buffer[screen_y][sx] = Style(color="bright_magenta", bold=True)
 
     def toggle_edit_mode(self) -> bool:
         """Toggle edit mode on/off. Returns new state."""

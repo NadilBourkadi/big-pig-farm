@@ -35,8 +35,6 @@ class NeedsConfig:
     HUNGER_DECAY: float = 0.6
     THIRST_DECAY: float = 0.8
     ENERGY_DECAY: float = 0.6
-    HAPPINESS_BASE_DECAY: float = 2.0
-
     # Thresholds
     CRITICAL_THRESHOLD: int = 20
     LOW_THRESHOLD: int = 40
@@ -74,9 +72,11 @@ class NeedsConfig:
     # Happiness boosts during behavior
     EATING_HAPPINESS_BOOST: float = 2.0
 
-    # Low-population happiness boost (per game hour, when colony is tiny)
-    LOW_POP_HAPPINESS_BOOST: float = 5.0
-    LOW_POP_BOREDOM_RECOVERY: float = 3.0
+    # Contentment model — happiness derived from needs satisfaction
+    HAPPINESS_CONTENTMENT_RECOVERY: float = 2.0   # passive recovery when basic needs met
+    HUNGER_HAPPINESS_DRAIN: float = 2.0            # drain when hunger critical
+    THIRST_HAPPINESS_DRAIN: float = 2.5            # drain when thirst critical
+    ENERGY_HAPPINESS_DRAIN: float = 1.5            # drain when energy critical
 
     # Offline recovery
     OFFLINE_PLAY_BOREDOM_RECOVERY: float = 10.0
@@ -84,11 +84,6 @@ class NeedsConfig:
     OFFLINE_SOCIAL_RECOVERY: float = 5.0
     OFFLINE_SOCIAL_HAPPINESS_RECOVERY: float = 3.0
     OFFLINE_ENERGY_RECOVERY: float = 30.0
-
-    # Happiness multipliers when needs are critical
-    HUNGER_CRITICAL_HAPPINESS_MULT: float = 1.5
-    THIRST_CRITICAL_HAPPINESS_MULT: float = 1.5
-    ENERGY_CRITICAL_HAPPINESS_MULT: float = 1.25
 
     # Personality modifiers
     GREEDY_HUNGER_MULT: float = 1.5

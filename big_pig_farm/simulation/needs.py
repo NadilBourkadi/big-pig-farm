@@ -1,6 +1,6 @@
 """Hunger, energy, happiness calculations for guinea pigs."""
 
-from big_pig_farm.data.config import NEEDS, BREEDING
+from big_pig_farm.data.config import NEEDS
 from big_pig_farm.entities.guinea_pig import GuineaPig, Personality, BehaviorState
 from big_pig_farm.entities.facilities import FacilityType
 
@@ -22,27 +22,25 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
     pig.needs.thirst -= NEEDS.THIRST_DECAY * hours
     pig.needs.energy -= NEEDS.ENERGY_DECAY * hours * energy_modifier
 
-    # Happiness decay - faster when other needs are low
-    happiness_decay = NEEDS.HAPPINESS_BASE_DECAY
-    if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= NEEDS.HUNGER_CRITICAL_HAPPINESS_MULT
-    if pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= NEEDS.THIRST_CRITICAL_HAPPINESS_MULT
-    if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
-        happiness_decay *= NEEDS.ENERGY_CRITICAL_HAPPINESS_MULT
+    # Contentment: happiness passively recovers when basic needs are met
+    needs_satisfied = (pig.needs.hunger >= NEEDS.LOW_THRESHOLD
+                       and pig.needs.thirst >= NEEDS.LOW_THRESHOLD
+                       and pig.needs.energy >= NEEDS.LOW_THRESHOLD)
+    if needs_satisfied:
+        pig.needs.happiness += NEEDS.HAPPINESS_CONTENTMENT_RECOVERY * hours
 
-    pig.needs.happiness -= happiness_decay * hours
+    # Critical needs directly drain happiness
+    if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
+        pig.needs.happiness -= NEEDS.HUNGER_HAPPINESS_DRAIN * hours
+    if pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD:
+        pig.needs.happiness -= NEEDS.THIRST_HAPPINESS_DRAIN * hours
+    if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
+        pig.needs.happiness -= NEEDS.ENERGY_HAPPINESS_DRAIN * hours
 
     # Boredom increases over time
     pig.needs.boredom += NEEDS.BOREDOM_DECAY * hours * boredom_modifier
     if pig.needs.boredom > NEEDS.BOREDOM_EXTRA_HAPPINESS_THRESHOLD:
         pig.needs.happiness -= NEEDS.BOREDOM_EXTRA_HAPPINESS_DRAIN * hours
-
-    # Low-population happiness boost — keeps colony breedable when tiny
-    pig_count = len(game_state.get_pigs_list())
-    if pig_count <= BREEDING.MIN_BREEDING_POPULATION:
-        pig.needs.happiness += NEEDS.LOW_POP_HAPPINESS_BOOST * hours
-        pig.needs.boredom -= NEEDS.LOW_POP_BOREDOM_RECOVERY * hours
 
     # Social need decay - reduced if near other pigs
     nearby_pigs = _count_nearby_pigs(pig, game_state, radius=NEEDS.SOCIAL_RADIUS)
