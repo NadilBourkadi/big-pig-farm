@@ -255,7 +255,11 @@ def _place_facilities_in_zone(
     farm_height: int,
     occupied: set[tuple[int, int]],
 ) -> tuple[list[Placement], list[Facility]]:
-    """Place facilities within a zone using greedy left-to-right, top-to-bottom.
+    """Place facilities within a zone, spreading them evenly across the zone height.
+
+    Facilities are assigned to horizontal shelves (rows) by packing left-to-right.
+    Shelves are then distributed vertically to maximize spacing within the zone,
+    preventing the top-heavy clustering of greedy top-to-bottom placement.
 
     The `occupied` set is shared across all zone placements and is updated
     in-place to prevent cross-zone and overflow-pass collisions.
@@ -272,52 +276,102 @@ def _place_facilities_in_zone(
     placed: list[Placement] = []
     overflow: list[Facility] = []
 
-    for facility in sorted_facilities:
-        info = FACILITY_INFO[facility.facility_type]
-        fw = info.size.width
-        fh = info.size.height
-        # Interaction point is at position_y + height, must be inside walls
-        interaction_row = fh  # relative offset
+    # Phase 1: Assign facilities to horizontal shelves (left-to-right rows)
+    # Each shelf: (items, max_sprite_height)
+    # Each item: (facility, x_position, sprite_width, sprite_height)
+    shelves: list[tuple[list[tuple[Facility, int, int, int]], int]] = []
+    current_items: list[tuple[Facility, int, int, int]] = []
+    cursor_x = zone.x1
+    max_sprite_h = 0
 
-        # Sprite dimensions determine visual footprint (much larger than grid)
+    for facility in sorted_facilities:
         sw, sh = _sprite_size(facility.facility_type)
 
-        placement_found = False
+        # Facility sprite wider than zone — can't fit at all
+        if sw > zone.width:
+            overflow.append(facility)
+            continue
 
-        # Scan top-to-bottom, left-to-right
-        y = zone.y1
-        while y + fh - 1 <= zone.y2 and not placement_found:
-            # Ensure interaction point row is inside the farm (not in wall)
-            if y + interaction_row >= farm_height - 1:
-                y += 1
+        # Check if facility fits in current row
+        if current_items and cursor_x + sw - 1 > zone.x2:
+            shelves.append((current_items, max_sprite_h))
+            current_items = []
+            cursor_x = zone.x1
+            max_sprite_h = 0
+
+        current_items.append((facility, cursor_x, sw, sh))
+        cursor_x += sw + h_gap
+        max_sprite_h = max(max_sprite_h, sh)
+
+    if current_items:
+        shelves.append((current_items, max_sprite_h))
+
+    if not shelves:
+        return placed, overflow
+
+    # Phase 2: Compute y-position for each shelf to spread evenly across zone
+    num_shelves = len(shelves)
+    total_content_h = sum(sh for _, sh in shelves)
+    zone_h = zone.y2 - zone.y1 + 1
+
+    if num_shelves == 1:
+        # Single shelf: center vertically in the zone
+        shelf_ys = [zone.y1 + (zone_h - shelves[0][1]) // 2]
+    else:
+        remaining_space = zone_h - total_content_h
+        if remaining_space > 0:
+            gap = max(v_gap, remaining_space // (num_shelves - 1))
+        else:
+            gap = v_gap
+
+        total_needed = total_content_h + gap * (num_shelves - 1)
+        if total_needed <= zone_h:
+            start_y = zone.y1
+        else:
+            gap = v_gap
+            start_y = zone.y1
+
+        shelf_ys = []
+        y = start_y
+        for _, sh in shelves:
+            shelf_ys.append(y)
+            y += sh + gap
+
+    # Phase 3: Place facilities at computed positions
+    for (items, _), shelf_y in zip(shelves, shelf_ys):
+        for facility, x, sw, sh in items:
+            info = FACILITY_INFO[facility.facility_type]
+            fh = info.size.height
+            interaction_row = fh
+
+            # Bounds check: facility grid cells within zone
+            if shelf_y + fh - 1 > zone.y2:
+                overflow.append(facility)
                 continue
 
-            x = zone.x1
-            while x + fw - 1 <= zone.x2 and not placement_found:
-                # Check the sprite footprint is clear (not just grid cells)
-                cells_ok = True
-                for dx in range(sw):
-                    for dy in range(sh):
-                        if (x + dx, y + dy) in occupied:
-                            cells_ok = False
-                            break
-                    if not cells_ok:
+            # Interaction point must be inside the farm (not in wall)
+            if shelf_y + interaction_row >= farm_height - 1:
+                overflow.append(facility)
+                continue
+
+            # Check the sprite footprint is clear (not just grid cells)
+            cells_ok = True
+            for dx in range(sw):
+                for dy in range(sh):
+                    if (x + dx, shelf_y + dy) in occupied:
+                        cells_ok = False
                         break
+                if not cells_ok:
+                    break
 
-                if cells_ok:
-                    # Place it
-                    placed.append(Placement(facility, x, y))
-                    # Mark sprite footprint + gap as occupied
-                    for dx in range(-1, sw + h_gap):
-                        for dy in range(-1, sh + v_gap):
-                            occupied.add((x + dx, y + dy))
-                    placement_found = True
-
-                x += 1
-            y += 1
-
-        if not placement_found:
-            overflow.append(facility)
+            if cells_ok:
+                placed.append(Placement(facility, x, shelf_y))
+                # Mark sprite footprint + gap as occupied
+                for dx in range(-1, sw + h_gap):
+                    for dy in range(-1, sh + v_gap):
+                        occupied.add((x + dx, shelf_y + dy))
+            else:
+                overflow.append(facility)
 
     return placed, overflow
 

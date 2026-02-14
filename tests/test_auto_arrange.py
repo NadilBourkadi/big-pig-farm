@@ -192,6 +192,68 @@ class TestNeighborhoodZones:
             assert _is_small_farm(state.farm)
 
 
+class TestVerticalSpread:
+    """Tests for vertical distribution of facilities within zones."""
+
+    def test_single_row_centered_vertically(self):
+        """When all facilities fit on one row, the row should be centered in the zone."""
+        state = _make_state(tier=4)
+        _add_facility(state, FacilityType.FOOD_BOWL, 2, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 5, 2)
+        _add_facility(state, FacilityType.HIDEOUT, 8, 2)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 11, 2)
+
+        placements, overflow = compute_arrangement(state)
+        assert len(overflow) == 0
+
+        zones = calculate_neighborhood_zones(state.farm, 1)
+        nh_zone = zones[0]
+        zone_height = nh_zone.y2 - nh_zone.y1 + 1
+
+        # Facilities should not be packed at the very top of the zone
+        min_y = min(p.new_y for p in placements)
+        assert min_y > nh_zone.y1 + 1, (
+            f"Facilities at y={min_y} still packed at zone top (y1={nh_zone.y1}), "
+            f"zone height={zone_height}"
+        )
+
+    def test_multi_row_spread_vertically(self):
+        """When facilities need multiple rows, rows should spread across the zone."""
+        state = _make_state(tier=5)
+        for i in range(3):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 4, 2)
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 4, 5)
+            _add_facility(state, FacilityType.HIDEOUT, 2 + i * 4, 8)
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 2 + i * 4, 11)
+
+        placements, overflow = compute_arrangement(state)
+        assert len(overflow) == 0
+
+        zones = calculate_neighborhood_zones(state.farm, 3)
+        nh_zone = zones[0]
+        zone_height = nh_zone.y2 - nh_zone.y1 + 1
+        nh_placements = [p for p in placements
+                         if nh_zone.x1 <= p.new_x <= nh_zone.x2
+                         and nh_zone.y1 <= p.new_y <= nh_zone.y2]
+
+        if len(nh_placements) > 1:
+            ys = sorted({p.new_y for p in nh_placements})
+            if len(ys) == 1:
+                # Single row: should be centered
+                center = (nh_zone.y1 + nh_zone.y2) // 2
+                assert abs(ys[0] - center) < zone_height // 3, (
+                    f"Single-row at y={ys[0]} not centered "
+                    f"(center={center}, height={zone_height})"
+                )
+            else:
+                # Multiple rows: should spread across zone
+                y_spread = max(ys) - min(ys)
+                assert y_spread > zone_height * 0.3, (
+                    f"Multi-row only spread {y_spread} cells "
+                    f"in zone of height {zone_height}"
+                )
+
+
 class TestFacilityPlacement:
     """Tests for placement algorithm."""
 
