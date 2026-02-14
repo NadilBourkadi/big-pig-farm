@@ -151,9 +151,9 @@ FARM_TIERS: list[FarmTier] = [
     FarmTier("Starter Hutch", 42, 21, 4, 0, 1),
     FarmTier("Cozy Enclosure", 54, 27, 8, 500, 2),
     FarmTier("Family Pen", 70, 35, 14, 2000, 3),
-    FarmTier("Guinea Grove", 86, 43, 24, 8000, 4),
-    FarmTier("Piggy Paradise", 108, 54, 40, 25000, 5),
-    FarmTier("Ultimate Farm", 140, 70, 60, 100000, 6),
+    FarmTier("Guinea Grove", 86, 43, 16, 8000, 4),
+    FarmTier("Piggy Paradise", 108, 54, 24, 25000, 5),
+    FarmTier("Ultimate Farm", 140, 70, 35, 100000, 6),
 ]
 
 
