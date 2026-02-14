@@ -11,7 +11,7 @@ from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, P
 from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.pigdex import phenotype_key, get_discovery_reward, key_to_rarity, get_milestone_reward
-from big_pig_farm.simulation.breeding_program import should_keep_pig, breeding_value
+from big_pig_farm.simulation.breeding_program import should_keep_pig, breeding_value, diversity_value
 from big_pig_farm.entities.genetics import calculate_target_probability
 
 
@@ -512,8 +512,15 @@ def cull_surplus_breeders(game_state) -> None:
     if len(adults) <= effective_limit:
         return  # Under limit, nothing to cull
 
-    # Score each pig by breeding value (target allele count)
-    scored = [(p, breeding_value(p, program, has_lab)) for p in adults]
+    # Score each pig — diversity primary with breeding value tiebreaker,
+    # or breeding value alone.  Tuples sort lexicographically.
+    if program.maximize_diversity:
+        scored = [
+            (p, (diversity_value(p, adults), breeding_value(p, program, has_lab)))
+            for p in adults
+        ]
+    else:
+        scored = [(p, (breeding_value(p, program, has_lab),)) for p in adults]
     scored.sort(key=lambda x: x[1], reverse=True)  # Best first
 
     # Ensure gender balance: keep at least 1 male + 1 female in top N
