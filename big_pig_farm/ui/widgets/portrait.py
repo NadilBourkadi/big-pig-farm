@@ -2,8 +2,8 @@
 
 from textual.widgets import Static
 
-from big_pig_farm.data.sprite_pixels import (
-    generate_portrait,
+from big_pig_farm.data.pig_portraits import generate_portrait
+from big_pig_farm.data.sprite_engine import (
     convert_pixels,
     render_to_rich_text,
     PALETTES,
