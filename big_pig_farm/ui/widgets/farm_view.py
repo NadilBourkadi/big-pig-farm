@@ -454,17 +454,21 @@ class FarmView(Static):
         anchor_x = base_x - sprite_w // 2
         anchor_y = base_y - sprite_h // 2
 
-        # Draw down-arrow indicator above selected pig (skip at far zoom — too large)
+        # Draw ground glow under selected pig (before sprite so it shows
+        # through transparent/edge pixels)
         if is_selected and self._zoom != ZoomLevel.FAR:
-            indicator_y = anchor_y - 1
-            indicator_x = base_x - 1
-            indicator_style = Style(color="yellow", bold=True)
-            for i, ch in enumerate("vvv"):
-                if 0 <= indicator_y < height and 0 <= indicator_x + i < width:
-                    self._char_buffer[indicator_y][indicator_x + i] = ch
-                    self._style_buffer[indicator_y][indicator_x + i] = indicator_style
+            glow_bg = "#8a7010"
+            pad = 1  # glow radius around sprite
+            for gy in range(anchor_y - pad, anchor_y + sprite_h + pad):
+                for gx in range(anchor_x - pad, anchor_x + sprite_w + pad):
+                    if 0 <= gx < width and 0 <= gy < height:
+                        existing = self._style_buffer[gy][gx]
+                        fg = existing.color if existing else None
+                        glow_style = Style(color=fg, bgcolor=glow_bg)
+                        self._style_buffer[gy][gx] = glow_style
+                        self._terrain_bg_buffer[gy][gx] = glow_style
 
-        # Draw half-block sprite
+        # Draw half-block sprite (always use natural colors)
         for dy, row in enumerate(halfblock):
             for dx, (char, fg, bg) in enumerate(row):
                 screen_x = anchor_x + dx
@@ -485,10 +489,7 @@ class FarmView(Static):
                     if terrain is not None:
                         effective_bg = terrain.bgcolor
 
-                if is_selected:
-                    style = Style(color="yellow", bgcolor=effective_bg, bold=True)
-                else:
-                    style = Style(color=fg, bgcolor=effective_bg)
+                style = Style(color=fg, bgcolor=effective_bg)
 
                 self._char_buffer[screen_y][screen_x] = char
                 self._style_buffer[screen_y][screen_x] = style
@@ -499,7 +500,7 @@ class FarmView(Static):
             if 0 <= name_y < height:
                 name = pig.name[:10]
                 name_x = base_x - len(name) // 2
-                name_style = Style(color="yellow", bold=True) if is_selected else Style(color="white", dim=True)
+                name_style = Style(color="bright_yellow", bold=True) if is_selected else Style(color="white", dim=True)
                 for i, char in enumerate(name):
                     if 0 <= name_x + i < width:
                         self._char_buffer[name_y][name_x + i] = char
