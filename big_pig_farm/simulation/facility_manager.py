@@ -191,7 +191,9 @@ class FacilityManager:
             fx, fy = f.interaction_point
             dist = pig.position.distance_to(Position(x=float(fx), y=float(fy)))
             crowd = self.count_pigs_near_or_heading_to(pig, f)
-            return dist + (crowd * BEHAVIOR.CROWDING_PENALTY) + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE)
+            return (dist * BEHAVIOR.FACILITY_DISTANCE_WEIGHT
+                    + crowd * BEHAVIOR.CROWDING_PENALTY
+                    + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE))
 
         ranked = sorted(facilities, key=score)
 

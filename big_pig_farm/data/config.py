@@ -151,9 +151,9 @@ FARM_TIERS: list[FarmTier] = [
     FarmTier("Starter Hutch", 42, 21, 4, 0, 1),
     FarmTier("Cozy Enclosure", 54, 27, 8, 500, 2),
     FarmTier("Family Pen", 70, 35, 14, 2000, 3),
-    FarmTier("Guinea Grove", 86, 43, 24, 8000, 4),
-    FarmTier("Piggy Paradise", 108, 54, 40, 25000, 5),
-    FarmTier("Ultimate Farm", 140, 70, 60, 100000, 6),
+    FarmTier("Guinea Grove", 86, 43, 16, 8000, 4),
+    FarmTier("Piggy Paradise", 108, 54, 24, 25000, 5),
+    FarmTier("Ultimate Farm", 140, 70, 35, 100000, 6),
 ]
 
 
@@ -275,6 +275,7 @@ class BehaviorConfig:
     FACILITY_NEARBY_RADIUS: float = 6.0   # Distance for counting nearby pigs
     FACILITY_HEADING_RADIUS: float = 3.0  # Distance for counting pigs heading to facility
     CROWDING_PENALTY: float = 25.0        # Scoring penalty per nearby pig
+    FACILITY_DISTANCE_WEIGHT: float = 2.0 # Distance multiplier in facility scoring (higher = prefer closer)
     SCORING_RANDOM_VARIANCE: float = 3.0  # Random variance in facility scoring
     UNCROWDED_CHANCE: float = 0.3         # Chance to prioritize uncrowded facility
 
@@ -302,7 +303,11 @@ class BehaviorConfig:
 
     # Wandering
     WANDER_ATTEMPTS: int = 20              # Random positions to try when wandering
-    WANDER_PIG_DISTANCE_WEIGHT: float = 0.5  # Weight of min pig distance in scoring
+    WANDER_DENSITY_RADIUS: float = 10.0    # Radius to count nearby pigs for density scoring
+    WANDER_DENSITY_PENALTY: float = 2.0    # Score penalty per nearby pig within radius
+
+    # Idle drift
+    IDLE_DRIFT_RADIUS: float = 5.0         # If another pig is within this radius, idle → wander
 
     # Movement modifiers
     TIRED_SPEED_MULT: float = 0.5          # Speed when energy < sleep threshold
@@ -337,6 +342,10 @@ class AutoArrangeConfig:
     # Reduced spacing for small farms
     SMALL_HORIZONTAL_GAP: int = 1
     SMALL_VERTICAL_GAP: int = 2
+
+    # Neighborhood layout (large farms)
+    NEIGHBORHOOD_UTILITY_FRACTION: float = 0.2  # Bottom fraction reserved for utility
+    MAX_NEIGHBORHOODS: int = 4                   # Maximum number of neighborhoods
 
 
 # Singleton instances

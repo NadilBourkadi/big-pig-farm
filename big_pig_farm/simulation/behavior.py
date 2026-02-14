@@ -6,7 +6,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import NEEDS, SIMULATION, BEHAVIOR
 from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Personality, Position
-from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
 from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.facility_manager import FacilityManager
@@ -222,12 +222,23 @@ class BehaviorController:
             pig.target_description = None
             self._start_wandering(pig)
         else:
-            pig.log_behavior("Nothing urgent, idling")
-            pig.behavior_state = BehaviorState.IDLE
-            pig.target_position = None
-            pig.target_facility_id = None
-            pig.target_description = None
-            pig.path = []
+            # Idle drift: if another pig is nearby, wander away instead of idling
+            has_nearby_pig = any(
+                pig.position.distance_to(p.position) < BEHAVIOR.IDLE_DRIFT_RADIUS
+                for p in self.game_state.get_pigs_list()
+                if p.id != pig.id
+            )
+            if has_nearby_pig:
+                pig.log_behavior("Too close to another pig, drifting away")
+                pig.target_description = None
+                self._start_wandering(pig)
+            else:
+                pig.log_behavior("Nothing urgent, idling")
+                pig.behavior_state = BehaviorState.IDLE
+                pig.target_position = None
+                pig.target_facility_id = None
+                pig.target_description = None
+                pig.path = []
 
     def _seek_facility_for_need(self, pig: GuineaPig, need: str) -> None:
         """Find and move towards a facility that addresses a need."""
@@ -274,7 +285,18 @@ class BehaviorController:
         """Find a place to sleep."""
         hideouts = self.facility_manager.get_reachable_facilities(pig, FacilityType.HIDEOUT)
 
-        for hideout in hideouts or []:
+        if not hideouts:
+            # No reachable hideout - sleep where standing
+            pig.path = []
+            pig.target_position = None
+            pig.target_facility_id = None
+            pig.target_description = "sleeping"
+            pig.behavior_state = BehaviorState.SLEEPING
+            pig.log_behavior("No reachable hideout, sleeping where standing")
+            return
+
+        ranked = self.facility_manager.rank_facilities_by_spread(pig, hideouts)
+        for hideout in ranked:
             target = self.facility_manager.find_open_interaction_point(pig, hideout)
             if target:
                 self._set_path_to(pig, target)
@@ -300,19 +322,23 @@ class BehaviorController:
 
     def _seek_play(self, pig: GuineaPig) -> None:
         """Find something to play with."""
-        play_facilities = [
+        play_types = [
             FacilityType.EXERCISE_WHEEL,
             FacilityType.PLAY_AREA,
             FacilityType.TUNNEL,
         ]
 
-        for facility_type in play_facilities:
-            facilities = self.facility_manager.get_reachable_facilities(pig, facility_type)
-            for facility in facilities or []:
+        # Collect all reachable play facilities across types and rank together
+        all_play: list[Facility] = []
+        for facility_type in play_types:
+            all_play.extend(self.facility_manager.get_reachable_facilities(pig, facility_type))
+
+        if all_play:
+            ranked = self.facility_manager.rank_facilities_by_spread(pig, all_play)
+            for facility in ranked:
                 target = self.facility_manager.find_open_interaction_point(pig, facility)
                 if target:
                     self._set_path_to(pig, target)
-                    # Verify path was actually set
                     if pig.path:
                         pig.log_behavior(f"Going to {facility.name} to play")
                         pig.behavior_state = BehaviorState.WANDERING
@@ -320,7 +346,6 @@ class BehaviorController:
                         pig.target_description = f"going to {facility.name}"
                         return
                     else:
-                        # Path failed - mark as failed and try next
                         pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
                         self.facility_manager.add_failed_facility(pig.id, facility.id)
 
@@ -396,34 +421,28 @@ class BehaviorController:
     def _start_wandering(self, pig: GuineaPig) -> None:
         """Start random wandering, preferring less crowded areas of the farm."""
         farm = self.game_state.farm
-
-        # Calculate the center of mass of all other pigs
         other_pigs = [p for p in self.game_state.get_pigs_list() if p.id != pig.id]
-        if other_pigs:
-            avg_x = sum(p.position.x for p in other_pigs) / len(other_pigs)
-            avg_y = sum(p.position.y for p in other_pigs) / len(other_pigs)
-        else:
-            avg_x, avg_y = farm.width / 2, farm.height / 2
 
         best_target = None
-        best_score = -1
+        best_score = float('-inf')
 
-        # Try multiple random positions and pick one away from the pig cluster
         for _ in range(BEHAVIOR.WANDER_ATTEMPTS):
             target = farm.find_random_walkable()
             if target and not self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
-                # Score based on distance from center of pig cluster (higher = better)
-                dist_from_cluster = ((target[0] - avg_x) ** 2 + (target[1] - avg_y) ** 2) ** 0.5
-
-                # Also consider minimum distance from any pig
+                # Local density scoring: count nearby pigs and track closest
+                nearby_count = 0
                 min_pig_dist = float('inf')
                 for other_pig in other_pigs:
                     dist = ((target[0] - other_pig.position.x) ** 2 +
                             (target[1] - other_pig.position.y) ** 2) ** 0.5
+                    if dist < BEHAVIOR.WANDER_DENSITY_RADIUS:
+                        nearby_count += 1
                     min_pig_dist = min(min_pig_dist, dist)
 
-                # Combined score: distance from cluster + minimum pig distance
-                score = dist_from_cluster + min_pig_dist * BEHAVIOR.WANDER_PIG_DISTANCE_WEIGHT
+                if min_pig_dist == float('inf'):
+                    min_pig_dist = 0.0
+
+                score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
 
                 if score > best_score:
                     best_score = score
