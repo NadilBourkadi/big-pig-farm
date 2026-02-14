@@ -8,9 +8,12 @@ from big_pig_farm.entities.genetics import Genotype, calculate_phenotype
 from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Position, Gender
 from big_pig_farm.game.auto_arrange import (
     calculate_zones,
+    calculate_neighborhood_zones,
     compute_arrangement,
     apply_arrangement,
     clear_pig_navigation,
+    _determine_neighborhood_count,
+    _is_small_farm,
     ZONE_FEEDING,
     ZONE_HYDRATION,
     ZONE_REST,
@@ -51,8 +54,8 @@ def _make_pig(x: float = 5.0, y: float = 5.0) -> GuineaPig:
 class TestZoneCalculation:
     """Tests for zone boundary computation."""
 
-    def test_tier1_produces_3_zones(self):
-        """Tier 1 (30x15) is small — should produce 3 zones."""
+    def test_small_farm_produces_3_zones(self):
+        """Small farms (tiers 1-2) should produce 3 zones."""
         state = _make_state(tier=1)
         zones = calculate_zones(state.farm)
         assert len(zones) == 3
@@ -61,21 +64,10 @@ class TestZoneCalculation:
         assert ZONE_REST in zone_names
         assert ZONE_UTILITY in zone_names
 
-    def test_tier3_produces_5_zones(self):
-        """Tier 3 (50x25) is big — should produce 5 zones."""
-        state = _make_state(tier=3)
-        zones = calculate_zones(state.farm)
-        assert len(zones) == 5
-        zone_names = {z.name for z in zones}
-        assert ZONE_FEEDING in zone_names
-        assert ZONE_HYDRATION in zone_names
-        assert ZONE_REST in zone_names
-        assert ZONE_PLAY in zone_names
-        assert ZONE_UTILITY in zone_names
-
     def test_zones_within_farm_bounds(self):
         """All zone boundaries must be inside the farm walls."""
-        for tier in range(1, len(FARM_TIERS) + 1):
+        # Small farms use calculate_zones
+        for tier in range(1, 3):
             state = _make_state(tier=tier)
             zones = calculate_zones(state.farm)
             for zone in zones:
@@ -86,29 +78,118 @@ class TestZoneCalculation:
 
     def test_zones_no_overlap(self):
         """Zone rectangles should not overlap."""
-        for tier in range(1, len(FARM_TIERS) + 1):
+        for tier in range(1, 3):
             state = _make_state(tier=tier)
             zones = calculate_zones(state.farm)
             for i, z1 in enumerate(zones):
                 for z2 in zones[i + 1:]:
-                    # Two rectangles overlap if they overlap on both axes
                     x_overlap = z1.x1 <= z2.x2 and z2.x1 <= z1.x2
                     y_overlap = z1.y1 <= z2.y2 and z2.y1 <= z1.y2
                     assert not (x_overlap and y_overlap), (
                         f"Tier {tier}: zones {z1.name} and {z2.name} overlap"
                     )
 
-    def test_zones_scale_with_farm_size(self):
-        """Larger farms should have larger zones."""
-        state_small = _make_state(tier=1)
-        state_large = _make_state(tier=4)
-        zones_small = calculate_zones(state_small.farm)
-        zones_large = calculate_zones(state_large.farm)
 
-        # Total zone area should be bigger for a larger farm
-        area_small = sum(z.width * z.height for z in zones_small)
-        area_large = sum(z.width * z.height for z in zones_large)
-        assert area_large > area_small
+class TestNeighborhoodZones:
+    """Tests for neighborhood zone calculation."""
+
+    def test_neighborhood_zones_within_bounds(self):
+        """All neighborhood zones must be inside the farm walls."""
+        for tier in range(3, len(FARM_TIERS) + 1):
+            state = _make_state(tier=tier)
+            for num_nh in range(1, 5):
+                zones = calculate_neighborhood_zones(state.farm, num_nh)
+                for zone in zones:
+                    assert zone.x1 >= 1, f"Tier {tier} nh={num_nh} zone {zone.name} x1 in wall"
+                    assert zone.y1 >= 1, f"Tier {tier} nh={num_nh} zone {zone.name} y1 in wall"
+                    assert zone.x2 <= state.farm.width - 2, f"Tier {tier} nh={num_nh} zone {zone.name} x2 in wall"
+                    assert zone.y2 <= state.farm.height - 2, f"Tier {tier} nh={num_nh} zone {zone.name} y2 in wall"
+
+    def test_neighborhood_zones_no_overlap(self):
+        """Neighborhood zones should not overlap."""
+        for tier in range(3, len(FARM_TIERS) + 1):
+            state = _make_state(tier=tier)
+            for num_nh in range(1, 5):
+                zones = calculate_neighborhood_zones(state.farm, num_nh)
+                for i, z1 in enumerate(zones):
+                    for z2 in zones[i + 1:]:
+                        x_overlap = z1.x1 <= z2.x2 and z2.x1 <= z1.x2
+                        y_overlap = z1.y1 <= z2.y2 and z2.y1 <= z1.y2
+                        assert not (x_overlap and y_overlap), (
+                            f"Tier {tier} nh={num_nh}: zones {z1.name} and {z2.name} overlap"
+                        )
+
+    def test_neighborhood_zone_count(self):
+        """Should produce num_neighborhoods + 1 (utility) zones."""
+        state = _make_state(tier=4)
+        for num_nh in range(1, 5):
+            zones = calculate_neighborhood_zones(state.farm, num_nh)
+            assert len(zones) == num_nh + 1
+            assert zones[-1].name == ZONE_UTILITY
+
+    def test_neighborhood_count_from_facilities(self):
+        """Neighborhood count is the minimum across essential categories."""
+        state = _make_state(tier=4)
+        # 3 food, 2 water, 1 rest, 2 play → min is 1 (rest)
+        _add_facility(state, FacilityType.FOOD_BOWL, 2, 2)
+        _add_facility(state, FacilityType.FOOD_BOWL, 5, 2)
+        _add_facility(state, FacilityType.FOOD_BOWL, 8, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 11, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 14, 2)
+        _add_facility(state, FacilityType.HIDEOUT, 2, 5)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 5, 5)
+        _add_facility(state, FacilityType.TUNNEL, 8, 5)
+
+        count = _determine_neighborhood_count(state.get_facilities_list())
+        assert count == 1
+
+    def test_neighborhood_count_balanced(self):
+        """With 2 of each essential type, should get 2 neighborhoods."""
+        state = _make_state(tier=4)
+        _add_facility(state, FacilityType.FOOD_BOWL, 2, 2)
+        _add_facility(state, FacilityType.FOOD_BOWL, 5, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 8, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 11, 2)
+        _add_facility(state, FacilityType.HIDEOUT, 2, 5)
+        _add_facility(state, FacilityType.HIDEOUT, 5, 5)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 8, 5)
+        _add_facility(state, FacilityType.TUNNEL, 11, 5)
+
+        count = _determine_neighborhood_count(state.get_facilities_list())
+        assert count == 2
+
+    def test_neighborhood_count_capped(self):
+        """Neighborhood count is capped at MAX_NEIGHBORHOODS (4)."""
+        state = _make_state(tier=6)
+        # 6 of each essential type
+        for i in range(6):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 4, 2)
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 4, 5)
+            _add_facility(state, FacilityType.HIDEOUT, 2 + i * 4, 8)
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 2 + i * 4, 11)
+
+        count = _determine_neighborhood_count(state.get_facilities_list())
+        assert count == 4  # Capped at MAX_NEIGHBORHOODS
+
+    def test_utility_only_gives_1_neighborhood(self):
+        """Only utility facilities → 1 neighborhood (no essential categories)."""
+        state = _make_state(tier=4)
+        _add_facility(state, FacilityType.BREEDING_DEN, 2, 2)
+        _add_facility(state, FacilityType.NURSERY, 5, 2)
+
+        count = _determine_neighborhood_count(state.get_facilities_list())
+        assert count == 1
+
+    def test_large_farm_uses_neighborhoods(self):
+        """Tier 3+ should use neighborhood layout, not type-grouped zones."""
+        state = _make_state(tier=3)
+        assert not _is_small_farm(state.farm)
+
+    def test_small_farm_detected(self):
+        """Tiers 1-2 should be detected as small farms."""
+        for tier in (1, 2):
+            state = _make_state(tier=tier)
+            assert _is_small_farm(state.farm)
 
 
 class TestFacilityPlacement:
@@ -123,30 +204,72 @@ class TestFacilityPlacement:
         assert len(placements) == 1
         assert len(overflow) == 0
 
-    def test_multiple_facility_types_grouped(self):
-        """Different facility types should end up in different zones."""
-        state = _make_state(tier=3)
-        # Place facilities at arbitrary positions; arrange will reposition them
+    def test_neighborhood_facilities_co_located(self):
+        """On large farms, different essential types end up in the same neighborhood."""
+        state = _make_state(tier=4)  # Tier 4 has enough space for all sprite sizes
         food = _add_facility(state, FacilityType.FOOD_BOWL, 3, 3)
-        water = _add_facility(state, FacilityType.WATER_BOTTLE, 5, 3)
-        hideout = _add_facility(state, FacilityType.HIDEOUT, 7, 3)
+        water = _add_facility(state, FacilityType.WATER_BOTTLE, 8, 3)
+        hideout = _add_facility(state, FacilityType.HIDEOUT, 12, 3)
+        wheel = _add_facility(state, FacilityType.EXERCISE_WHEEL, 18, 3)
 
         placements, overflow = compute_arrangement(state)
-        assert len(placements) == 3
+        assert len(placements) == 4
         assert len(overflow) == 0
 
-        zones = calculate_zones(state.farm)
-        zone_by_name = {z.name: z for z in zones}
+        # With 1 of each type, all should be in the same neighborhood zone
+        zones = calculate_neighborhood_zones(state.farm, 1)
+        nh_zone = zones[0]  # The single neighborhood
 
         for p in placements:
-            if p.facility.id == food.id:
-                z = zone_by_name[ZONE_FEEDING]
-                assert z.x1 <= p.new_x <= z.x2
-                assert z.y1 <= p.new_y <= z.y2
-            elif p.facility.id == water.id:
-                z = zone_by_name[ZONE_HYDRATION]
-                assert z.x1 <= p.new_x <= z.x2
-                assert z.y1 <= p.new_y <= z.y2
+            assert nh_zone.x1 <= p.new_x <= nh_zone.x2, (
+                f"{p.facility.facility_type.value} at x={p.new_x} "
+                f"outside neighborhood ({nh_zone.x1}-{nh_zone.x2})"
+            )
+            assert nh_zone.y1 <= p.new_y <= nh_zone.y2, (
+                f"{p.facility.facility_type.value} at y={p.new_y} "
+                f"outside neighborhood ({nh_zone.y1}-{nh_zone.y2})"
+            )
+
+    def test_facilities_distributed_across_neighborhoods(self):
+        """With 2 of each essential type, facilities split into 2 neighborhoods."""
+        state = _make_state(tier=4)
+        foods = [
+            _add_facility(state, FacilityType.FOOD_BOWL, 2, 2),
+            _add_facility(state, FacilityType.FOOD_BOWL, 5, 2),
+        ]
+        waters = [
+            _add_facility(state, FacilityType.WATER_BOTTLE, 8, 2),
+            _add_facility(state, FacilityType.WATER_BOTTLE, 11, 2),
+        ]
+        hideouts = [
+            _add_facility(state, FacilityType.HIDEOUT, 2, 5),
+            _add_facility(state, FacilityType.HIDEOUT, 5, 5),
+        ]
+        wheels = [
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 8, 5),
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 11, 5),
+        ]
+
+        placements, overflow = compute_arrangement(state)
+        assert len(overflow) == 0
+
+        zones = calculate_neighborhood_zones(state.farm, 2)
+        nh0 = zones[0]
+        nh1 = zones[1]
+
+        def in_zone(p, z):
+            return z.x1 <= p.new_x <= z.x2 and z.y1 <= p.new_y <= z.y2
+
+        # Each neighborhood should have facilities from different categories
+        nh0_placements = [p for p in placements if in_zone(p, nh0)]
+        nh1_placements = [p for p in placements if in_zone(p, nh1)]
+
+        nh0_types = {p.facility.facility_type for p in nh0_placements}
+        nh1_types = {p.facility.facility_type for p in nh1_placements}
+
+        # Each neighborhood should have at least food + water + rest + play
+        assert FacilityType.FOOD_BOWL in nh0_types
+        assert FacilityType.FOOD_BOWL in nh1_types
 
     def test_no_facility_overlap(self):
         """Placed facilities must not overlap each other."""
@@ -486,6 +609,26 @@ class TestIntegration:
         placements, overflow = compute_arrangement(state)
         apply_arrangement(state, placements, overflow)
 
+        _assert_no_overlap_in_state(state)
+        _assert_grid_consistent(state)
+        _assert_no_sprite_overlap(state)
+
+    def test_full_cycle_neighborhood_layout(self):
+        """Neighborhood layout: each neighborhood gets a mix of facility types."""
+        state = _make_state(tier=5)
+        # 3 of each essential type → 3 neighborhoods
+        for i in range(3):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 4, 2)
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 4, 5)
+            _add_facility(state, FacilityType.HIDEOUT, 2 + i * 4, 8)
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 2 + i * 4, 11)
+        # Plus utility
+        _add_facility(state, FacilityType.BREEDING_DEN, 20, 2)
+
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
+
+        assert len(overflow) == 0
         _assert_no_overlap_in_state(state)
         _assert_grid_consistent(state)
         _assert_no_sprite_overlap(state)

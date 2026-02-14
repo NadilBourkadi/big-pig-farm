@@ -342,6 +342,10 @@ class AutoArrangeConfig:
     SMALL_HORIZONTAL_GAP: int = 1
     SMALL_VERTICAL_GAP: int = 2
 
+    # Neighborhood layout (large farms)
+    NEIGHBORHOOD_UTILITY_FRACTION: float = 0.2  # Bottom fraction reserved for utility
+    MAX_NEIGHBORHOODS: int = 4                   # Maximum number of neighborhoods
+
 
 # Singleton instances
 NEEDS = NeedsConfig()
