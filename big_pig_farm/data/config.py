@@ -302,7 +302,11 @@ class BehaviorConfig:
 
     # Wandering
     WANDER_ATTEMPTS: int = 20              # Random positions to try when wandering
-    WANDER_PIG_DISTANCE_WEIGHT: float = 0.5  # Weight of min pig distance in scoring
+    WANDER_DENSITY_RADIUS: float = 10.0    # Radius to count nearby pigs for density scoring
+    WANDER_DENSITY_PENALTY: float = 2.0    # Score penalty per nearby pig within radius
+
+    # Idle drift
+    IDLE_DRIFT_RADIUS: float = 5.0         # If another pig is within this radius, idle → wander
 
     # Movement modifiers
     TIRED_SPEED_MULT: float = 0.5          # Speed when energy < sleep threshold

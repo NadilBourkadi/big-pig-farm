@@ -222,12 +222,23 @@ class BehaviorController:
             pig.target_description = None
             self._start_wandering(pig)
         else:
-            pig.log_behavior("Nothing urgent, idling")
-            pig.behavior_state = BehaviorState.IDLE
-            pig.target_position = None
-            pig.target_facility_id = None
-            pig.target_description = None
-            pig.path = []
+            # Idle drift: if another pig is nearby, wander away instead of idling
+            has_nearby_pig = any(
+                pig.position.distance_to(p.position) < BEHAVIOR.IDLE_DRIFT_RADIUS
+                for p in self.game_state.get_pigs_list()
+                if p.id != pig.id
+            )
+            if has_nearby_pig:
+                pig.log_behavior("Too close to another pig, drifting away")
+                pig.target_description = None
+                self._start_wandering(pig)
+            else:
+                pig.log_behavior("Nothing urgent, idling")
+                pig.behavior_state = BehaviorState.IDLE
+                pig.target_position = None
+                pig.target_facility_id = None
+                pig.target_description = None
+                pig.path = []
 
     def _seek_facility_for_need(self, pig: GuineaPig, need: str) -> None:
         """Find and move towards a facility that addresses a need."""
@@ -396,34 +407,28 @@ class BehaviorController:
     def _start_wandering(self, pig: GuineaPig) -> None:
         """Start random wandering, preferring less crowded areas of the farm."""
         farm = self.game_state.farm
-
-        # Calculate the center of mass of all other pigs
         other_pigs = [p for p in self.game_state.get_pigs_list() if p.id != pig.id]
-        if other_pigs:
-            avg_x = sum(p.position.x for p in other_pigs) / len(other_pigs)
-            avg_y = sum(p.position.y for p in other_pigs) / len(other_pigs)
-        else:
-            avg_x, avg_y = farm.width / 2, farm.height / 2
 
         best_target = None
-        best_score = -1
+        best_score = float('-inf')
 
-        # Try multiple random positions and pick one away from the pig cluster
         for _ in range(BEHAVIOR.WANDER_ATTEMPTS):
             target = farm.find_random_walkable()
             if target and not self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
-                # Score based on distance from center of pig cluster (higher = better)
-                dist_from_cluster = ((target[0] - avg_x) ** 2 + (target[1] - avg_y) ** 2) ** 0.5
-
-                # Also consider minimum distance from any pig
+                # Local density scoring: count nearby pigs and track closest
+                nearby_count = 0
                 min_pig_dist = float('inf')
                 for other_pig in other_pigs:
                     dist = ((target[0] - other_pig.position.x) ** 2 +
                             (target[1] - other_pig.position.y) ** 2) ** 0.5
+                    if dist < BEHAVIOR.WANDER_DENSITY_RADIUS:
+                        nearby_count += 1
                     min_pig_dist = min(min_pig_dist, dist)
 
-                # Combined score: distance from cluster + minimum pig distance
-                score = dist_from_cluster + min_pig_dist * BEHAVIOR.WANDER_PIG_DISTANCE_WEIGHT
+                if min_pig_dist == float('inf'):
+                    min_pig_dist = 0.0
+
+                score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
 
                 if score > best_score:
                     best_score = score

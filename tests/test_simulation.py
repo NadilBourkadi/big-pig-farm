@@ -406,3 +406,175 @@ class TestContentmentModel:
         # Only boredom extra drain could change it, but boredom starts at 0
         # After 1hr boredom rises to ~2.0 which is below the 70 threshold
         assert 48.0 < pig.needs.happiness < 52.0
+
+
+class TestWanderDensityScoring:
+    """Tests for density-aware wander target selection."""
+
+    def test_wander_prefers_less_crowded_area(self):
+        """Pig should prefer wandering to positions with fewer nearby pigs."""
+        from big_pig_farm.game.world import FarmGrid
+        from big_pig_farm.data.config import FARM_TIERS
+
+        tier_info = FARM_TIERS[2]  # Tier 3 — large enough for meaningful spread
+        farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        # Create a cluster of pigs in one corner
+        for i in range(5):
+            cluster_pig = GuineaPig.create(
+                name=f"ClusterPig{i}",
+                gender=Gender.MALE,
+                position=Position(x=5.0 + i, y=5.0),
+                age_days=5.0,
+            )
+            cluster_pig.behavior_state = BehaviorState.IDLE
+            state.guinea_pigs[cluster_pig.id] = cluster_pig
+
+        # Create the test pig near the cluster
+        test_pig = GuineaPig.create(
+            name="TestPig",
+            gender=Gender.MALE,
+            position=Position(x=8.0, y=5.0),
+            age_days=5.0,
+        )
+        state.guinea_pigs[test_pig.id] = test_pig
+
+        # Run wandering multiple times and check that pig tends to move away
+        moved_away_count = 0
+        trials = 20
+        initial_cluster_dist = test_pig.position.distance_to(
+            Position(x=7.0, y=5.0)  # Approximate cluster center
+        )
+
+        for _ in range(trials):
+            test_pig.position.x = 8.0
+            test_pig.position.y = 5.0
+            test_pig.path = []
+            controller._start_wandering(test_pig)
+            if test_pig.target_position:
+                new_dist = test_pig.target_position.distance_to(
+                    Position(x=7.0, y=5.0)
+                )
+                if new_dist > initial_cluster_dist:
+                    moved_away_count += 1
+
+        # Should move away from the cluster more often than toward it
+        assert moved_away_count > trials * 0.4
+
+    def test_wander_works_with_no_other_pigs(self):
+        """Wandering should work fine when pig is alone."""
+        from big_pig_farm.game.world import FarmGrid
+        from big_pig_farm.data.config import FARM_TIERS
+
+        tier_info = FARM_TIERS[2]
+        farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="LonePig",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        state.guinea_pigs[pig.id] = pig
+
+        controller._start_wandering(pig)
+        assert pig.behavior_state == BehaviorState.WANDERING
+
+
+class TestIdleDrift:
+    """Tests for idle drift anti-clustering."""
+
+    def test_idle_becomes_wander_when_pig_nearby(self):
+        """When another pig is within IDLE_DRIFT_RADIUS, idle converts to wander."""
+        from big_pig_farm.game.world import FarmGrid
+        from big_pig_farm.data.config import FARM_TIERS
+
+        tier_info = FARM_TIERS[2]
+        farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="IdlePig",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.needs.hunger = 90
+        pig.needs.thirst = 90
+        pig.needs.energy = 90
+        pig.needs.happiness = 90
+        pig.needs.social = 90
+        pig.needs.boredom = 0
+        state.guinea_pigs[pig.id] = pig
+
+        neighbor = GuineaPig.create(
+            name="Neighbor",
+            gender=Gender.FEMALE,
+            position=Position(x=12.0, y=10.0),  # Within IDLE_DRIFT_RADIUS (5.0)
+            age_days=5.0,
+        )
+        neighbor.needs.hunger = 90
+        neighbor.needs.thirst = 90
+        neighbor.needs.energy = 90
+        neighbor.needs.happiness = 90
+        neighbor.needs.social = 90
+        state.guinea_pigs[neighbor.id] = neighbor
+
+        # Force the pig to make a decision where it would normally idle
+        # by patching random to return > WANDER_CHANCE
+        with patch('big_pig_farm.simulation.behavior.random') as mock_random:
+            mock_random.random.return_value = 0.99  # > WANDER_CHANCE (0.8), would normally idle
+            mock_random.uniform.return_value = 0.0
+            controller._make_decision(pig)
+
+        # Should be wandering (drifted away) instead of idle
+        assert pig.behavior_state == BehaviorState.WANDERING
+
+    def test_idle_stays_idle_when_no_pig_nearby(self):
+        """When no pig is within IDLE_DRIFT_RADIUS, pig stays idle."""
+        from big_pig_farm.game.world import FarmGrid
+        from big_pig_farm.data.config import FARM_TIERS
+
+        tier_info = FARM_TIERS[2]
+        farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="IdlePig",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.needs.hunger = 90
+        pig.needs.thirst = 90
+        pig.needs.energy = 90
+        pig.needs.happiness = 90
+        pig.needs.social = 90
+        pig.needs.boredom = 0
+        state.guinea_pigs[pig.id] = pig
+
+        far_pig = GuineaPig.create(
+            name="FarPig",
+            gender=Gender.FEMALE,
+            position=Position(x=50.0, y=50.0),  # Well outside IDLE_DRIFT_RADIUS
+            age_days=5.0,
+        )
+        far_pig.needs.hunger = 90
+        far_pig.needs.thirst = 90
+        far_pig.needs.energy = 90
+        far_pig.needs.happiness = 90
+        far_pig.needs.social = 90
+        state.guinea_pigs[far_pig.id] = far_pig
+
+        with patch('big_pig_farm.simulation.behavior.random') as mock_random:
+            mock_random.random.return_value = 0.99
+            mock_random.uniform.return_value = 0.0
+            controller._make_decision(pig)
+
+        assert pig.behavior_state == BehaviorState.IDLE
