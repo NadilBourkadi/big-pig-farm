@@ -1,0 +1,278 @@
+"""Hand-crafted close-zoom pig pixel sprites (28w×16h adult, 16w×12h baby).
+
+Only right-facing variants are drawn here; left-facing ones are auto-generated
+by mirroring each row.  Uses compact single-char encoding decoded at import time.
+
+The silhouette (transparent vs non-transparent boundary) matches the 2x-scaled
+normal sprites exactly — this guarantees smooth outlines.  Interior pixels are
+refined to break up the 2x2 blockiness: ears, eyes, nose, and belly transitions
+differ between paired rows.
+"""
+
+from big_pig_farm.data.sprite_engine import (
+    PixelGrid,
+    build_mirrored_dict,
+    decode_sprite,
+)
+
+# Character maps — one char per palette key
+_PIG_CHAR = {
+    ".": None, "d": "dark", "f": "fur", "b": "belly",
+    "e": "eye", "p": "pupil", "n": "nose", "a": "ear", "w": "paw",
+}
+
+# fmt: off
+
+# ---------------------------------------------------------------------------
+# Adult close-zoom sprites (28w × 16h)
+#
+# Silhouette matches scale_pixel_grid(normal, 2) exactly.
+# Interior detail refined: each row pair is unpaired for less blockiness.
+# ---------------------------------------------------------------------------
+
+_CLOSE_IDLE_R: PixelGrid = decode_sprite([
+    "................ddddaadd....",
+    "...............dddfaafddd...",
+    "......ddddddddddffffffffdd..",
+    ".....dddddfffffdffffffffddd.",
+    "....ddddffffffffffeeeeppffdd",
+    "...dddddffffffffffeeepppffdd",
+    "..ddffffffffffffffeeppppnndd",
+    ".dddffffffffffffffeepppfnndd",
+    "ddffffffffffffffffffffffffdd",
+    ".dffffffffffffffffffffffffd.",
+    "..ddbbffffffffffffffffbbdd..",
+    "...dbffffffffffffffffffbd...",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    ".....dwf............fwd.....",
+    ".....dww............wwd.....",
+], _PIG_CHAR, width=28)
+
+_CLOSE_WALKING_R: PixelGrid = decode_sprite([
+    "................ddddaadd....",
+    "...............dddfaafddd...",
+    "......ddddddddddffffffffdd..",
+    ".....dddddfffffdffffffffddd.",
+    "....ddddffffffffffeeeeppffdd",
+    "...dddddffffffffffeeepppffdd",
+    "..ddffffffffffffffeeppppnndd",
+    ".dddffffffffffffffeepppfnndd",
+    "ddffffffffffffffffffffffffdd",
+    ".dffffffffffffffffffffffffd.",
+    "..ddbbffffffffffffffffbbdd..",
+    "...dbffffffffffffffffffbd...",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "...dwf................fwd...",
+    "...dww................wwd...",
+], _PIG_CHAR, width=28)
+
+_CLOSE_EATING_R: PixelGrid = decode_sprite([
+    "................ddddaadd....",
+    "...............dddfaafddd...",
+    "......ddddddddddffffffffdd..",
+    ".....dddddfffffdffffffffddd.",
+    "....ddddffffffffffddddffffdd",
+    "...dddddfffffffffffdddffffdd",
+    "..ddffffffffffffffffffffnndd",
+    ".dddffffffffffffffffffffnndd",
+    "ddffffffffffffffffffffffffdd",
+    ".dffffffffffffffffffffffffd.",
+    "..ddbbffffffffffffffffbbdd..",
+    "...dbffffffffffffffffffbd...",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    ".....dwf............fwd.....",
+    ".....dww............wwd.....",
+], _PIG_CHAR, width=28)
+
+# Walking frame 1: body drops 2 rows, ear flattens, no paws
+_CLOSE_WALKING_1_R: PixelGrid = decode_sprite([
+    "............................",
+    "............................",
+    "................dddd..dd....",
+    "................dddd..dd....",
+    "........ddddddddffffaaffffdd",
+    ".......dddddffffffffaaffffdd",
+    "....ddddffffffffffeeeeppffdd",
+    "...dddddffffffffffeeepppffdd",
+    "..ddffffffffffffffeeppppnndd",
+    "..ddffffffffffffffeepppfnndd",
+    "..ddffffffffffffffffffffffdd",
+    "...dffffffffffffffffffffffd.",
+    "....ddffffffffffffffbbbbdd..",
+    ".....dffffffffffffffbbfbdd..",
+    "......ddbbbbbbbbbbbbbbbbdd..",
+    "......ddbbbbbbbbbbbbbbbbdd..",
+], _PIG_CHAR, width=28)
+
+# Eating frame 1: face dips, ear flat, closed eyes at lower position
+_CLOSE_EATING_1_R: PixelGrid = decode_sprite([
+    "................dddd..dd....",
+    "................dddd..dd....",
+    "......ddddddddddffffaaffdd..",
+    ".....dddddfffffdffffaaffddd.",
+    "....ddddffffffffffffffffffdd",
+    "...dddddffffffffffffffffffdd",
+    "..ddffffffffffffffddddffffdd",
+    ".dddfffffffffffffffdddffffdd",
+    "ddffffffffffffffffffffffnndd",
+    ".dffffffffffffffffffffffnnd.",
+    "..ddbbffffffffffffffffbbdd..",
+    "...dbffffffffffffffffffbd...",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    ".....dwf............fwd.....",
+    ".....dww............wwd.....",
+], _PIG_CHAR, width=28)
+
+# Sleeping frame 1: belly expands 1px wider each side
+_CLOSE_SLEEPING_1_R: PixelGrid = decode_sprite([
+    "................ddddaadd....",
+    "...............dddfaafddd...",
+    "......ddddddddddffffffffdd..",
+    ".....dddddfffffdffffffffddd.",
+    "....ddddffffffffffddddffffdd",
+    "...dddddfffffffffffdddffffdd",
+    "..ddffffffffffffffffffffffdd",
+    ".dddffffffffffffffffffffffdd",
+    "ddffffffffffffffffffffffffdd",
+    "ddffffffffffffffffffffffffdd",
+    "ddbbbbffffffffffffffffbbbbdd",
+    ".dbbbbffffffffffffffffbbbbd.",
+    "..ddbbbbbbbbbbbbbbbbbbbbdd..",
+    "..ddbbbbbbbbbbbbbbbbbbbbdd..",
+    ".....dwf............fwd.....",
+    ".....dww............wwd.....",
+], _PIG_CHAR, width=28)
+
+# Happy frame 1: body hops up 2 rows, bottom rows empty
+_CLOSE_HAPPY_1_R: PixelGrid = decode_sprite([
+    "......ddddddddddffffaaffdd..",
+    ".....dddddfffffdffffaaffddd.",
+    "....ddddffffffffffeeeeppffdd",
+    "...dddddffffffffffeeepppffdd",
+    "..ddffffffffffffffeeppppnndd",
+    ".dddffffffffffffffeepppfnndd",
+    "ddffffffffffffffffffffffffdd",
+    ".dffffffffffffffffffffffffd.",
+    "..ddbbffffffffffffffffbbdd..",
+    "...dbffffffffffffffffffbd...",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "....ddbbbbbbbbbbbbbbbbdd....",
+    "...dwf................fwd...",
+    "...dww................wwd...",
+    "............................",
+    "............................",
+], _PIG_CHAR, width=28)
+
+
+# Build combined dict — right-facing raw grids mapped to all states
+PIG_PIXELS_CLOSE_ADULT: dict[str, PixelGrid] = build_mirrored_dict({
+    "idle_right":       _CLOSE_IDLE_R,
+    "walking_right":    _CLOSE_WALKING_R,
+    "eating_right":     _CLOSE_EATING_R,
+    "sleeping_right":   _CLOSE_EATING_R,       # same closed-eye pose
+    "happy_right":      _CLOSE_IDLE_R,          # same open-eye pose
+    "sad_right":        _CLOSE_IDLE_R,          # same open-eye pose
+    "walking_right_1":  _CLOSE_WALKING_1_R,
+    "eating_right_1":   _CLOSE_EATING_1_R,
+    "sleeping_right_1": _CLOSE_SLEEPING_1_R,
+    "happy_right_1":    _CLOSE_HAPPY_1_R,
+})
+
+
+# ---------------------------------------------------------------------------
+# Baby close-zoom sprites (16w × 12h)
+#
+# Same approach: silhouette matches 2x-scaled, interior refined.
+# ---------------------------------------------------------------------------
+
+_BABY_IDLE_R: PixelGrid = decode_sprite([
+    "........ddaadd..",
+    ".......dddfaafd.",
+    "..ddddddffffffdd",
+    "..ddfffdffffffdd",
+    "..ddffffeeppffdd",
+    ".dddffffeepppfdd",
+    "ddbbffffeeeenndd",
+    ".dbbbfffeeeefnd.",
+    "..ddbbbbbbbbdd..",
+    "..ddbbbbbbbbdd..",
+    "...dwf....fwd...",
+    "...dww....wwd...",
+], _PIG_CHAR, width=16)
+
+_BABY_WALKING_R: PixelGrid = decode_sprite([
+    "........ddaadd..",
+    ".......dddfaafd.",
+    "..ddddddffffffdd",
+    "..ddfffdffffffdd",
+    "..ddffffeeppffdd",
+    ".dddffffeepppfdd",
+    "ddbbffffeeeenndd",
+    ".dbbbfffeeeefnd.",
+    "..ddbbbbbbbbdd..",
+    "..ddbbbbbbbbdd..",
+    ".dwf........fwd.",
+    ".dww........wwd.",
+], _PIG_CHAR, width=16)
+
+_BABY_SLEEPING_R: PixelGrid = decode_sprite([
+    "........ddaadd..",
+    ".......dddfaafd.",
+    "..ddddddffffffdd",
+    "..ddfffdffffffdd",
+    "..ddffffddddffdd",
+    ".dddffffdddddfdd",
+    "ddbbffffffffffdd",
+    ".dbbffffffffffd.",
+    "..ddbbbbbbbbdd..",
+    "..ddbbbbbbbbdd..",
+    "...dwf....fwd...",
+    "...dww....wwd...",
+], _PIG_CHAR, width=16)
+
+# Walking frame 1: ear flattens, paws together
+_BABY_WALKING_1_R: PixelGrid = decode_sprite([
+    "........dd..dd..",
+    "........dd..dd..",
+    "..ddddddffaaffdd",
+    "..ddfffdffaaffdd",
+    "..ddffffeeppffdd",
+    ".dddffffeepppfdd",
+    "ddbbffffeeeenndd",
+    ".dbbbfffeeeefnd.",
+    "..ddbbbbbbbbdd..",
+    "..ddbbbbbbbbdd..",
+    "...dwf....fwd...",
+    "...dww....wwd...",
+], _PIG_CHAR, width=16)
+
+# Sleeping frame 1: belly expands
+_BABY_SLEEPING_1_R: PixelGrid = decode_sprite([
+    "........ddaadd..",
+    ".......dddfaafd.",
+    "..ddddddffffffdd",
+    "..ddfffdffffffdd",
+    "..ddffffddddffdd",
+    ".dddffffdddddfdd",
+    "ddbbbbffffffbbdd",
+    "ddbbbbffffffbbdd",
+    "ddbbbbbbbbbbbbdd",
+    "ddbbbbbbbbbbbbdd",
+    "...dwf....fwd...",
+    "...dww....wwd...",
+], _PIG_CHAR, width=16)
+
+
+PIG_PIXELS_CLOSE_BABY: dict[str, PixelGrid] = build_mirrored_dict({
+    "idle_right":       _BABY_IDLE_R,
+    "walking_right":    _BABY_WALKING_R,
+    "sleeping_right":   _BABY_SLEEPING_R,
+    "walking_right_1":  _BABY_WALKING_1_R,
+    "sleeping_right_1": _BABY_SLEEPING_1_R,
+})
+
+# fmt: on

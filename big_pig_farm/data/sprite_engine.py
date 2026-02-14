@@ -214,3 +214,52 @@ def scale_pixel_grid(grid: PixelGrid, factor: int) -> PixelGrid:
         for _ in range(factor):
             scaled.append(list(scaled_row))
     return scaled
+
+
+# ---------------------------------------------------------------------------
+# Compact sprite encoding (for hand-crafted close-zoom sprites)
+# ---------------------------------------------------------------------------
+
+CharMap = dict[str, Optional[str]]
+
+
+def decode_sprite(
+    lines: list[str], char_map: CharMap, width: int = 0,
+) -> PixelGrid:
+    """Decode a compact single-char-per-pixel sprite into a PixelGrid.
+
+    Each character in *lines* is looked up in *char_map* to produce a palette
+    key (or None for transparent).  This keeps large close-zoom grids compact
+    in source.
+
+    If *width* is given, every row is right-padded with ``None`` to that width,
+    ensuring uniform dimensions even when trailing transparent pixels are
+    omitted from the source strings.
+    """
+    grid: PixelGrid = []
+    for line in lines:
+        row = [char_map.get(c) for c in line]
+        if width and len(row) < width:
+            row.extend([None] * (width - len(row)))
+        grid.append(row)
+    return grid
+
+
+def mirror_grid(grid: PixelGrid) -> PixelGrid:
+    """Mirror a pixel grid horizontally (flip left/right)."""
+    return [list(reversed(row)) for row in grid]
+
+
+def build_mirrored_dict(
+    right_sprites: dict[str, PixelGrid],
+) -> dict[str, PixelGrid]:
+    """Build a dict containing both right- and left-facing variants.
+
+    *right_sprites* keys must contain ``_right``.  For each entry a mirrored
+    ``_left`` variant is generated automatically.
+    """
+    result: dict[str, PixelGrid] = {}
+    for key, grid in right_sprites.items():
+        result[key] = grid
+        result[key.replace("_right", "_left")] = mirror_grid(grid)
+    return result

@@ -16,6 +16,7 @@ from big_pig_farm.data.facility_pixels import (
     FACILITY_PIXELS,
     FACILITY_PIXELS_FAR,
 )
+from big_pig_farm.data.facility_pixels_close import FACILITY_PIXELS_CLOSE
 
 
 class ZoomLevel(Enum):
@@ -351,10 +352,19 @@ def get_facility_halfblock_sprite(
     # Normal or close zoom — look up with state variant
     if state:
         key = f"{facility_type}_{state}"
-        grid = FACILITY_PIXELS.get(key)
-        if grid is None:
-            grid = FACILITY_PIXELS.get(facility_type)
     else:
+        key = facility_type
+
+    # Close zoom: try hand-crafted sprites first, fall back to 2x scaling
+    if zoom == ZoomLevel.CLOSE:
+        close_grid = FACILITY_PIXELS_CLOSE.get(key)
+        if close_grid is None and state:
+            close_grid = FACILITY_PIXELS_CLOSE.get(facility_type)
+        if close_grid is not None:
+            return convert_pixels(close_grid, palette)
+
+    grid = FACILITY_PIXELS.get(key)
+    if grid is None and state:
         grid = FACILITY_PIXELS.get(facility_type)
 
     if grid is None:
