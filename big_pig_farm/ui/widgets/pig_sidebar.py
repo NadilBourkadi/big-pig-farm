@@ -2,7 +2,14 @@
 
 from textual.widgets import Static
 from textual.reactive import reactive
+from rich.text import Text
 
+from big_pig_farm.data.sprite_pixels import (
+    generate_portrait_with_scene,
+    convert_pixels,
+    render_to_rich_text,
+    PALETTES,
+)
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.simulation.needs import get_most_urgent_need
 from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
@@ -16,7 +23,7 @@ class PigSidebar(Static):
         width: 38;
         height: 100%;
         border: solid $secondary;
-        padding: 0 1;
+        padding: 1 1 0 1;
         background: $surface;
     }
 
@@ -40,6 +47,19 @@ class PigSidebar(Static):
         else:
             self.add_class("hidden")
         self.refresh_content()
+
+    def _build_portrait(self, pig: GuineaPig) -> Text:
+        """Render a half-block portrait for the sidebar."""
+        grid = generate_portrait_with_scene(
+            pig.phenotype.base_color.name,
+            pig.phenotype.pattern.value,
+            pig.phenotype.intensity.value,
+            pig.phenotype.roan.value,
+            str(pig.id),
+        )
+        palette = PALETTES.get(pig.phenotype.base_color.name, PALETTES["BLACK"])
+        converted = convert_pixels(grid, palette)
+        return render_to_rich_text(converted, center_width=34)
 
     def refresh_content(self) -> None:
         """Refresh the sidebar content."""
@@ -83,10 +103,20 @@ class PigSidebar(Static):
             lines.append(f" {len(pig.path)} steps away")
         lines.append("")
 
+        # Build portrait
+        portrait = self._build_portrait(pig)
+        portrait_lines = str(portrait).count("\n") + 1
+
+        # Calculate how many recent entries fit
+        # Fixed lines: portrait + all lines above + "Recent:" label + 1 blank
+        fixed_lines = portrait_lines + 1 + len(lines) + 1
+        available = self.size.height - 2 - fixed_lines  # -2 for border
+        recent_count = max(3, available)
+
         # Recent log
         lines.append("[dim]Recent:[/]")
         if pig.behavior_log:
-            for entry in reversed(pig.behavior_log[-6:]):
+            for entry in reversed(pig.behavior_log[-recent_count:]):
                 # Truncate long entries
                 if len(entry) > 34:
                     entry = entry[:31] + "..."
@@ -94,5 +124,9 @@ class PigSidebar(Static):
         else:
             lines.append(" (no activity)")
 
-        self.update("\n".join(lines))
+        combined = Text()
+        combined.append_text(portrait)
+        combined.append("\n\n")
+        combined.append(Text.from_markup("\n".join(lines)))
+        self.update(combined)
 

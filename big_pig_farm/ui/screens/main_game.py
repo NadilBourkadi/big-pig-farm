@@ -95,6 +95,7 @@ class MainGameScreen(Screen):
         super().__init__(**kwargs)
         self.state = state
         self._selected_pig_index = -1
+        self._pre_follow_zoom: ZoomLevel | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the screen layout."""
@@ -180,6 +181,11 @@ class MainGameScreen(Screen):
         """Stop following the currently selected pig."""
         farm_view = self.query_one("#farm-view", FarmView)
         if farm_view.selected_pig_id:
+            # Restore zoom level from before follow
+            if self._pre_follow_zoom is not None:
+                farm_view._zoom = self._pre_follow_zoom
+                farm_view._clamp_viewport()
+                self._pre_follow_zoom = None
             farm_view.select_pig(None)
             self._selected_pig_index = -1
             self.query_one("#pig-sidebar", PigSidebar).set_pig(None)
@@ -193,7 +199,15 @@ class MainGameScreen(Screen):
                 self._selected_pig_index = i
                 break
 
-        self.query_one("#farm-view", FarmView).select_pig(pig.id)
+        farm_view = self.query_one("#farm-view", FarmView)
+
+        # Auto-zoom to CLOSE for better visibility
+        if farm_view.zoom != ZoomLevel.CLOSE:
+            self._pre_follow_zoom = farm_view.zoom
+            farm_view._zoom = ZoomLevel.CLOSE
+            farm_view._clamp_viewport()
+
+        farm_view.select_pig(pig.id)
         self.query_one("#pig-sidebar", PigSidebar).set_pig(pig)
         self.notify(f"Following: {pig.name}")
 
@@ -249,11 +263,7 @@ class MainGameScreen(Screen):
             return
 
         self._selected_pig_index = (self._selected_pig_index + 1) % len(pigs)
-        pig = pigs[self._selected_pig_index]
-
-        self.query_one("#farm-view", FarmView).select_pig(pig.id)
-        self.query_one("#pig-sidebar", PigSidebar).set_pig(pig)
-        self.notify(f"Selected: {pig.name}")
+        self._follow_pig(pigs[self._selected_pig_index])
 
     def action_toggle_edit(self) -> None:
         """Toggle facility edit mode."""
@@ -267,7 +277,7 @@ class MainGameScreen(Screen):
             self.notify("Edit mode off")
 
     def action_handle_escape(self) -> None:
-        """Handle escape - exit edit mode or deselect."""
+        """Handle escape - exit edit mode or stop following."""
         farm_view = self.query_one("#farm-view", FarmView)
         if farm_view.edit_mode:
             if farm_view.moving_facility:
@@ -279,9 +289,7 @@ class MainGameScreen(Screen):
                 self._refresh_footer()
                 self.notify("Edit mode off")
         else:
-            self._selected_pig_index = -1
-            farm_view.select_pig(None)
-            self.query_one("#pig-sidebar", PigSidebar).set_pig(None)
+            self._stop_following()
 
     def action_handle_up(self) -> None:
         """Handle up arrow."""
