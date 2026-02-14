@@ -9,9 +9,15 @@ from big_pig_farm.entities.genetics import (
     RoanType,
     Genotype,
     Phenotype,
+    LOCUS_DEFINITIONS,
 )
+from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.guinea_pig import GuineaPig
+
+# Penalty applied to seniors in scoring — large enough that any breeding-age
+# pig outranks a senior (max allele score is 10, max uniqueness+het is 15).
+_SENIOR_PENALTY = 20.0
 
 
 class BreedingProgram(BaseModel):
@@ -30,6 +36,7 @@ class BreedingProgram(BaseModel):
     target_roan: set[RoanType] = Field(default_factory=set)
     keep_carriers: bool = True
     auto_pair: bool = True
+    maximize_diversity: bool = False
     stock_limit: int = 6
     enabled: bool = False
 
@@ -90,8 +97,9 @@ def breeding_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool) -> f
 
     Base score is target allele count (0-10 across 5 loci).
     An age bonus (0-5) is added so younger pigs within breeding age
-    score higher than older ones with equal genetics, and seniors
-    (who can no longer breed) get no age bonus at all.
+    score higher than older ones with equal genetics.  Seniors (who
+    can no longer breed) receive a large penalty so they are culled
+    before any breeding-age pig.
     """
     score = 0
     g = pig.genotype
@@ -134,6 +142,10 @@ def breeding_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool) -> f
             score += g.r_locus.count("R")
         elif roan == RoanType.NONE:
             score += g.r_locus.count("r")
+
+    # Seniors can't breed — heavy penalty so they're culled before breeders
+    if pig.is_senior:
+        score -= _SENIOR_PENALTY
 
     # Age tiebreaker: younger breeding-age pigs score higher
     remaining = max(0, BREEDING.MAX_AGE_DAYS - pig.age_days)
@@ -212,3 +224,37 @@ def _matches_roan(
 ) -> bool:
     """Check if pig matches roan axis. No carrier rescue for roan."""
     return phenotype.roan in target
+
+
+def _heterozygosity_count(genotype: Genotype) -> int:
+    """Count how many loci are heterozygous (0-5).
+
+    A pig heterozygous at more loci produces more varied offspring.
+    """
+    count = 0
+    for locus_name, dominant, recessive in LOCUS_DEFINITIONS:
+        locus = getattr(genotype, locus_name)
+        if dominant in locus and recessive in locus:
+            count += 1
+    return count
+
+
+def diversity_value(pig: GuineaPig, all_pigs: list[GuineaPig]) -> float:
+    """Score a pig's contribution to phenotype diversity.
+
+    Components:
+    - Uniqueness (0-10): 10 / count_of_pigs_sharing_phenotype
+    - Heterozygosity bonus (0-5): heterozygous loci count
+    - Age tiebreaker (0-3): younger pigs break ties
+    - Senior penalty (-20): seniors can't breed, cull them first
+    """
+    key = phenotype_key(pig.phenotype)
+    same_count = sum(1 for p in all_pigs if phenotype_key(p.phenotype) == key)
+    uniqueness = 10.0 / same_count
+    het_bonus = float(_heterozygosity_count(pig.genotype))
+    remaining = max(0, BREEDING.MAX_AGE_DAYS - pig.age_days)
+    age_bonus = (remaining / BREEDING.MAX_AGE_DAYS) * 3.0
+    score = uniqueness + het_bonus + age_bonus
+    if pig.is_senior:
+        score -= _SENIOR_PENALTY
+    return score

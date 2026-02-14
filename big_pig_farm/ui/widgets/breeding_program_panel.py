@@ -82,13 +82,13 @@ class BreedingProgramPanel(Static, can_focus=True):
             return self.breeding_program.target_intensities
         elif axis_idx == 3:
             return self.breeding_program.target_roan
-        elif axis_idx in (4, 5, 6, 7):
+        elif axis_idx in (4, 5, 6, 7, 8):
             return set()  # toggle rows
         return set()
 
     def _total_rows(self) -> int:
-        """Total navigable rows: 4 trait axes + keep_carriers + auto_pair + stock_limit + enabled."""
-        return 8
+        """Total navigable rows: 4 trait axes + keep_carriers + auto_pair + max_diversity + stock_limit + enabled."""
+        return 9
 
     def _items_in_row(self, row: int) -> int:
         """Number of items in a given row."""
@@ -109,7 +109,7 @@ class BreedingProgramPanel(Static, can_focus=True):
             self._cursor_item = min(self._cursor_item, self._items_in_row(self._cursor_axis) - 1)
             event.stop()
         elif key == "left":
-            if self._cursor_axis == 6:
+            if self._cursor_axis == 7:
                 # Stock limit: decrease
                 self.breeding_program.stock_limit = max(2, self.breeding_program.stock_limit - 1)
                 event.stop()
@@ -117,7 +117,7 @@ class BreedingProgramPanel(Static, can_focus=True):
                 self._cursor_item = max(0, self._cursor_item - 1)
                 event.stop()
         elif key == "right":
-            if self._cursor_axis == 6:
+            if self._cursor_axis == 7:
                 # Stock limit: increase
                 self.breeding_program.stock_limit = min(20, self.breeding_program.stock_limit + 1)
                 event.stop()
@@ -150,9 +150,12 @@ class BreedingProgramPanel(Static, can_focus=True):
             # Auto-pair toggle
             self.breeding_program.auto_pair = not self.breeding_program.auto_pair
         elif self._cursor_axis == 6:
+            # Max diversity toggle
+            self.breeding_program.maximize_diversity = not self.breeding_program.maximize_diversity
+        elif self._cursor_axis == 7:
             # Stock limit — space does nothing, use left/right
             pass
-        elif self._cursor_axis == 7:
+        elif self._cursor_axis == 8:
             # Enabled toggle
             self.breeding_program.enabled = not self.breeding_program.enabled
 
@@ -207,8 +210,12 @@ class BreedingProgramPanel(Static, can_focus=True):
         lines.append(f"  {self._fmt_check(bp.auto_pair, 'Auto-Pair', self._cursor_axis == 5)}")
         lines.append(f"       [dim]Automatically select the best breeding pair[/]")
 
+        # Max diversity toggle
+        lines.append(f"  {self._fmt_check(bp.maximize_diversity, 'Max Diversity', self._cursor_axis == 6)}")
+        lines.append(f"       [dim]Keep unique phenotypes when culling surplus[/]")
+
         # Stock limit
-        is_sl_cursor = self._cursor_axis == 6
+        is_sl_cursor = self._cursor_axis == 7
         if is_sl_cursor:
             lines.append(f"  [reverse] \u25c4 {bp.stock_limit:>2} \u25ba [/]  Stock Limit")
         else:
@@ -216,7 +223,7 @@ class BreedingProgramPanel(Static, can_focus=True):
         lines.append(f"       [dim]Max adult pigs before surplus are sold  (left/right to adjust)[/]")
 
         # Enabled toggle
-        lines.append(f"  {self._fmt_check(bp.enabled, 'Program Enabled', self._cursor_axis == 7)}")
+        lines.append(f"  {self._fmt_check(bp.enabled, 'Program Enabled', self._cursor_axis == 8)}")
         lines.append(f"       [dim]Enable or disable the entire breeding program[/]")
 
         self.update("\n".join(lines))
@@ -241,4 +248,5 @@ class BreedingProgramPanel(Static, can_focus=True):
 
         trait_str = "; ".join(parts) if parts else "all traits"
         auto = " | Auto-pair ON" if bp.auto_pair else ""
-        return f"Target: {trait_str}{auto} | Stock: {bp.stock_limit}"
+        diversity = " | Diversity" if bp.maximize_diversity else ""
+        return f"Target: {trait_str}{auto}{diversity} | Stock: {bp.stock_limit}"

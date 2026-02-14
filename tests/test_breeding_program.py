@@ -13,7 +13,9 @@ from big_pig_farm.entities.genetics import (
     calculate_target_probability,
 )
 from big_pig_farm.data.config import BREEDING
-from big_pig_farm.simulation.breeding_program import BreedingProgram, should_keep_pig, breeding_value
+from big_pig_farm.simulation.breeding_program import (
+    BreedingProgram, should_keep_pig, breeding_value, diversity_value, _heterozygosity_count,
+)
 from big_pig_farm.simulation.breeding import _auto_pair_from_program, _apply_breeding_filter, cull_surplus_breeders
 from big_pig_farm.game.state import GameState
 
@@ -636,6 +638,30 @@ class TestBreedingValueAge:
         young_bad = _make_pig("YoungBad", Gender.MALE, age_days=5.0)
         assert breeding_value(old_good, program, False) > breeding_value(young_bad, program, False)
 
+    def test_senior_always_below_breeder(self):
+        """A senior with perfect genetics should still score below any breeding-age pig."""
+        program = BreedingProgram(
+            target_colors={BaseColor.GOLDEN},
+            target_patterns={Pattern.DALMATIAN},
+            target_intensities={ColorIntensity.HIMALAYAN},
+            target_roan={RoanType.ROAN},
+        )
+        # Senior with max alleles on every axis
+        senior = _make_pig(
+            "Senior", Gender.MALE, age_days=35.0,
+            e_locus=("e", "e"), s_locus=("s", "s"), c_locus=("ch", "ch"), r_locus=("R", "r"),
+        )
+        # Young pig with zero target alleles
+        young = _make_pig("Young", Gender.MALE, age_days=5.0)
+        assert breeding_value(young, program, False) > breeding_value(senior, program, False)
+
+    def test_senior_diversity_below_breeder(self):
+        """A senior should score below a breeding-age pig in diversity mode too."""
+        senior = _make_pig("Senior", Gender.MALE, age_days=35.0, e_locus=("E", "e"), b_locus=("B", "b"))
+        young = _make_pig("Young", Gender.MALE, age_days=5.0)
+        all_pigs = [senior, young]
+        assert diversity_value(young, all_pigs) > diversity_value(senior, all_pigs)
+
 
 # ─── Culling with population floor tests ───
 
@@ -709,3 +735,111 @@ class TestCullPopulationFloor:
         _apply_breeding_filter(state, [baby])
         # Baby should NOT be marked because population is at the floor
         assert not baby.marked_for_sale
+
+
+# ─── Diversity scoring tests ───
+
+
+class TestHeterozygosityCount:
+    """Tests for _heterozygosity_count helper."""
+
+    def test_fully_homozygous_is_zero(self):
+        g = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "C"), r_locus=("r", "r"))
+        assert _heterozygosity_count(g) == 0
+
+    def test_fully_heterozygous_is_five(self):
+        g = Genotype(e_locus=("E", "e"), b_locus=("B", "b"), s_locus=("S", "s"), c_locus=("C", "ch"), r_locus=("R", "r"))
+        assert _heterozygosity_count(g) == 5
+
+    def test_c_locus_detected(self):
+        """C/ch heterozygosity should be detected despite multi-char allele."""
+        g = Genotype(e_locus=("E", "E"), b_locus=("B", "B"), s_locus=("S", "S"), c_locus=("C", "ch"), r_locus=("r", "r"))
+        assert _heterozygosity_count(g) == 1
+
+
+class TestDiversityValue:
+    """Tests for diversity_value scoring."""
+
+    def test_unique_beats_duplicate(self):
+        """A pig with a unique phenotype should score higher than a duplicate."""
+        # 3 black pigs (duplicates) + 1 golden pig (unique)
+        black1 = _make_pig("B1", Gender.MALE, age_days=5.0)
+        black2 = _make_pig("B2", Gender.FEMALE, age_days=5.0)
+        black3 = _make_pig("B3", Gender.FEMALE, age_days=5.0)
+        golden = _make_pig("G1", Gender.MALE, age_days=5.0, e_locus=("e", "e"))
+        all_pigs = [black1, black2, black3, golden]
+
+        assert diversity_value(golden, all_pigs) > diversity_value(black1, all_pigs)
+
+    def test_heterozygous_beats_homozygous(self):
+        """A pig with more carrier alleles should score higher (same phenotype)."""
+        # Both are black solid — same phenotype, different genotype depth
+        homo = _make_pig("Homo", Gender.MALE, age_days=5.0,
+                         e_locus=("E", "E"), b_locus=("B", "B"))
+        het = _make_pig("Het", Gender.MALE, age_days=5.0,
+                        e_locus=("E", "e"), b_locus=("B", "b"), s_locus=("S", "s"))
+        all_pigs = [homo, het]
+
+        assert diversity_value(het, all_pigs) > diversity_value(homo, all_pigs)
+
+
+class TestCullWithDiversity:
+    """Tests for culling with maximize_diversity enabled."""
+
+    def test_keeps_unique_phenotypes(self):
+        """With diversity mode, unique phenotypes should survive culling over duplicates."""
+        state = GameState()
+        # 4 Black pigs (same phenotype — duplicates)
+        for i in range(4):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Black{i}", gender, age_days=5.0)
+            state.add_guinea_pig(pig)
+        # 1 Golden pig (unique phenotype)
+        golden = _make_pig("Golden", Gender.FEMALE, age_days=5.0, e_locus=("e", "e"))
+        state.add_guinea_pig(golden)
+        # 1 Chocolate pig (unique phenotype)
+        choc = _make_pig("Choc", Gender.MALE, age_days=5.0, b_locus=("b", "b"))
+        state.add_guinea_pig(choc)
+
+        # effective_limit = max(stock_limit, MIN_BREEDING_POPULATION) = 4
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            maximize_diversity=True,
+            stock_limit=3,
+        )
+
+        cull_surplus_breeders(state)
+        kept = [p for p in state.get_pigs_list() if not p.marked_for_sale]
+        kept_names = {p.name for p in kept}
+
+        # Both unique phenotypes must survive
+        assert "Golden" in kept_names
+        assert "Choc" in kept_names
+        # 2 of the 4 black pigs should be marked (surplus duplicates)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 2
+
+    def test_diversity_culls_seniors_before_young(self):
+        """Seniors should be culled before young pigs even in diversity mode."""
+        state = GameState()
+        # Senior with unique phenotype (golden)
+        senior = _make_pig("SeniorGold", Gender.MALE, age_days=35.0, e_locus=("e", "e"))
+        state.add_guinea_pig(senior)
+        # Young pigs — all black (duplicates), but breeding-age
+        for i in range(4):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            pig = _make_pig(f"Young{i}", gender, age_days=5.0)
+            state.add_guinea_pig(pig)
+
+        # effective_limit = max(3, MIN_BREEDING_POPULATION) = 4
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            maximize_diversity=True,
+            stock_limit=3,
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        marked_names = {p.name for p in marked}
+        # Senior should be culled despite unique phenotype — can't breed
+        assert "SeniorGold" in marked_names
