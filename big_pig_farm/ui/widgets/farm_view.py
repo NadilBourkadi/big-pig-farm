@@ -454,13 +454,19 @@ class FarmView(Static):
         anchor_x = base_x - sprite_w // 2
         anchor_y = base_y - sprite_h // 2
 
-        # Draw ground glow under selected pig (before sprite so it shows
+        # Draw oval glow under selected pig (before sprite so it shows
         # through transparent/edge pixels)
         if is_selected and self._zoom != ZoomLevel.FAR:
             glow_bg = "#8a7010"
-            pad = 1  # glow radius around sprite
+            pad = 2  # padding around sprite for ellipse bounds
+            cx = anchor_x + (sprite_w - 1) / 2
+            cy = anchor_y + (sprite_h - 1) / 2
+            rx = (sprite_w + 2 * pad) / 2
+            ry = (sprite_h + 2 * pad) / 2
             for gy in range(anchor_y - pad, anchor_y + sprite_h + pad):
                 for gx in range(anchor_x - pad, anchor_x + sprite_w + pad):
+                    if ((gx - cx) / rx) ** 2 + ((gy - cy) / ry) ** 2 > 1.0:
+                        continue
                     if 0 <= gx < width and 0 <= gy < height:
                         existing = self._style_buffer[gy][gx]
                         fg = existing.color if existing else None
