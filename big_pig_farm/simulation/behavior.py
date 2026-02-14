@@ -6,7 +6,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import NEEDS, SIMULATION, BEHAVIOR
 from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Personality, Position
-from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
 from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.facility_manager import FacilityManager
@@ -285,7 +285,18 @@ class BehaviorController:
         """Find a place to sleep."""
         hideouts = self.facility_manager.get_reachable_facilities(pig, FacilityType.HIDEOUT)
 
-        for hideout in hideouts or []:
+        if not hideouts:
+            # No reachable hideout - sleep where standing
+            pig.path = []
+            pig.target_position = None
+            pig.target_facility_id = None
+            pig.target_description = "sleeping"
+            pig.behavior_state = BehaviorState.SLEEPING
+            pig.log_behavior("No reachable hideout, sleeping where standing")
+            return
+
+        ranked = self.facility_manager.rank_facilities_by_spread(pig, hideouts)
+        for hideout in ranked:
             target = self.facility_manager.find_open_interaction_point(pig, hideout)
             if target:
                 self._set_path_to(pig, target)
@@ -311,19 +322,23 @@ class BehaviorController:
 
     def _seek_play(self, pig: GuineaPig) -> None:
         """Find something to play with."""
-        play_facilities = [
+        play_types = [
             FacilityType.EXERCISE_WHEEL,
             FacilityType.PLAY_AREA,
             FacilityType.TUNNEL,
         ]
 
-        for facility_type in play_facilities:
-            facilities = self.facility_manager.get_reachable_facilities(pig, facility_type)
-            for facility in facilities or []:
+        # Collect all reachable play facilities across types and rank together
+        all_play: list[Facility] = []
+        for facility_type in play_types:
+            all_play.extend(self.facility_manager.get_reachable_facilities(pig, facility_type))
+
+        if all_play:
+            ranked = self.facility_manager.rank_facilities_by_spread(pig, all_play)
+            for facility in ranked:
                 target = self.facility_manager.find_open_interaction_point(pig, facility)
                 if target:
                     self._set_path_to(pig, target)
-                    # Verify path was actually set
                     if pig.path:
                         pig.log_behavior(f"Going to {facility.name} to play")
                         pig.behavior_state = BehaviorState.WANDERING
@@ -331,7 +346,6 @@ class BehaviorController:
                         pig.target_description = f"going to {facility.name}"
                         return
                     else:
-                        # Path failed - mark as failed and try next
                         pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
                         self.facility_manager.add_failed_facility(pig.id, facility.id)
 

@@ -275,6 +275,7 @@ class BehaviorConfig:
     FACILITY_NEARBY_RADIUS: float = 6.0   # Distance for counting nearby pigs
     FACILITY_HEADING_RADIUS: float = 3.0  # Distance for counting pigs heading to facility
     CROWDING_PENALTY: float = 25.0        # Scoring penalty per nearby pig
+    FACILITY_DISTANCE_WEIGHT: float = 2.0 # Distance multiplier in facility scoring (higher = prefer closer)
     SCORING_RANDOM_VARIANCE: float = 3.0  # Random variance in facility scoring
     UNCROWDED_CHANCE: float = 0.3         # Chance to prioritize uncrowded facility
 
