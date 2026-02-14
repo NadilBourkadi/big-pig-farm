@@ -87,9 +87,8 @@ _CLOSE_EATING_R: PixelGrid = decode_sprite([
     ".....dww............wwd.....",
 ], _PIG_CHAR, width=28)
 
-# Walking frame 1: body drops 2 rows, ear flattens, no paws
+# Walking frame 1: body drops 1 row, ear flattens (1px shift for smooth half-cell bounce)
 _CLOSE_WALKING_1_R: PixelGrid = decode_sprite([
-    "............................",
     "............................",
     "................dddd..dd....",
     "................dddd..dd....",
@@ -105,6 +104,7 @@ _CLOSE_WALKING_1_R: PixelGrid = decode_sprite([
     ".....dffffffffffffffbbfbdd..",
     "......ddbbbbbbbbbbbbbbbbdd..",
     "......ddbbbbbbbbbbbbbbbbdd..",
+    "............................",
 ], _PIG_CHAR, width=28)
 
 # Eating frame 1: face dips, ear flat, closed eyes at lower position
@@ -147,8 +147,9 @@ _CLOSE_SLEEPING_1_R: PixelGrid = decode_sprite([
     ".....dww............wwd.....",
 ], _PIG_CHAR, width=28)
 
-# Happy frame 1: body hops up 2 rows, bottom rows empty
+# Happy frame 1: body hops up 1 row (1px shift for smooth half-cell bounce)
 _CLOSE_HAPPY_1_R: PixelGrid = decode_sprite([
+    "............................",
     "......ddddddddddffffaaffdd..",
     ".....dddddfffffdffffaaffddd.",
     "....ddddffffffffffeeeeppffdd",
@@ -163,7 +164,6 @@ _CLOSE_HAPPY_1_R: PixelGrid = decode_sprite([
     "....ddbbbbbbbbbbbbbbbbdd....",
     "...dwf................fwd...",
     "...dww................wwd...",
-    "............................",
     "............................",
 ], _PIG_CHAR, width=28)
 
