@@ -6,8 +6,8 @@ from textual.containers import Vertical, VerticalScroll
 from textual.widgets import Static, Footer
 from rich.text import Text
 
-from big_pig_farm.data.sprite_pixels import (
-    generate_portrait_with_scene,
+from big_pig_farm.data.pig_portraits import generate_portrait_with_scene
+from big_pig_farm.data.sprite_engine import (
     convert_pixels,
     render_to_rich_text,
     PALETTES,

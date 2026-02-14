@@ -8,13 +8,7 @@ Each facility gets:
 Uses the same PixelGrid / convert_pixels() pipeline as pig sprites.
 """
 
-from typing import Optional
-
-# Transparent sentinel (matches sprite_pixels.py)
-T = None
-
-# Type alias for clarity (same as sprite_pixels.py)
-PixelGrid = list[list[Optional[str]]]
+from big_pig_farm.data.sprite_engine import PixelGrid, T
 
 # ---------------------------------------------------------------------------
 # Color palettes — one per facility type

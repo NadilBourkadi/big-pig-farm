@@ -18,16 +18,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from rich.console import Console
 from rich.text import Text
 
-from big_pig_farm.data.sprite_pixels import (
+from big_pig_farm.data.sprite_engine import (
     convert_pixels,
     render_to_rich_text,
     scale_pixel_grid,
-    generate_portrait,
-    get_pig_pixel_sprite,
     PALETTES,
-    PIG_PIXELS_ADULT,
-    PIG_PIXELS_BABY,
 )
+from big_pig_farm.data.pig_portraits import generate_portrait
+from big_pig_farm.data.pig_sprite_lookup import get_pig_pixel_sprite
+from big_pig_farm.data.pig_sprites import PIG_PIXELS_ADULT, PIG_PIXELS_BABY
 from big_pig_farm.data.facility_pixels import (
     FACILITY_PALETTES,
     FACILITY_PIXELS,
