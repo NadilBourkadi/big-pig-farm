@@ -51,6 +51,8 @@ class FarmGrid(BaseModel):
 
     # Cached list of walkable interior positions (invalidated on grid changes)
     _walkable_cache: Optional[list[tuple[int, int]]] = None
+    # Per-area walkable position cache (invalidated alongside _walkable_cache)
+    _area_walkable_cache: dict[UUID, list[tuple[int, int]]] = {}
     # O(1) area lookup by UUID
     _area_lookup: dict[UUID, FarmArea] = {}
 
@@ -64,11 +66,13 @@ class FarmGrid(BaseModel):
                 for _ in range(self.height)
             ]
         self._walkable_cache = None
+        self._area_walkable_cache = {}
         self._area_lookup = {a.id: a for a in self.areas}
 
     def _invalidate_walkable_cache(self) -> None:
         """Invalidate the cached list of walkable positions."""
         self._walkable_cache = None
+        self._area_walkable_cache = {}
 
     def _compute_wall_flags(self) -> None:
         """Pre-compute is_corner and is_horizontal_wall for all wall cells.
@@ -394,14 +398,20 @@ class FarmGrid(BaseModel):
 
     def find_random_walkable_in_area(self, area_id: UUID) -> Optional[tuple[int, int]]:
         """Find a random walkable position within a specific area."""
-        candidates = [
-            (x, y)
-            for y in range(self.height)
-            for x in range(self.width)
-            if self.is_walkable(x, y) and self.cells[y][x].area_id == area_id
-        ]
-        if candidates:
-            return random.choice(candidates)
+        cached = self._area_walkable_cache.get(area_id)
+        if cached is None:
+            area = self._area_lookup.get(area_id)
+            if area is None:
+                return None
+            cached = [
+                (x, y)
+                for y in range(area.y1, area.y2 + 1)
+                for x in range(area.x1, area.x2 + 1)
+                if self.is_walkable(x, y) and self.cells[y][x].area_id == area_id
+            ]
+            self._area_walkable_cache[area_id] = cached
+        if cached:
+            return random.choice(cached)
         return None
 
     def get_area_at(self, x: int, y: int) -> Optional[FarmArea]:
