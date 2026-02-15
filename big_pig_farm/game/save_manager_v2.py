@@ -84,6 +84,16 @@ class SaveManagerV2:
 
             json_blob = row[0]
             state = GameState.model_validate_json(json_blob)
+
+            # Migrate saves from before multi-area support
+            if not state.farm.areas:
+                state.farm._create_legacy_starter_area()
+            else:
+                # Repair border cells that lack area_id (pre-add_area saves)
+                state.farm._repair_area_cells()
+                # Re-carve tunnels with current width/count settings
+                state.farm._rebuild_tunnels()
+
             return state
         except Exception as e:
             logger.error(f"Failed to load v2 save: {e}")
