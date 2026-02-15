@@ -130,6 +130,7 @@ def render_to_rich_text(
 
 # Palette keys used in pixel grids:
 #   "fur"   — main body color
+#   "shade" — slightly darkened fur (accents, eye outlines, edge shadows)
 #   "dark"  — outline / dark details (ears, back)
 #   "belly" — lighter underside
 #   "pupil" — eye pupil (always near-black for contrast on any fur color)
@@ -143,6 +144,7 @@ def render_to_rich_text(
 PALETTES: dict[str, dict[str, str]] = {
     "BLACK": {
         "fur":   "grey27",
+        "shade": "grey23",
         "dark":  "grey15",
         "belly": "grey35",
         "pupil": "grey7",
@@ -157,6 +159,7 @@ PALETTES: dict[str, dict[str, str]] = {
     },
     "CHOCOLATE": {
         "fur":   "orange4",
+        "shade": "#8b4a00",
         "dark":  "dark_red",
         "belly": "sandy_brown",
         "pupil": "grey7",
@@ -171,6 +174,7 @@ PALETTES: dict[str, dict[str, str]] = {
     },
     "GOLDEN": {
         "fur":   "gold1",
+        "shade": "#d4a800",
         "dark":  "dark_goldenrod",
         "belly": "light_goldenrod1",
         "pupil": "grey7",
@@ -185,6 +189,7 @@ PALETTES: dict[str, dict[str, str]] = {
     },
     "CREAM": {
         "fur":   "wheat1",
+        "shade": "#d9c49e",
         "dark":  "tan",
         "belly": "cornsilk1",
         "pupil": "grey7",
