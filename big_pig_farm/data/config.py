@@ -120,7 +120,7 @@ class BreedingConfig:
     HIGH_HAPPINESS_THRESHOLD: int = 80  # Threshold for happiness breeding bonus
     HIGH_HAPPINESS_BONUS: float = 0.05  # +5% with high happiness
     OLD_AGE_DEATH_RATE: float = 0.1     # Base death rate multiplier per game day past max age
-    MIN_BREEDING_POPULATION: int = 4    # Hard floor — never cull below this many adults
+    MIN_BREEDING_POPULATION: int = 2    # Hard floor — never cull below this many adults
 
 
 @dataclass(frozen=True)
@@ -141,7 +141,7 @@ class TimeConfig:
 
 @dataclass(frozen=True)
 class FarmTier:
-    """Farm expansion tier definition."""
+    """Farm expansion tier definition (legacy, kept for migration)."""
     name: str
     width: int
     height: int
@@ -150,15 +150,46 @@ class FarmTier:
     tier: int
 
 
-# Farm expansion tiers
+# Legacy farm tiers — kept for save migration only
 FARM_TIERS: list[FarmTier] = [
-    FarmTier("Starter Hutch", 42, 21, 4, 0, 1),
+    FarmTier("Starter Hutch", 78, 46, 8, 0, 1),
     FarmTier("Cozy Enclosure", 54, 27, 8, 500, 2),
     FarmTier("Family Pen", 70, 35, 14, 2000, 3),
     FarmTier("Guinea Grove", 86, 43, 16, 8000, 4),
     FarmTier("Piggy Paradise", 108, 54, 24, 25000, 5),
     FarmTier("Ultimate Farm", 140, 70, 35, 100000, 6),
 ]
+
+
+@dataclass(frozen=True)
+class RoomTier:
+    """Room size/capacity definition for multi-area farms."""
+    name: str
+    room_width: int
+    room_height: int
+    capacity_add: int
+    cost: int
+    tier: int
+
+
+# Room tiers — each room addition uses the next tier in sequence
+ROOM_TIERS: list[RoomTier] = [
+    RoomTier("Starter Hutch",   78, 46,  8,      0, 1),
+    RoomTier("Cozy Enclosure",  78, 46,  8,    500, 2),
+    RoomTier("Family Pen",      88, 52, 12,   2000, 3),
+    RoomTier("Guinea Grove",    98, 56, 14,   8000, 4),
+    RoomTier("Piggy Paradise", 108, 62, 18,  25000, 5),
+    RoomTier("Ultimate Farm",  120, 68, 24, 100000, 6),
+]
+
+
+@dataclass(frozen=True)
+class BiomeConfig:
+    """Configuration for biome effects."""
+    PREFERRED_BIOME_HAPPINESS_BONUS: float = 1.5  # per game hour
+    BIOME_MUTATION_BOOST: float = 0.01             # base per-locus extra rate
+    BIOME_CONTRACT_REWARD_BONUS: float = 0.25      # 25% reward bonus for biome contracts
+    BIOME_CONTRACT_CHANCE: float = 0.3             # 30% chance for biome requirement on hard+
 
 
 @dataclass(frozen=True)
@@ -365,3 +396,4 @@ CONTRACTS = ContractConfig()
 BEHAVIOR = BehaviorConfig()
 FACILITY_INTERACTION = FacilityInteractionConfig()
 AUTO_ARRANGE = AutoArrangeConfig()
+BIOME = BiomeConfig()

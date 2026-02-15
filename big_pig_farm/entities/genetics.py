@@ -316,13 +316,20 @@ def mutate_locus(
     return tuple(new_locus), True
 
 
-def breed(parent1: Genotype, parent2: Genotype, mutation_rate: float = 0.0) -> BreedResult:
+def breed(
+    parent1: Genotype,
+    parent2: Genotype,
+    mutation_rate: float = 0.0,
+    locus_rates: dict[str, float] | None = None,
+) -> BreedResult:
     """Create offspring genotype from two parents with optional mutations.
 
     Args:
         parent1: First parent genotype
         parent2: Second parent genotype
         mutation_rate: Per-locus mutation rate (0.0 = no mutations, 0.02 = 2%)
+        locus_rates: Optional per-locus overrides (e.g. from biome boosts).
+            Keys are locus names like "e_locus", "b_locus", etc.
 
     Returns:
         BreedResult with genotype and list of mutation descriptions
@@ -349,9 +356,12 @@ def breed(parent1: Genotype, parent2: Genotype, mutation_rate: float = 0.0) -> B
         "r_locus": (child_r, "R", "r"),
     }
 
-    if mutation_rate > 0:
+    if mutation_rate > 0 or locus_rates:
         for locus_name, (locus_val, dom, rec) in loci.items():
-            new_val, did_mutate = mutate_locus(locus_val, dom, rec, mutation_rate)
+            rate = locus_rates.get(locus_name, mutation_rate) if locus_rates else mutation_rate
+            if rate <= 0:
+                continue
+            new_val, did_mutate = mutate_locus(locus_val, dom, rec, rate)
             if did_mutate:
                 # If mutation creates RR, force to Rr instead
                 if locus_name == "r_locus" and new_val[0] == "R" and new_val[1] == "R":
