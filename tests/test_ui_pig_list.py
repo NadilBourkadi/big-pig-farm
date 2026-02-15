@@ -41,6 +41,8 @@ async def test_pig_table_shows_starter_pigs():
     """Table row count should match the pig count in game state."""
     app = BigPigFarmApp(debug=False)
     async with app.run_test() as pilot:
+        # Pause to prevent simulation from selling pigs mid-assertion
+        await pilot.press("space")
         await pilot.press("p")
         table = app.query_one("#pig-table", DataTable)
         assert table.row_count == app.state.pig_count
