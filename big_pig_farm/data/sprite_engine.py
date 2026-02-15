@@ -31,6 +31,14 @@ ANIM_TICKS_PER_FRAME: dict[str, int] = {
     "sleeping": 10,
 }
 
+# Number of animation frames per state.  States not listed default to 2.
+ANIM_FRAME_COUNT: dict[str, int] = {
+    "walking": 3,
+    "eating": 2,
+    "happy": 2,
+    "sleeping": 2,
+}
+
 
 # ---------------------------------------------------------------------------
 # Core converter

@@ -160,6 +160,27 @@ PIG_PIXELS_ADULT = {
         [ T,  "dark","belly","belly","fur","fur","fur","fur","fur","fur","fur","dark", T,   T  ],
         [ T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T,   T  ],
     ],
+    # Walking frame 3: body centred (same as frame 1 height), paws closer together, slight width shift
+    "walking_right_3": [
+        [ T,   T,   T,   T,   T,   T,   T,   T,  "dark","dark","ear","dark", T,   T  ],
+        [ T,   T,   T,  "dark","dark","dark","dark","dark","fur","fur","fur","fur","dark", T  ],
+        [ T,   T,  "dark","dark","fur","fur","fur","fur","fur","eye","eye","pupil","fur","dark"],
+        [ T,  "dark","fur","fur","fur","fur","fur","fur","fur","eye","pupil","pupil","nose","dark"],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,   T,  "paw", T,   T,   T,   T,  "paw", T,   T,   T,   T  ],
+    ],
+    "walking_left_3": [
+        [ T,   T,  "dark","ear","dark","dark", T,   T,   T,   T,   T,   T,   T,   T  ],
+        [ T,  "dark","fur","fur","fur","fur","dark","dark","dark","dark","dark", T,   T,   T  ],
+        ["dark","fur","pupil","eye","eye","fur","fur","fur","fur","fur","dark","dark", T,   T  ],
+        ["dark","nose","pupil","pupil","eye","fur","fur","fur","fur","fur","fur","fur","dark", T  ],
+        ["dark","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","fur","dark"],
+        [ T,  "dark","belly","fur","fur","fur","fur","fur","fur","fur","fur","belly","dark", T  ],
+        [ T,   T,  "dark","belly","belly","belly","belly","belly","belly","belly","belly","dark", T,   T  ],
+        [ T,   T,   T,   T,  "paw", T,   T,   T,   T,  "paw", T,   T,   T,   T  ],
+    ],
     # Eating: ear flattens + whole face dips (closed eyes shift down 1 row) + nose dips
     "eating_right_2": [
         [ T,   T,   T,   T,   T,   T,   T,   T,  "dark","dark", T,  "dark", T,   T  ],
@@ -276,6 +297,23 @@ PIG_PIXELS_BABY = {
         [ T,  "dark","belly","belly","belly","belly","dark", T  ],
         [ T,   T,  "paw", T,   T,  "paw", T,   T  ],
     ],
+    # Walking frame 3: body centred, paws closer together (weight-shift pose)
+    "walking_right_3": [
+        [ T,   T,   T,   T,  "dark","ear","dark", T  ],
+        [ T,  "dark","dark","dark","fur","fur","fur","dark"],
+        [ T,  "dark","fur","fur","eye","pupil","fur","dark"],
+        ["dark","belly","fur","fur","eye","eye","nose","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,   T,  "paw","paw", T,   T,   T  ],
+    ],
+    "walking_left_3": [
+        [ T,  "dark","ear","dark", T,   T,   T,   T  ],
+        ["dark","fur","fur","fur","dark","dark","dark", T  ],
+        ["dark","fur","pupil","eye","fur","fur","dark", T  ],
+        ["dark","nose","eye","eye","fur","fur","belly","dark"],
+        [ T,  "dark","belly","belly","belly","belly","dark", T  ],
+        [ T,   T,   T,  "paw","paw", T,   T,   T  ],
+    ],
     # --- Frame 2 variants (animation alternates) ---
     # Walking: ear bounce (flattens into head) + paws together
     "walking_right_2": [
@@ -349,6 +387,23 @@ PIG_PIXELS_FAR_ADULT = {
         [ T,  "dark","belly","belly","fur","dark", T  ],
         [ T,  "dark","belly","belly","belly","dark", T  ],
     ],
+    # Walking frame 3: body centred, paws closer together
+    "walking_right_3": [
+        [ T,   T,  "dark","dark","dark","ear","dark"],
+        [ T,  "dark","fur", "fur", "fur","fur","dark"],
+        ["dark","fur", "fur", "fur","eye","pupil","dark"],
+        ["dark","fur", "fur", "fur", "fur","nose","dark"],
+        [ T,  "dark","belly","belly","belly","dark", T  ],
+        [ T,   T,   T,  "paw","paw", T,   T  ],
+    ],
+    "walking_left_3": [
+        ["dark","ear","dark","dark","dark", T,   T  ],
+        ["dark","fur", "fur", "fur","fur","dark", T  ],
+        ["dark","pupil","eye","fur", "fur", "fur","dark"],
+        ["dark","nose","fur", "fur", "fur", "fur","dark"],
+        [ T,  "dark","belly","belly","belly","dark", T  ],
+        [ T,   T,  "paw","paw", T,   T,   T  ],
+    ],
     # Sleeping frame 2: belly widens (breathing)
     "sleeping_right_2": [
         [ T,   T,  "dark","dark","dark","ear","dark"],
@@ -395,6 +450,19 @@ PIG_PIXELS_FAR_BABY = {
         ["dark","ear","dark","dark", T  ],
         ["dark","pupil","eye","fur","dark"],
         ["dark","nose","fur", "fur","dark"],
+    ],
+    # Walking frame 3: body centred, paws closer together
+    "walking_right_3": [
+        [ T,  "dark","dark","ear","dark"],
+        ["dark","fur","eye","pupil","dark"],
+        ["dark","fur", "fur","nose","dark"],
+        [ T,   T,  "paw","paw", T  ],
+    ],
+    "walking_left_3": [
+        ["dark","ear","dark","dark", T  ],
+        ["dark","pupil","eye","fur","dark"],
+        ["dark","nose","fur", "fur","dark"],
+        [ T,  "paw","paw", T,   T  ],
     ],
 }
 
