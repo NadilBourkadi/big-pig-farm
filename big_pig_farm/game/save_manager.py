@@ -11,12 +11,14 @@ from uuid import UUID
 
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
+from big_pig_farm.entities.areas import FarmArea, TunnelConnection
+from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.simulation.breeding_program import BreedingProgram, BreedingStrategy
 from big_pig_farm.game.state import GameState, GameTime, EventLog, BreedingPair
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Personality, Needs, Position
 from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype, BaseColor, Pattern, ColorIntensity, RoanType
 from big_pig_farm.entities.facilities import Facility, FacilityType
-from big_pig_farm.game.world import FarmGrid
+from big_pig_farm.game.world import CellType, FarmGrid
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +202,54 @@ class SaveManager:
                 except sqlite3.OperationalError:
                     pass  # Column already exists
 
+            # Farm areas table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS farm_areas (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    biome TEXT NOT NULL,
+                    x1 INTEGER NOT NULL,
+                    y1 INTEGER NOT NULL,
+                    x2 INTEGER NOT NULL,
+                    y2 INTEGER NOT NULL,
+                    is_starter INTEGER NOT NULL
+                )
+            """)
+
+            # Tunnel connections table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS tunnel_connections (
+                    id TEXT PRIMARY KEY,
+                    area_a_id TEXT NOT NULL,
+                    area_b_id TEXT NOT NULL,
+                    cells_json TEXT NOT NULL,
+                    orientation TEXT NOT NULL
+                )
+            """)
+
+            # Guinea pig area/biome migrations
+            for col, typedef in [
+                ("current_area_id", "TEXT"),
+                ("birth_area_id", "TEXT"),
+                ("preferred_biome", "TEXT"),
+            ]:
+                try:
+                    cursor.execute(f"ALTER TABLE guinea_pigs ADD COLUMN {col} {typedef}")
+                except sqlite3.OperationalError:
+                    pass
+
+            # Facility area_id migration
+            try:
+                cursor.execute("ALTER TABLE facilities ADD COLUMN area_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+
+            # Contract required_biome migration
+            try:
+                cursor.execute("ALTER TABLE contracts ADD COLUMN required_biome TEXT")
+            except sqlite3.OperationalError:
+                pass
+
             conn.commit()
 
     def _backup_save(self) -> None:
@@ -236,6 +286,8 @@ class SaveManager:
             cursor.execute("DELETE FROM contract_meta")
             cursor.execute("DELETE FROM breeding_pair")
             cursor.execute("DELETE FROM breeding_program")
+            cursor.execute("DELETE FROM farm_areas")
+            cursor.execute("DELETE FROM tunnel_connections")
 
             # Save game state
             cursor.execute("""
@@ -268,8 +320,9 @@ class SaveManager:
                         position_x, position_y, is_pregnant, pregnancy_days,
                         partner_id, last_birth_age, mother_id, father_id,
                         origin_tag, breeding_locked, mother_name, father_name,
-                        partner_genotype_json, partner_name, marked_for_sale
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        partner_genotype_json, partner_name, marked_for_sale,
+                        current_area_id, birth_area_id, preferred_biome
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(pig.id),
                     pig.name,
@@ -295,12 +348,18 @@ class SaveManager:
                     pig.partner_genotype.model_dump_json() if pig.partner_genotype else None,
                     pig.partner_name,
                     1 if pig.marked_for_sale else 0,
+                    str(pig.current_area_id) if pig.current_area_id else None,
+                    str(pig.birth_area_id) if pig.birth_area_id else None,
+                    pig.preferred_biome,
                 ))
 
             # Save facilities
             for facility in state.facilities.values():
                 cursor.execute("""
-                    INSERT INTO facilities VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO facilities (
+                        id, facility_type, position_x, position_y,
+                        level, current_amount, max_amount, auto_refill, area_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     str(facility.id),
                     facility.facility_type.value,
@@ -310,6 +369,7 @@ class SaveManager:
                     facility.current_amount,
                     facility.max_amount,
                     1 if facility.auto_refill else 0,
+                    str(facility.area_id) if facility.area_id else None,
                 ))
 
             # Save recent events
@@ -340,7 +400,11 @@ class SaveManager:
                 board = state.contract_board
                 for contract in board.active_contracts:
                     cursor.execute("""
-                        INSERT INTO contracts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO contracts (
+                            id, description, required_color, required_pattern,
+                            required_intensity, required_roan, difficulty, reward,
+                            deadline_day, created_day, fulfilled, required_biome
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         str(contract.id),
                         contract.description,
@@ -353,6 +417,7 @@ class SaveManager:
                         contract.deadline_day,
                         contract.created_day,
                         1 if contract.fulfilled else 0,
+                        contract.required_biome.value if contract.required_biome else None,
                     ))
                 cursor.execute(
                     "INSERT INTO contract_meta VALUES (1, ?, ?, ?)",
@@ -383,6 +448,30 @@ class SaveManager:
                     bp.strategy.value,
                 ),
             )
+
+            # Save farm areas
+            for area in state.farm.areas:
+                cursor.execute("""
+                    INSERT INTO farm_areas VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    str(area.id),
+                    area.name,
+                    area.biome.value,
+                    area.x1, area.y1, area.x2, area.y2,
+                    1 if area.is_starter else 0,
+                ))
+
+            # Save tunnel connections
+            for tunnel in state.farm.tunnels:
+                cursor.execute("""
+                    INSERT INTO tunnel_connections VALUES (?, ?, ?, ?, ?)
+                """, (
+                    str(tunnel.id),
+                    str(tunnel.area_a_id),
+                    str(tunnel.area_b_id),
+                    json.dumps(tunnel.cells),
+                    tunnel.orientation,
+                ))
 
             conn.commit()
         except Exception:
@@ -421,6 +510,50 @@ class SaveManager:
             except ValueError:
                 saved_speed = GameSpeed.NORMAL
 
+            farm = FarmGrid(
+                width=row["farm_width"],
+                height=row["farm_height"],
+                tier=row["farm_tier"],
+            )
+
+            # Load farm areas (if table exists)
+            try:
+                cursor.execute("SELECT * FROM farm_areas")
+                for area_row in cursor.fetchall():
+                    area = FarmArea(
+                        id=UUID(area_row["id"]),
+                        name=area_row["name"],
+                        biome=BiomeType(area_row["biome"]),
+                        x1=area_row["x1"], y1=area_row["y1"],
+                        x2=area_row["x2"], y2=area_row["y2"],
+                        is_starter=bool(area_row["is_starter"]),
+                    )
+                    farm.add_area(area)
+
+                cursor.execute("SELECT * FROM tunnel_connections")
+                for t_row in cursor.fetchall():
+                    tunnel = TunnelConnection(
+                        id=UUID(t_row["id"]),
+                        area_a_id=UUID(t_row["area_a_id"]),
+                        area_b_id=UUID(t_row["area_b_id"]),
+                        cells=json.loads(t_row["cells_json"]),
+                        orientation=t_row["orientation"],
+                    )
+                    farm.tunnels.append(tunnel)
+                    # Mark tunnel cells as walkable
+                    for tx, ty in tunnel.cells:
+                        if farm.is_valid_position(tx, ty):
+                            cell = farm.cells[ty][tx]
+                            cell.cell_type = CellType.FLOOR
+                            cell.is_walkable = True
+                            cell.is_tunnel = True
+            except sqlite3.OperationalError:
+                pass  # Tables don't exist in old saves
+
+            # Legacy migration: if no areas were loaded, create a single MEADOW area
+            if not farm.areas:
+                farm._create_legacy_starter_area()
+
             state = GameState(
                 money=row["money"],
                 game_time=GameTime(
@@ -432,7 +565,7 @@ class SaveManager:
                 ),
                 speed=saved_speed,
                 is_paused=bool(row["is_paused"]),
-                farm=FarmGrid(width=row["farm_width"], height=row["farm_height"], tier=row["farm_tier"]),
+                farm=farm,
                 total_pigs_born=row["total_pigs_born"],
                 total_pigs_sold=row["total_pigs_sold"],
                 total_earnings=row["total_earnings"],
@@ -455,6 +588,20 @@ class SaveManager:
                 last_birth_age = row["last_birth_age"] if "last_birth_age" in row_keys else None
 
                 marked_for_sale = bool(row["marked_for_sale"]) if "marked_for_sale" in row_keys else False
+
+                # Area/biome fields
+                current_area_id = UUID(row["current_area_id"]) if "current_area_id" in row_keys and row["current_area_id"] else None
+                birth_area_id = UUID(row["birth_area_id"]) if "birth_area_id" in row_keys and row["birth_area_id"] else None
+                preferred_biome = row["preferred_biome"] if "preferred_biome" in row_keys else None
+
+                # Legacy migration: assign area IDs from position if not set
+                if not current_area_id and farm.areas:
+                    pig_gx, pig_gy = int(row["position_x"]), int(row["position_y"])
+                    area_at = farm.get_area_at(pig_gx, pig_gy)
+                    if area_at:
+                        current_area_id = area_at.id
+                if not birth_area_id and current_area_id:
+                    birth_area_id = current_area_id
 
                 # Load partner genotype stored at conception (for pregnancy survival)
                 partner_genotype = None
@@ -490,12 +637,24 @@ class SaveManager:
                     marked_for_sale=marked_for_sale,
                     mother_name=mother_name,
                     father_name=father_name,
+                    current_area_id=current_area_id,
+                    birth_area_id=birth_area_id,
+                    preferred_biome=preferred_biome,
                 )
                 state.add_guinea_pig(pig)
 
             # Load facilities
             cursor.execute("SELECT * FROM facilities")
             for row in cursor.fetchall():
+                row_keys = row.keys()
+                area_id = UUID(row["area_id"]) if "area_id" in row_keys and row["area_id"] else None
+
+                # Legacy migration: determine area_id from position
+                if not area_id and farm.areas:
+                    area_at = farm.get_area_at(row["position_x"], row["position_y"])
+                    if area_at:
+                        area_id = area_at.id
+
                 facility = Facility(
                     id=UUID(row["id"]),
                     facility_type=FacilityType(row["facility_type"]),
@@ -505,6 +664,7 @@ class SaveManager:
                     current_amount=row["current_amount"],
                     max_amount=row["max_amount"],
                     auto_refill=bool(row["auto_refill"]),
+                    area_id=area_id,
                 )
                 state.add_facility(facility)
 
@@ -546,6 +706,14 @@ class SaveManager:
                     raw_color = row["required_color"]
                     if raw_color == "light_golden":
                         raw_color = "cream"
+                    row_keys = row.keys()
+                    required_biome = None
+                    if "required_biome" in row_keys and row["required_biome"]:
+                        try:
+                            required_biome = BiomeType(row["required_biome"])
+                        except ValueError:
+                            pass
+
                     contract = BreedingContract(
                         id=UUID(row["id"]),
                         description=row["description"],
@@ -553,6 +721,7 @@ class SaveManager:
                         required_pattern=Pattern(row["required_pattern"]) if row["required_pattern"] else None,
                         required_intensity=ColorIntensity(row["required_intensity"]) if row["required_intensity"] else None,
                         required_roan=RoanType(row["required_roan"]) if row["required_roan"] else None,
+                        required_biome=required_biome,
                         difficulty=ContractDifficulty(row["difficulty"]),
                         reward=row["reward"],
                         deadline_day=row["deadline_day"],
@@ -632,25 +801,42 @@ class SaveManager:
 
             conn.close()
 
-            # Check if farm needs resizing to match current config
-            resized, offset_x, offset_y = state.farm.resize_to_match_config()
-            if resized:
-                # Reposition all pigs
-                for pig in state.guinea_pigs.values():
-                    pig.position.x += offset_x
-                    pig.position.y += offset_y
-                    # Clear any paths that would be invalid now
-                    pig.path = []
-                    pig.target_position = None
+            # Legacy saves only: resize grid if tier dimensions changed in config.
+            # Multi-area farms manage their own grid size via areas/tunnels.
+            has_saved_areas = len(state.farm.areas) > 0 and not (
+                len(state.farm.areas) == 1 and state.farm.areas[0].is_starter
+                and state.farm.areas[0].x1 == 0 and state.farm.areas[0].y1 == 0
+            )
+            if not has_saved_areas:
+                resized, offset_x, offset_y = state.farm.resize_to_match_config()
+                if resized:
+                    # Reposition all pigs
+                    for pig in state.guinea_pigs.values():
+                        pig.position.x += offset_x
+                        pig.position.y += offset_y
+                        pig.path = []
+                        pig.target_position = None
 
-                # Reposition all facilities
-                for facility in state.facilities.values():
-                    facility.position_x += offset_x
-                    facility.position_y += offset_y
+                    # Reposition all facilities
+                    for facility in state.facilities.values():
+                        facility.position_x += offset_x
+                        facility.position_y += offset_y
 
-                # Re-register facilities on the grid
-                for facility in state.facilities.values():
-                    state.farm.place_facility(facility)
+                    # Re-register facilities on the grid
+                    for facility in state.facilities.values():
+                        state.farm.place_facility(facility)
+
+                    # Update the legacy area to match new grid bounds
+                    if state.farm.areas:
+                        legacy_area = state.farm.areas[0]
+                        legacy_area.x1 = 0
+                        legacy_area.y1 = 0
+                        legacy_area.x2 = state.farm.width - 1
+                        legacy_area.y2 = state.farm.height - 1
+                        for y in range(1, state.farm.height - 1):
+                            for x in range(1, state.farm.width - 1):
+                                if state.farm.cells[y][x].is_walkable:
+                                    state.farm.cells[y][x].area_id = legacy_area.id
 
             return state
 

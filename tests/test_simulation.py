@@ -277,6 +277,7 @@ class TestStuckTimer:
             for _ in range(60):
                 if fallback_called:
                     break
+                controller.collision.rebuild_spatial_grid()
                 controller._update_movement(pig, 0.1)
                 # _try_alternative_facility resets _blocked_timers but doesn't
                 # actually move the pig, so re-give a path for next iteration
@@ -318,6 +319,7 @@ class TestStuckTimer:
         with patch.object(controller, '_try_dodge', return_value=False), \
              patch.object(controller.facility_manager, 'try_alternative_facility', return_value=True):
             for _ in range(40):
+                controller.collision.rebuild_spatial_grid()
                 controller._update_movement(pig, 0.1)
                 if not pig.path:
                     pig.path = [(12, 10)]
@@ -334,6 +336,7 @@ class TestStuckTimer:
         pig.target_position = Position(x=12.0, y=10.0)
 
         # Simulate movement succeeding (no blocker now)
+        controller.collision.rebuild_spatial_grid()
         controller._update_movement(pig, 0.1)
 
         # Stuck timer should be cleared since pig actually moved
@@ -578,3 +581,71 @@ class TestIdleDrift:
             controller._make_decision(pig)
 
         assert pig.behavior_state == BehaviorState.IDLE
+
+
+class TestSpatialGrid:
+    """Tests for the spatial grid acceleration structure."""
+
+    def test_get_nearby_matches_brute_force(self):
+        """SpatialGrid.get_nearby() must return the same pigs as a brute-force scan."""
+        from big_pig_farm.simulation.collision import SpatialGrid
+
+        pigs = [
+            GuineaPig.create(name=f"P{i}", gender=Gender.MALE,
+                             position=Position(x=float(x), y=float(y)), age_days=5.0)
+            for i, (x, y) in enumerate([
+                (2, 3), (7, 3), (12, 3),    # Spread across grid
+                (2, 8), (7, 8), (12, 8),
+                (50, 50), (51, 51),          # Far cluster
+                (0, 0),                      # Corner
+            ])
+        ]
+
+        grid = SpatialGrid(cell_size=5)
+        grid.rebuild(pigs)
+
+        # For every pig, verify get_nearby returns at least the same set
+        # as a brute-force radius scan at the max blocking distance (3.0)
+        radius = 5.0  # One grid cell — all pigs in same/adjacent cells
+        for pig in pigs:
+            nearby_ids = {p.id for p in grid.get_nearby(pig.position.x, pig.position.y)}
+            brute_ids = set()
+            for other in pigs:
+                dx = pig.position.x - other.position.x
+                dy = pig.position.y - other.position.y
+                if (dx * dx + dy * dy) ** 0.5 <= radius:
+                    brute_ids.add(other.id)
+            # Spatial grid may return extra pigs (from adjacent cells) but
+            # must never miss any that are within radius
+            assert brute_ids.issubset(nearby_ids), (
+                f"Pig at ({pig.position.x}, {pig.position.y}): "
+                f"brute found {brute_ids - nearby_ids} not in spatial grid"
+            )
+
+    def test_unique_nearby_pairs_complete(self):
+        """unique_nearby_pairs must return all pairs within grid adjacency."""
+        from big_pig_farm.simulation.collision import SpatialGrid
+
+        pigs = [
+            GuineaPig.create(name=f"P{i}", gender=Gender.MALE,
+                             position=Position(x=float(x), y=float(y)), age_days=5.0)
+            for i, (x, y) in enumerate([
+                (3, 3), (4, 3), (6, 3), (50, 50),
+            ])
+        ]
+
+        grid = SpatialGrid(cell_size=5)
+        grid.rebuild(pigs)
+
+        pairs = grid.unique_nearby_pairs()
+        pair_ids = {(a.id, b.id) for a, b in pairs}
+
+        # P0 (3,3) and P1 (4,3) are in the same cell — must be paired
+        p0, p1, p2, p3 = pigs
+        assert (min(p0.id, p1.id), max(p0.id, p1.id)) in pair_ids or \
+               (min(p1.id, p0.id), max(p1.id, p0.id)) in pair_ids
+
+        # P3 (50,50) is far from P0/P1/P2 — should not be paired with them
+        for p in [p0, p1, p2]:
+            key = tuple(sorted([p.id, p3.id]))
+            assert key not in pair_ids

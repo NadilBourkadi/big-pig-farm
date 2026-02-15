@@ -55,8 +55,8 @@ class TestZoneCalculation:
     """Tests for zone boundary computation."""
 
     def test_small_farm_produces_3_zones(self):
-        """Small farms (tiers 1-2) should produce 3 zones."""
-        state = _make_state(tier=1)
+        """Small farms should produce 3 zones."""
+        state = _make_state(tier=2)
         zones = calculate_zones(state.farm)
         assert len(zones) == 3
         zone_names = {z.name for z in zones}
@@ -186,10 +186,9 @@ class TestNeighborhoodZones:
         assert not _is_small_farm(state.farm)
 
     def test_small_farm_detected(self):
-        """Tiers 1-2 should be detected as small farms."""
-        for tier in (1, 2):
-            state = _make_state(tier=tier)
-            assert _is_small_farm(state.farm)
+        """Tier 2 should be detected as a small farm."""
+        state = _make_state(tier=2)
+        assert _is_small_farm(state.farm)
 
 
 class TestVerticalSpread:
@@ -708,7 +707,7 @@ class TestEmptyFarm:
 
     def test_small_farm_zone_collapse(self):
         """On small farms, hydration merges into feeding zone."""
-        state = _make_state(tier=1)
+        state = _make_state(tier=2)
         water = _add_facility(state, FacilityType.WATER_BOTTLE, 5, 3)
 
         placements, _ = compute_arrangement(state)

@@ -27,6 +27,7 @@ from big_pig_farm.data.sprites import (
     ZoomLevel,
     ZOOM_SCALES,
 )
+from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.data.indicator_sprites import (
     IndicatorType,
     get_pig_indicator_type,
@@ -36,6 +37,7 @@ from big_pig_farm.data.indicator_sprites import (
 from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.facilities import Facility
 from big_pig_farm.game.state import GameState
+from big_pig_farm.game.world import CellType
 
 
 # Ordered cycle for zoom toggle
@@ -202,7 +204,34 @@ class FarmView(Static):
     # ------------------------------------------------------------------
 
     def _floor_texture(self, wx: int, wy: int, far: bool = False) -> tuple[str, Style]:
-        """Return a deterministic hay/straw character and style for a floor cell."""
+        """Return a deterministic character and style for a floor cell.
+
+        Uses biome-specific palettes when the cell belongs to a biome area.
+        Tunnel cells render as grey stone.
+        """
+        farm = self.state.farm
+
+        # Check for tunnel cells
+        if farm.is_valid_position(wx, wy) and farm.cells[wy][wx].is_tunnel:
+            h = (wx * 7 + wy * 13) & 0xFFFF
+            tunnel_chars = ["·", ".", ",", "'"]
+            char = tunnel_chars[h % len(tunnel_chars)]
+            tunnel_colors = ["#808080", "#707070", "#909090", "#757575"]
+            color = tunnel_colors[(h >> 4) % len(tunnel_colors)]
+            return char, Style(color=color, bgcolor="#3a3a3a")
+
+        # Check for biome-specific floor
+        biome = farm.get_biome_at(wx, wy)
+        if biome is not None and biome != BiomeType.MEADOW:
+            info = BIOMES[biome]
+            h = (wx * 7 + wy * 13) & 0xFFFF
+            chars = info.floor_chars
+            colors = info.floor_colors
+            char = chars[h % len(chars)]
+            color = colors[(h >> 4) % len(colors)]
+            return char, Style(color=color, bgcolor=info.floor_bg)
+
+        # Default meadow/hay texture
         h = (wx * 7 + wy * 13) & 0xFFFF
         chars = FLOOR_CHARS_FAR if far else FLOOR_CHARS
         colors = FLOOR_COLORS_FAR if far else FLOOR_COLORS
@@ -225,60 +254,52 @@ class FarmView(Static):
 
         dx/dy are sub-cell offsets (0..cell_w-1, 0..cell_h-1) used at close
         zoom for per-character detail within a single world cell.
+        Uses biome-specific wall tints when the wall belongs to a biome area.
         """
-        is_corner = (
-            (wy == 0 or wy == farm_h - 1)
-            and (wx == 0 or wx == farm_w - 1)
-        )
-        is_horizontal = wy == 0 or wy == farm_h - 1
+        farm = self.state.farm
+
+        # Get biome tint for this wall cell
+        plank_palette = WALL_PLANK
+        grain_palette = WALL_GRAIN
+        post_color = WALL_POST
+        if farm.is_valid_position(wx, wy):
+            cell = farm.cells[wy][wx]
+            if cell.area_id is not None:
+                area = farm.get_area_by_id(cell.area_id)
+                if area is not None:
+                    info = BIOMES.get(area.biome)
+                    if info and info.wall_tint_plank:
+                        plank_palette = info.wall_tint_plank
+                    if info and info.wall_tint_grain:
+                        grain_palette = info.wall_tint_grain
+
+        # Use pre-computed wall flags (set by FarmGrid._compute_wall_flags)
+        is_corner = False
+        is_horizontal = False
+        if farm.is_valid_position(wx, wy):
+            wall_cell = farm.cells[wy][wx]
+            is_corner = wall_cell.is_corner
+            is_horizontal = wall_cell.is_horizontal_wall
 
         h = (wx * 11 + wy * 17) & 0xFFFF
-        plank = WALL_PLANK[h % len(WALL_PLANK)]
-        grain = WALL_GRAIN[(h >> 3) % len(WALL_GRAIN)]
+        plank = plank_palette[h % len(plank_palette)]
+        grain = grain_palette[(h >> 3) % len(grain_palette)]
 
         if is_corner:
-            return "█", Style(color=WALL_POST)
+            return "█", Style(color=post_color)
 
         if is_horizontal:
             if cell_h > 1:
-                # Close zoom: thick plank + grain line at bottom
                 if dy == 0:
                     return "█", Style(color=plank)
                 return "▀", Style(color=plank, bgcolor=grain)
-            # Normal zoom: two-tone plank
             return "▀", Style(color=plank, bgcolor=grain)
 
         # Vertical wall
         if cell_w > 1:
-            # Close zoom: highlight / shadow columns
             color = grain if dx == 0 else plank
             return "█", Style(color=color)
         return "█", Style(color=plank)
-
-    def _draw_outer_wall(
-        self, width: int, height: int, offset_x: int, offset_y: int,
-        scale: float, cell_w: int, cell_h: int, farm_w: int, farm_h: int,
-    ) -> None:
-        """Draw a darker outer ring around the farm perimeter for wall thickness."""
-        # Iterate the ring of cells just outside the grid bounds
-        for world_y in range(-1, farm_h + 1):
-            for world_x in range(-1, farm_w + 1):
-                # Skip cells inside the grid — those are drawn by _draw_terrain
-                if 0 <= world_x < farm_w and 0 <= world_y < farm_h:
-                    continue
-                screen_x = int((world_x - self._viewport_x) * scale) + offset_x
-                screen_y = int((world_y - self._viewport_y) * scale) + offset_y
-                h = (world_x * 11 + world_y * 17) & 0xFFFF
-                color = WALL_GRAIN[h % len(WALL_GRAIN)]
-                style = Style(color=color)
-                for dy in range(cell_h):
-                    for dx in range(cell_w):
-                        sx = screen_x + dx
-                        sy = screen_y + dy
-                        if 0 <= sx < width and 0 <= sy < height:
-                            self._char_buffer[sy][sx] = "█"
-                            self._style_buffer[sy][sx] = style
-                            self._terrain_bg_buffer[sy][sx] = style
 
     def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw the terrain/floor."""
@@ -292,12 +313,6 @@ class FarmView(Static):
         cell_w = max(1, int(scale))
         cell_h = max(1, int(scale))
 
-        # Outer wall ring (darker blocks for extra thickness)
-        self._draw_outer_wall(
-            width, height, offset_x, offset_y,
-            scale, cell_w, cell_h, farm.width, farm.height,
-        )
-
         for world_y in range(farm.height):
             for world_x in range(farm.width):
                 screen_x = int((world_x - self._viewport_x) * scale) + offset_x
@@ -307,6 +322,10 @@ class FarmView(Static):
                     continue
 
                 cell = farm.cells[world_y][world_x]
+
+                # Skip void cells (not part of any area or tunnel)
+                if cell.area_id is None and not cell.is_tunnel:
+                    continue
 
                 if cell.cell_type.value == "wall":
                     for dy in range(cell_h):
@@ -343,85 +362,62 @@ class FarmView(Static):
                             self._terrain_bg_buffer[sy][sx] = style
 
     def _draw_terrain_far(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
-        """Simplified terrain for far zoom — explicit border + floor fill.
+        """Simplified terrain for far zoom — cell-by-cell with biome support.
 
-        At sub-1x scales, world→screen mapping is lossy (multiple world cells
-        map to the same screen cell). Drawing border explicitly avoids walls
-        being overwritten by adjacent floor cells.
+        At sub-1x scales, world->screen mapping is lossy (multiple world cells
+        map to the same screen cell). We iterate screen cells, map back to
+        world coordinates, and draw floor/wall based on cell type. This handles
+        multi-area layouts with different biome palettes and tunnel corridors.
         """
         farm = self.state.farm
         scale = self._scale()
-        post_style = Style(color=WALL_POST)
-        outer_style = Style(color=WALL_GRAIN[0])
-
-        # Screen extents of the farm rectangle (inner wall ring)
-        x0 = int((0 - self._viewport_x) * scale) + offset_x
-        y0 = int((0 - self._viewport_y) * scale) + offset_y
-        x1 = int(((farm.width - 1) - self._viewport_x) * scale) + offset_x
-        y1 = int(((farm.height - 1) - self._viewport_y) * scale) + offset_y
-
-        # Outer wall ring (one screen cell outside inner walls)
-        ox0 = int((-1 - self._viewport_x) * scale) + offset_x
-        oy0 = int((-1 - self._viewport_y) * scale) + offset_y
-        ox1 = int((farm.width - self._viewport_x) * scale) + offset_x
-        oy1 = int((farm.height - self._viewport_y) * scale) + offset_y
-
-        for sx in range(max(0, ox0), min(width, ox1 + 1)):
-            if 0 <= oy0 < height:
-                self._char_buffer[oy0][sx] = "█"
-                self._style_buffer[oy0][sx] = outer_style
-            if 0 <= oy1 < height:
-                self._char_buffer[oy1][sx] = "█"
-                self._style_buffer[oy1][sx] = outer_style
-        for sy in range(max(0, oy0 + 1), min(height, oy1)):
-            if 0 <= ox0 < width:
-                self._char_buffer[sy][ox0] = "█"
-                self._style_buffer[sy][ox0] = outer_style
-            if 0 <= ox1 < width:
-                self._char_buffer[sy][ox1] = "█"
-                self._style_buffer[sy][ox1] = outer_style
-
-        # Fill interior with textured floor
         inv_scale = 1.0 / scale
-        for sy in range(max(0, y0 + 1), min(height, y1)):
+
+        # Draw each screen pixel by mapping back to world coordinates
+        for sy in range(height):
             wy = int((sy - offset_y) * inv_scale) + self._viewport_y
-            for sx in range(max(0, x0 + 1), min(width, x1)):
+            for sx in range(width):
                 wx = int((sx - offset_x) * inv_scale) + self._viewport_x
-                char, style = self._floor_texture(wx, wy, far=True)
-                self._char_buffer[sy][sx] = char
-                self._style_buffer[sy][sx] = style
-                self._terrain_bg_buffer[sy][sx] = style
 
-        # Draw inner horizontal walls (top + bottom)
-        for sx in range(max(0, x0), min(width, x1 + 1)):
-            h = (sx * 7 + 3) & 0xFF
-            plank = WALL_PLANK[h % len(WALL_PLANK)]
-            grain = WALL_GRAIN[(h >> 3) % len(WALL_GRAIN)]
-            ws = Style(color=plank, bgcolor=grain)
-            if 0 <= y0 < height:
-                self._char_buffer[y0][sx] = "▀"
-                self._style_buffer[y0][sx] = ws
-            if 0 <= y1 < height:
-                self._char_buffer[y1][sx] = "▀"
-                self._style_buffer[y1][sx] = ws
+                if not farm.is_valid_position(wx, wy):
+                    continue
 
-        # Draw inner vertical walls (left + right)
-        for sy in range(max(0, y0 + 1), min(height, y1)):
-            h = (sy * 11 + 5) & 0xFF
-            plank = WALL_PLANK[h % len(WALL_PLANK)]
-            ws = Style(color=plank)
-            if 0 <= x0 < width:
-                self._char_buffer[sy][x0] = "█"
-                self._style_buffer[sy][x0] = ws
-            if 0 <= x1 < width:
-                self._char_buffer[sy][x1] = "█"
-                self._style_buffer[sy][x1] = ws
+                cell = farm.cells[wy][wx]
 
-        # Corners
-        for cx, cy in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)]:
-            if 0 <= cx < width and 0 <= cy < height:
-                self._char_buffer[cy][cx] = "█"
-                self._style_buffer[cy][cx] = post_style
+                # Skip void cells (not part of any area or tunnel)
+                if cell.area_id is None and not cell.is_tunnel:
+                    continue
+
+                if cell.cell_type == CellType.WALL:
+                    # Wall — use biome tint if available
+                    plank_palette = WALL_PLANK
+                    grain_palette = WALL_GRAIN
+                    if cell.area_id is not None:
+                        area = farm.get_area_by_id(cell.area_id)
+                        if area:
+                            info = BIOMES.get(area.biome)
+                            if info and info.wall_tint_plank:
+                                plank_palette = info.wall_tint_plank
+                            if info and info.wall_tint_grain:
+                                grain_palette = info.wall_tint_grain
+
+                    h = (wx * 11 + wy * 17) & 0xFFFF
+                    plank = plank_palette[h % len(plank_palette)]
+                    grain = grain_palette[(h >> 3) % len(grain_palette)]
+
+                    # Use pre-computed wall flags for orientation
+                    if cell.is_horizontal_wall or cell.is_corner:
+                        self._char_buffer[sy][sx] = "▀"
+                        self._style_buffer[sy][sx] = Style(color=plank, bgcolor=grain)
+                    else:
+                        self._char_buffer[sy][sx] = "█"
+                        self._style_buffer[sy][sx] = Style(color=plank)
+                else:
+                    # Floor / tunnel
+                    char, style = self._floor_texture(wx, wy, far=True)
+                    self._char_buffer[sy][sx] = char
+                    self._style_buffer[sy][sx] = style
+                    self._terrain_bg_buffer[sy][sx] = style
 
     # ------------------------------------------------------------------
     # Facilities

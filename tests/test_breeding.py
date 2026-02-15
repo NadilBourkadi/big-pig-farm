@@ -311,17 +311,16 @@ class TestBreedingProgram:
 
     def test_enabled_filter_marks_non_matching(self):
         state = GameState()
-        # Expand farm to hold more pigs (need > MIN_BREEDING_POPULATION adults)
+        # Expand farm to hold more pigs
         state.farm.tier = 3  # Family Pen, capacity 20
         male, female = _make_breeding_pair(state)
-        # Add extra adults so population is above MIN_BREEDING_POPULATION
-        # (the filter skips marking when adults <= MIN_BREEDING_POPULATION)
-        for i in range(BREEDING.MIN_BREEDING_POPULATION):
+        # Add extra adults so population exceeds the stock limit
+        for i in range(3):
             extra = _make_pig(f"Extra{i}", Gender.FEMALE, age_days=5.0, x=15.0, y=15.0)
             state.add_guinea_pig(extra)
         # Both parents have random-common genotypes (likely BB EE = Black)
-        # Filter for Golden only
-        f = BreedingProgram(enabled=True, target_colors={BaseColor.GOLDEN})
+        # Filter for Golden only; stock_limit=4 so 5 adults > limit
+        f = BreedingProgram(enabled=True, stock_limit=4, target_colors={BaseColor.GOLDEN})
 
         babies = self._birth_with_filter(state, male, female, f)
         assert len(babies) > 0

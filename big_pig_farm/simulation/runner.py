@@ -3,10 +3,11 @@
 from typing import Callable, Optional, Protocol
 from uuid import UUID
 
+from big_pig_farm.data.config import NEEDS
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
-from big_pig_farm.simulation.needs import update_all_needs
+from big_pig_farm.simulation.needs import update_all_needs, precompute_nearby_counts
 from big_pig_farm.simulation.breeding import (
     advance_pregnancies,
     age_all_pigs,
@@ -49,52 +50,58 @@ class SimulationRunner:
 
         # 1. Update all guinea pig needs
         game_minutes = delta_seconds
-        for pig in state.get_pigs_list():
-            update_all_needs(pig, game_minutes, state)
+        pigs = state.get_pigs_list()
+        nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS)
+        for pig in pigs:
+            update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
 
-        # 2. Update behaviors
+        # 2. Rebuild spatial grid for fast collision/blocking checks
+        controller.collision.rebuild_spatial_grid()
+
+        # 3. Update behaviors
         for pig in state.get_pigs_list():
             controller.update(pig, delta_seconds)
 
-        # 3. Separate any overlapping pigs
+        # 4. Separate any overlapping pigs
         controller.separate_overlapping_pigs()
 
-        # 4. Advance pregnancies
+        # 5. Advance pregnancies
         game_hours = game_minutes / 60.0
         advance_pregnancies(state, game_hours)
 
-        # 5. Age pigs and cleanup controller state for deaths
+        # 6. Age pigs and cleanup controller state for deaths
         deaths = age_all_pigs(state, game_hours)
         for dead_pig in deaths:
             controller.cleanup_dead_pig(dead_pig.id)
 
-        # 6. Cull surplus breeders
+        # 7. Cull surplus breeders
         cull_surplus_breeders(state)
 
-        # 7. Auto-sell marked pigs that reached adulthood
+        # 8. Auto-sell marked pigs that reached adulthood
         sold_pigs = sell_marked_adults(state)
         for pig_name, total, pig_id in sold_pigs:
             controller.cleanup_dead_pig(pig_id)
             if self.on_pig_sold:
                 self.on_pig_sold(pig_name, total, pig_id)
 
-        # 8. Check for breeding
+        # 9. Check for breeding
         check_breeding_opportunities(state)
 
-        # 9. Check contract refresh/expiry
+        # 10. Check contract refresh/expiry
         game_day = state.game_time.day
         board = state.contract_board
         board.check_expiry(game_day)
         if board.needs_refresh(game_day) or (not board.active_contracts and board.last_refresh_day == 0):
-            new_contracts = generate_contracts(state.farm.tier, game_day)
+            player_biomes = [a.biome for a in state.farm.areas]
+            new_contracts = generate_contracts(state.farm.tier, game_day, player_biomes)
             board.active_contracts.extend(new_contracts)
             board.last_refresh_day = game_day
 
-        # 10. Debug logging
+        # 11. Debug logging
         if self.debug_logger:
             self.debug_logger.tick(state, controller)
 
-        # 11. Auto-save every ~30 seconds (300 ticks)
+        # 12. Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1
         if self._save_counter >= 300:
             self._save_counter = 0

@@ -166,6 +166,9 @@ class Facility(BaseModel):
     # Auto-refill setting
     auto_refill: bool = False
 
+    # Area tracking — auto-assigned on placement based on position
+    area_id: Optional[UUID] = None
+
     @property
     def info(self) -> FacilityInfo:
         """Get facility metadata."""

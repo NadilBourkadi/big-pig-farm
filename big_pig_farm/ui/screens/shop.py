@@ -14,10 +14,12 @@ from big_pig_farm.economy.shop import (
     get_shop_items,
     purchase_item,
     get_farm_upgrade_info,
-    purchase_farm_upgrade,
+    get_room_total_cost,
+    purchase_new_room,
     ShopCategory,
     ShopItem,
 )
+from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.entities.facilities import FACILITY_INFO
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
@@ -191,14 +193,11 @@ class ShopScreen(Screen):
         elif self.current_category == ShopCategory.UPGRADES:
             upgrade_info = get_farm_upgrade_info(self.state)
             if upgrade_info:
-                can_afford = self.state.money >= upgrade_info["cost"]
-                label = f"Expand to {upgrade_info['name']:15} {format_currency(upgrade_info['cost']):>10}"
-                if not can_afford:
-                    label += " (!)"
+                label = f"Add New Room ({upgrade_info['name']})  Base: {format_currency(upgrade_info['cost'])}"
                 list_view.append(ListItem(Label(label), id="farm-upgrade"))
                 self._is_upgrade_selected = True
             else:
-                list_view.append(ListItem(Label("Farm is at maximum size!")))
+                list_view.append(ListItem(Label("All rooms built!")))
         else:
             items = get_shop_items(self.current_category, self.state.farm.tier)
             for item in items:
@@ -277,15 +276,15 @@ class ShopScreen(Screen):
         elif self._is_upgrade_selected:
             upgrade_info = get_farm_upgrade_info(self.state)
             if upgrade_info:
-                can_afford = "Yes" if self.state.money >= upgrade_info["cost"] else "No"
-                current_tier = self.state.farm.tier
+                rooms = len(self.state.farm.areas)
                 detail.update(
-                    f"Upgrade to {upgrade_info['name']} - {format_currency(upgrade_info['cost'])}\n"
-                    f"Size: {upgrade_info['width']}x{upgrade_info['height']} | Capacity: {upgrade_info['capacity']} pigs\n"
-                    f"Can afford: {can_afford} | Current tier: {current_tier}"
+                    f"Add New Room — {upgrade_info['name']}\n"
+                    f"Base cost: {format_currency(upgrade_info['cost'])} + biome cost\n"
+                    f"Size: {upgrade_info['width']}x{upgrade_info['height']} | +{upgrade_info['capacity']} pig capacity\n"
+                    f"Rooms: {rooms} | Press Enter to choose a biome"
                 )
             else:
-                detail.update("Your farm is at maximum size!")
+                detail.update("All rooms have been built!")
         elif self.selected_item:
             item = self.selected_item
             can_afford = "Yes" if self.state.money >= item.cost else "No"
@@ -379,20 +378,17 @@ class ShopScreen(Screen):
             self._adopt_pig()
             return
 
-        # Handle farm upgrade purchase
+        # Handle room addition — open biome selection
         if self._is_upgrade_selected:
             upgrade_info = get_farm_upgrade_info(self.state)
             if not upgrade_info:
-                self.notify("Farm is at maximum size!", severity="warning")
+                self.notify("All rooms built!", severity="warning")
                 return
-            if self.state.money < upgrade_info["cost"]:
-                self.notify("Not enough money!", severity="error")
-                return
-            if purchase_farm_upgrade(self.state):
-                self.notify(f"Upgraded to {upgrade_info['name']}!", severity="information")
-                self._refresh_items()
-                self._update_header()
-                self._update_detail()
+            from big_pig_farm.ui.screens.biome_select import BiomeSelectScreen
+            self.app.push_screen(
+                BiomeSelectScreen(farm_tier=self.state.farm.tier),
+                callback=self._on_biome_selected,
+            )
             return
 
         if not self.selected_item:
@@ -464,6 +460,26 @@ class ShopScreen(Screen):
         self._selected_pig = None
         self._refresh_items()
         self._update_header()
+
+    def _on_biome_selected(self, biome: Optional[BiomeType]) -> None:
+        """Callback when biome is selected from BiomeSelectScreen."""
+        if biome is None:
+            return  # Cancelled
+
+        total_cost = get_room_total_cost(self.state, biome)
+        if self.state.money < total_cost:
+            self.notify(f"Need {format_currency(total_cost)}!", severity="error")
+            return
+
+        if purchase_new_room(self.state, biome):
+            from big_pig_farm.entities.biomes import BIOMES
+            biome_name = BIOMES[biome].display_name
+            self.notify(f"Built new {biome_name} room!")
+            self._refresh_items()
+            self._update_header()
+            self._update_detail()
+        else:
+            self.notify("Could not add room!", severity="error")
 
     def _find_spawn_position(self) -> Optional[tuple[int, int]]:
         """Find a valid spawn position for an adopted pig."""

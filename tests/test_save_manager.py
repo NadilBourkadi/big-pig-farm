@@ -319,7 +319,7 @@ class TestLightGoldenMigration:
         # Manually insert an old-style contract
         conn = sqlite3.connect(tmp_save_path)
         conn.execute(
-            "INSERT INTO contracts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO contracts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "00000000-0000-0000-0000-000000000001",
                 "Deliver a Cream pig",
@@ -332,6 +332,7 @@ class TestLightGoldenMigration:
                 30,
                 10,
                 0,
+                None,  # required_biome
             ),
         )
         conn.execute(

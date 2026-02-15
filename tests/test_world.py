@@ -12,8 +12,8 @@ class TestFarmGrid:
         """Test creating a starter farm."""
         farm = FarmGrid.create_starter()
 
-        assert farm.width == 42
-        assert farm.height == 21
+        assert farm.width == 78
+        assert farm.height == 46
         assert farm.tier == 1
 
     def test_grid_bounds(self):

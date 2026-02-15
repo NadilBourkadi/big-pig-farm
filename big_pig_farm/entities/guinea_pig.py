@@ -18,7 +18,7 @@ from big_pig_farm.entities.genetics import (
 )
 
 if TYPE_CHECKING:
-    pass
+    from big_pig_farm.entities.biomes import BiomeType
 
 from big_pig_farm.data.config import BREEDING, ECONOMY, NEEDS, SIMULATION
 
@@ -144,6 +144,11 @@ class GuineaPig(BaseModel):
 
     # Origin info (e.g., "Spotted Bloodline" for bloodline pigs)
     origin_tag: Optional[str] = None
+
+    # Area/biome tracking
+    current_area_id: Optional[UUID] = None    # Updated each tick from position
+    birth_area_id: Optional[UUID] = None      # Set at birth
+    preferred_biome: Optional[str] = None     # BiomeType value, assigned at birth
 
     # Behavior log for debugging (recent decisions/actions)
     behavior_log: list[str] = Field(default_factory=list)

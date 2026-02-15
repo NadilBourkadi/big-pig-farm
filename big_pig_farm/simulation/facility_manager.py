@@ -20,6 +20,30 @@ class FacilityManager:
         self.collision = collision
         self._failed_facilities: dict[UUID, set[UUID]] = {}
         self._failed_cooldowns: dict[UUID, int] = {}
+        # Per-decision pathfinding cache: avoids redundant A* calls when
+        # get_reachable_facilities, find_open_interaction_point, and
+        # try_alternative_facility all pathfind to the same points.
+        self._path_cache: dict[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int]]] = {}
+
+    def begin_decision(self) -> None:
+        """Start a facility decision — enable path caching."""
+        self._path_cache.clear()
+
+    def end_decision(self) -> None:
+        """End a facility decision — discard cached paths."""
+        self._path_cache.clear()
+
+    def _cached_find_path(
+        self, start: tuple[int, int], goal: tuple[int, int],
+    ) -> list[tuple[int, int]]:
+        """find_path with per-decision caching."""
+        key = (start, goal)
+        result = self._path_cache.get(key)
+        if result is not None:
+            return result
+        path = self.game_state.farm.find_path(start, goal)
+        self._path_cache[key] = path
+        return path
 
     def get_failed_facilities(self, pig_id: UUID) -> set[UUID]:
         """Get the set of failed facility IDs for a pig."""
@@ -89,7 +113,7 @@ class FacilityManager:
                 if not farm.is_walkable(point[0], point[1]):
                     continue
                 # Try to path there
-                path = farm.find_path(start, point)
+                path = self._cached_find_path(start, point)
                 if path:
                     found_reachable_point = True
                     break
@@ -148,7 +172,7 @@ class FacilityManager:
 
             if not occupied:
                 # Verify we can path there
-                path = farm.find_path(start, point)
+                path = self._cached_find_path(start, point)
                 if path:
                     candidates.append((point, len(path)))
 
@@ -187,18 +211,20 @@ class FacilityManager:
         if not facilities:
             return []
 
+        # Pre-compute crowd counts once instead of per-facility-per-call
+        crowd_counts = {f.id: self.count_pigs_near_or_heading_to(pig, f) for f in facilities}
+
         def score(f: Facility) -> float:
             fx, fy = f.interaction_point
             dist = pig.position.distance_to(Position(x=float(fx), y=float(fy)))
-            crowd = self.count_pigs_near_or_heading_to(pig, f)
             return (dist * BEHAVIOR.FACILITY_DISTANCE_WEIGHT
-                    + crowd * BEHAVIOR.CROWDING_PENALTY
+                    + crowd_counts[f.id] * BEHAVIOR.CROWDING_PENALTY
                     + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE))
 
         ranked = sorted(facilities, key=score)
 
         # Chance to shuffle an uncrowded facility to the front
-        uncrowded = [f for f in ranked if self.count_pigs_near_or_heading_to(pig, f) == 0]
+        uncrowded = [f for f in ranked if crowd_counts[f.id] == 0]
         if uncrowded and random.random() < BEHAVIOR.UNCROWDED_CHANCE:
             pick = random.choice(uncrowded)
             ranked.remove(pick)
@@ -409,7 +435,7 @@ class FacilityManager:
                 target = self.find_open_interaction_point(pig, facility)
                 if target:
                     start = pig.position.grid_pos()
-                    path = self.game_state.farm.find_path(start, target)
+                    path = self._cached_find_path(start, target)
                     if path:
                         pig.path = path[1:]
                         if pig.path:

@@ -674,18 +674,17 @@ class TestCullPopulationFloor:
     """Tests for the MIN_BREEDING_POPULATION floor in culling."""
 
     def test_cull_at_min_population_uses_active_replacement(self):
-        """At MIN_BREEDING_POPULATION, surplus culling doesn't fire but active replacement does."""
+        """At stock limit, surplus culling doesn't fire but active replacement does."""
         state = GameState()
-        # Create exactly MIN_BREEDING_POPULATION adults (all non-matching)
-        for i in range(BREEDING.MIN_BREEDING_POPULATION):
+        # Create 4 adults (all non-matching), 1M + 3F so gender balance allows replacement
+        for i in range(4):
             gender = Gender.MALE if i == 0 else Gender.FEMALE
             pig = _make_pig(f"Pig{i}", gender)
             state.add_guinea_pig(pig)
 
-        # stock_limit=2 is below MIN_BREEDING_POPULATION
         state.breeding_program = BreedingProgram(
             enabled=True,
-            stock_limit=2,
+            stock_limit=4,
             target_colors={BaseColor.GOLDEN},
         )
 
@@ -810,7 +809,7 @@ class TestCullWithDiversity:
         state.breeding_program = BreedingProgram(
             enabled=True,
             strategy=BreedingStrategy.DIVERSITY,
-            stock_limit=3,
+            stock_limit=4,
         )
 
         cull_surplus_breeders(state)
