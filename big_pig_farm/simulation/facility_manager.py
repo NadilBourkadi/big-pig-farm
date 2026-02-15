@@ -263,12 +263,20 @@ class FacilityManager:
                     counted.add(other_pig.id)
         return len(counted)
 
+    def _get_candidate_facilities(self, pig: GuineaPig) -> list[Facility]:
+        """Get facilities to check for arrival — target facility first, then nearby."""
+        if pig.target_facility_id:
+            target = self.game_state.get_facility(pig.target_facility_id)
+            if target:
+                return [target]
+        return self.game_state.get_facilities_list()
+
     def check_arrived_at_facility(self, pig: GuineaPig) -> None:
         """Check if pig arrived at a facility and update behavior state."""
         grid_pos = pig.position.grid_pos()
         successfully_using_facility = False
 
-        for facility in self.game_state.get_facilities_list():
+        for facility in self._get_candidate_facilities(pig):
             # Check if pig is at an interaction point for this facility
             # Must be at exact position or orthogonally adjacent (not diagonal)
             for ix, iy in facility.interaction_points:
@@ -346,7 +354,7 @@ class FacilityManager:
         """Consume resources from a nearby facility."""
         grid_pos = pig.position.grid_pos()
 
-        for facility in self.game_state.get_facilities_list():
+        for facility in self._get_candidate_facilities(pig):
             ix, iy = facility.interaction_point
             if abs(grid_pos[0] - ix) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE and abs(grid_pos[1] - iy) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE:
                 if pig.behavior_state == BehaviorState.EATING:
