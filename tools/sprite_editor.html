@@ -141,6 +141,9 @@ function getPixels() {
 
 function getPalette() {
     if (!currentGroup) return {};
+    if (currentGroup.startsWith('indicator')) {
+        return DATA.palettes.indicator[currentKey] || {};
+    }
     if (currentGroup.startsWith('facility')) {
         // Determine facility type from the sprite key
         const ftype = currentKey.replace(/_empty$/, '').replace(/_full$/, '');
@@ -151,6 +154,9 @@ function getPalette() {
 
 function getPaletteKeys() {
     if (!currentGroup) return [];
+    if (currentGroup.startsWith('indicator')) {
+        return DATA.palette_keys.indicator[currentKey] || [];
+    }
     if (currentGroup.startsWith('facility')) {
         const ftype = currentKey.replace(/_empty$/, '').replace(/_full$/, '');
         return DATA.palette_keys.facility[ftype] || [];
@@ -184,6 +190,8 @@ function buildSpriteTree() {
         facility_normal: 'Facility Normal',
         facility_far: 'Facility Far',
         facility_close: 'Facility Close',
+        indicator_normal: 'Indicator Normal',
+        indicator_close: 'Indicator Close',
     };
 
     for (const [group, label] of Object.entries(groupLabels)) {
@@ -251,7 +259,13 @@ function updatePaletteSelect() {
     const sel = document.getElementById('palette-select');
     sel.innerHTML = '';
 
-    if (currentGroup && currentGroup.startsWith('facility')) {
+    if (currentGroup && currentGroup.startsWith('indicator')) {
+        const opt = document.createElement('option');
+        opt.value = currentKey;
+        opt.textContent = currentKey;
+        sel.appendChild(opt);
+        currentPaletteName = currentKey;
+    } else if (currentGroup && currentGroup.startsWith('facility')) {
         const ftype = getFacilityType(currentKey);
         const opt = document.createElement('option');
         opt.value = ftype;
@@ -561,14 +575,14 @@ function renderPreview() {
     const pixels = getPixels();
     if (!pixels) return;
 
-    if (currentGroup && currentGroup.startsWith('facility')) {
+    if (currentGroup && (currentGroup.startsWith('facility') || currentGroup.startsWith('indicator'))) {
         // Single palette preview
         const palette = getPalette();
         const item = document.createElement('div');
         item.className = 'preview-item';
         const label = document.createElement('div');
         label.className = 'label';
-        label.textContent = getFacilityType(currentKey);
+        label.textContent = currentGroup.startsWith('indicator') ? currentKey : getFacilityType(currentKey);
         item.appendChild(label);
         const canvas = document.createElement('canvas');
         canvas.className = 'preview-canvas';

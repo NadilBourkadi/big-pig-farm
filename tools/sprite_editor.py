@@ -3,14 +3,15 @@
 
 Usage:
     poetry run sprite-editor          # exports data + opens editor
-    poetry run sprite-editor apply    # applies changes from editor
+    poetry run sprite-editor apply    # applies changes from sprite_data.js
 
 The default command reads all sprite data from Python modules, resolves Rich
 color names to hex RGB, writes tools/sprite_data.js, starts a local server,
-and opens the editor in the default browser.
+and opens the editor in the default browser.  Clicking "Export Changes" in
+the browser saves to sprite_data.js and automatically applies changes back
+to the Python source files.
 
-The apply command reads tools/sprite_data.js (updated by the editor's Save
-button) and regenerates the Python sprite data files.
+The apply command manually re-applies from sprite_data.js (or a JSON file).
 """
 
 import argparse
@@ -33,6 +34,7 @@ from tools.sprite_gen_facility import (
     generate_facility_close_source,
     generate_facility_pixels_source,
 )
+from tools.sprite_gen_indicator import generate_indicator_pixels_source
 from tools.sprite_gen_pig import (
     generate_close_pig_source,
     generate_pig_sprites_source,
@@ -49,6 +51,7 @@ PIG_SPRITES_FILE = DATA_DIR / "pig_sprites.py"
 PIG_SPRITES_CLOSE_FILE = DATA_DIR / "pig_sprites_close.py"
 FACILITY_PIXELS_FILE = DATA_DIR / "facility_pixels.py"
 FACILITY_PIXELS_CLOSE_FILE = DATA_DIR / "facility_pixels_close.py"
+INDICATOR_PIXELS_FILE = DATA_DIR / "indicator_pixels.py"
 
 
 def _write_sprite_data_js(json_str: str) -> None:
@@ -65,9 +68,103 @@ def _read_sprite_data_js() -> dict:
     text = SPRITE_DATA_JS.read_text(encoding="utf-8")
     m = re.search(r"^const DATA = ({.*});$", text, re.DOTALL | re.MULTILINE)
     if not m:
-        print("Error: could not parse sprite_data.js")
-        sys.exit(1)
+        raise ValueError("could not parse sprite_data.js")
     return json.loads(m.group(1))
+
+
+# ---------------------------------------------------------------------------
+# Core apply logic
+# ---------------------------------------------------------------------------
+
+def apply_sprite_data(data: dict) -> list[str]:
+    """Apply sprite changes from editor data back to Python source files.
+
+    Compares against current source data to only regenerate files whose
+    sprite groups actually changed.
+
+    Returns:
+        List of messages describing what was done.
+
+    Raises:
+        ValueError: If data format is unsupported or generated code has errors.
+    """
+    if data.get("format_version") != 1:
+        raise ValueError("unsupported format version")
+
+    sprites = data["sprites"]
+
+    # Compare against current source data to detect which groups changed
+    original = build_export_data()
+    original_sprites = original["sprites"]
+
+    def _groups_changed(*group_names: str) -> bool:
+        return any(
+            sprites.get(g) != original_sprites.get(g) for g in group_names
+        )
+
+    # Only regenerate files whose sprite groups actually changed
+    generated: list[tuple[Path, str]] = []
+
+    if _groups_changed("pig_adult", "pig_baby", "pig_far_adult", "pig_far_baby"):
+        generated.append((PIG_SPRITES_FILE, generate_pig_sprites_source(
+            sprites.get("pig_adult", {}),
+            sprites.get("pig_baby", {}),
+            sprites.get("pig_far_adult", {}),
+            sprites.get("pig_far_baby", {}),
+        )))
+
+    if _groups_changed("pig_adult_close", "pig_baby_close"):
+        generated.append((PIG_SPRITES_CLOSE_FILE, generate_close_pig_source(
+            sprites.get("pig_adult_close", {}),
+            sprites.get("pig_baby_close", {}),
+        )))
+
+    if _groups_changed("facility_normal", "facility_far"):
+        facility_source = FACILITY_PIXELS_FILE.read_text(encoding="utf-8")
+        generated.append((FACILITY_PIXELS_FILE, generate_facility_pixels_source(
+            sprites.get("facility_normal", {}),
+            sprites.get("facility_far", {}),
+            facility_source,
+        )))
+
+    if _groups_changed("facility_close"):
+        facility_close_source = FACILITY_PIXELS_CLOSE_FILE.read_text(encoding="utf-8")
+        generated.append((FACILITY_PIXELS_CLOSE_FILE, generate_facility_close_source(
+            sprites.get("facility_close", {}),
+            facility_close_source,
+        )))
+
+    if _groups_changed("indicator_normal", "indicator_close"):
+        indicator_source = INDICATOR_PIXELS_FILE.read_text(encoding="utf-8")
+        generated.append((INDICATOR_PIXELS_FILE, generate_indicator_pixels_source(
+            sprites.get("indicator_normal", {}),
+            sprites.get("indicator_close", {}),
+            indicator_source,
+        )))
+
+    if not generated:
+        return ["No sprite changes detected — nothing to apply."]
+
+    # Create backup of files we're about to write
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    for target, _ in generated:
+        if target.exists():
+            shutil.copy2(target, BACKUP_DIR / target.name)
+
+    # Validate syntax before writing anything
+    for target, src in generated:
+        try:
+            compile(src, target.name, "exec")
+        except SyntaxError as e:
+            raise ValueError(f"generated {target.name} has syntax error: {e}")
+
+    # Write validated sources
+    messages = []
+    for target, src in generated:
+        target.write_text(src, encoding="utf-8")
+        messages.append(f"Wrote {target.name}")
+
+    return messages
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +178,27 @@ class _EditorHandler(SimpleHTTPRequestHandler):
         if self.path == "/save":
             length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(length)
-            _write_sprite_data_js(body.decode("utf-8"))
+            data_str = body.decode("utf-8")
+
+            # Save to sprite_data.js
+            _write_sprite_data_js(data_str)
+
+            # Auto-apply changes back to Python source files
+            try:
+                data = json.loads(data_str)
+                messages = apply_sprite_data(data)
+                for msg in messages:
+                    print(f"  {msg}")
+                response = "Applied:\n" + "\n".join(messages)
+            except (ValueError, json.JSONDecodeError) as e:
+                print(f"  Apply error: {e}")
+                response = f"Saved to sprite_data.js but apply failed: {e}"
+
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.send_header("Access-Control-Allow-Origin", "*")
             self.end_headers()
-            self.wfile.write(b"OK")
+            self.wfile.write(response.encode("utf-8"))
             print(f"Saved changes to {SPRITE_DATA_JS}")
         else:
             self.send_error(404)
@@ -140,64 +252,13 @@ def cmd_apply(json_path: str | None = None) -> None:
             sys.exit(1)
         data = _read_sprite_data_js()
 
-    if data.get("format_version") != 1:
-        print("Error: unsupported format version")
+    try:
+        messages = apply_sprite_data(data)
+        for msg in messages:
+            print(msg)
+    except ValueError as e:
+        print(f"Error: {e}")
         sys.exit(1)
-
-    sprites = data["sprites"]
-
-    # Create backup
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-    targets = [
-        PIG_SPRITES_FILE, PIG_SPRITES_CLOSE_FILE,
-        FACILITY_PIXELS_FILE, FACILITY_PIXELS_CLOSE_FILE,
-    ]
-    for src in targets:
-        if src.exists():
-            shutil.copy2(src, BACKUP_DIR / src.name)
-    print(f"Backups saved to {BACKUP_DIR}/")
-
-    # Read existing sources for facility generators
-    facility_source = FACILITY_PIXELS_FILE.read_text(encoding="utf-8")
-    facility_close_source = FACILITY_PIXELS_CLOSE_FILE.read_text(encoding="utf-8")
-
-    # Generate sources
-    generated: list[tuple[Path, str]] = [
-        (PIG_SPRITES_FILE, generate_pig_sprites_source(
-            sprites.get("pig_adult", {}),
-            sprites.get("pig_baby", {}),
-            sprites.get("pig_far_adult", {}),
-            sprites.get("pig_far_baby", {}),
-        )),
-        (PIG_SPRITES_CLOSE_FILE, generate_close_pig_source(
-            sprites.get("pig_adult_close", {}),
-            sprites.get("pig_baby_close", {}),
-        )),
-        (FACILITY_PIXELS_FILE, generate_facility_pixels_source(
-            sprites.get("facility_normal", {}),
-            sprites.get("facility_far", {}),
-            facility_source,
-        )),
-        (FACILITY_PIXELS_CLOSE_FILE, generate_facility_close_source(
-            sprites.get("facility_close", {}),
-            facility_close_source,
-        )),
-    ]
-
-    # Validate syntax before writing anything
-    for target, src in generated:
-        try:
-            compile(src, target.name, "exec")
-        except SyntaxError as e:
-            print(f"Error: generated {target.name} has syntax error: {e}")
-            sys.exit(1)
-
-    # Write validated sources
-    for target, src in generated:
-        target.write_text(src, encoding="utf-8")
-        print(f"Wrote {target}")
-
-    print("\nDone! Run 'poetry run sprite-preview --sprites' to verify.")
 
 
 # ---------------------------------------------------------------------------
