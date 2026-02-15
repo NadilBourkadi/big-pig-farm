@@ -544,7 +544,11 @@ class BehaviorController:
             self._decision_timers[pig.id] = 0
 
     def _update_movement(self, pig: GuineaPig, delta_seconds: float) -> None:
-        """Update pig position along its path."""
+        """Update pig position along its path.
+
+        At high game speeds delta_seconds can be very large, so we consume
+        multiple waypoints per tick until the movement budget is spent.
+        """
         if not pig.path:
             return
 
@@ -563,118 +567,111 @@ class BehaviorController:
         if pig.is_baby:
             speed *= BEHAVIOR.BABY_SPEED_MULT
 
-        # Get next path point
-        next_point = pig.path[0]
-        target_x, target_y = float(next_point[0]), float(next_point[1])
+        remaining = speed * delta_seconds
+        moved = False
+        farm = self.game_state.farm
 
-        dx = target_x - pig.position.x
-        dy = target_y - pig.position.y
-        distance = (dx * dx + dy * dy) ** 0.5
+        while pig.path and remaining > 0:
+            next_point = pig.path[0]
+            target_x, target_y = float(next_point[0]), float(next_point[1])
 
-        if distance < BEHAVIOR.WAYPOINT_REACHED:
-            # Reached this waypoint - check if we can actually move there
-            if not self.collision.is_position_blocked(target_x, target_y, pig):
-                pig.position.x = target_x
-                pig.position.y = target_y
-                pig.path.pop(0)
+            dx = target_x - pig.position.x
+            dy = target_y - pig.position.y
+            distance = (dx * dx + dy * dy) ** 0.5
 
-                if not pig.path:
-                    pig.target_position = None
-            else:
-                # Try dodging sideways to get around the blocking pig
-                if self._try_dodge(pig, dx, dy, delta_seconds, speed):
-                    if pig.target_description and "(blocked)" in pig.target_description:
-                        pig.target_description = pig.target_description.replace(" (blocked)", "")
-                    self._blocked_timers[pig.id] = 0
-                    self._stuck_positions.pop(pig.id, None)
-                    self._stuck_timers.pop(pig.id, None)
+            if distance < BEHAVIOR.WAYPOINT_REACHED:
+                # Already at this waypoint — pop it and continue
+                if not self.collision.is_position_blocked(target_x, target_y, pig):
+                    pig.position.x = target_x
+                    pig.position.y = target_y
+                    pig.path.pop(0)
+                    moved = True
+                    continue
                 else:
-                    # Blocked - track how long and try to find alternative
-                    blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
-                    self._blocked_timers[pig.id] = blocked_time
+                    self._handle_movement_blocked(pig, dx, dy, delta_seconds, speed)
+                    return
 
-                    # Track how long pig is stuck at the same grid cell.
-                    # Unlike _blocked_timers, this is NOT reset by facility
-                    # switches — only by actual physical movement.
-                    grid_pos = (int(pig.position.x), int(pig.position.y))
-                    if self._stuck_positions.get(pig.id) != grid_pos:
-                        self._stuck_positions[pig.id] = grid_pos
-                        self._stuck_timers[pig.id] = 0.0
-                    self._stuck_timers[pig.id] = self._stuck_timers.get(pig.id, 0.0) + delta_seconds
+            if remaining >= distance:
+                # Can reach this waypoint in one step
+                if not self.collision.is_position_blocked(target_x, target_y, pig):
+                    pig.position.x = target_x
+                    pig.position.y = target_y
+                    pig.path.pop(0)
+                    remaining -= distance
+                    moved = True
+                    continue
+                else:
+                    self._handle_movement_blocked(pig, dx, dy, delta_seconds, speed)
+                    return
 
-                    if pig.target_description and "(blocked)" not in pig.target_description:
-                        pig.target_description = f"{pig.target_description} (blocked)"
+            # Partial movement toward next waypoint (remaining < distance)
+            new_x = pig.position.x + (dx / distance) * remaining
+            new_y = pig.position.y + (dy / distance) * remaining
 
-                    # If stuck at the same cell too long, force give-up regardless
-                    # of whether alternative facilities exist (prevents corridor deadlock)
-                    if self._stuck_timers.get(pig.id, 0) > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
-                        self._give_up_and_fallback(pig)
-                        return
-
-                    # After 2 seconds of being blocked, try to find an alternative facility
-                    if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
-                        current_target = pig.target_position
-                        if current_target and self.facility_manager.try_alternative_facility(pig, current_target):
-                            self._blocked_timers[pig.id] = 0
-                        elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
-                            self._give_up_and_fallback(pig)
-        else:
-            # Calculate proposed new position
-            move_distance = speed * delta_seconds
-            if move_distance >= distance:
-                new_x, new_y = target_x, target_y
-            else:
-                new_x = pig.position.x + (dx / distance) * move_distance
-                new_y = pig.position.y + (dy / distance) * move_distance
-
-            # Check walkability and collision with other pigs
-            farm = self.game_state.farm
             if (farm.is_walkable(int(new_x), int(new_y))
                     and not self.collision.is_position_blocked(new_x, new_y, pig, min_distance=BEHAVIOR.BLOCKING_DEFAULT)):
                 pig.position.x = new_x
                 pig.position.y = new_y
-                # Clear blocked status and timer
-                if pig.target_description and "(blocked)" in pig.target_description:
-                    pig.target_description = pig.target_description.replace(" (blocked)", "")
-                self._blocked_timers[pig.id] = 0
-                self._stuck_positions.pop(pig.id, None)
-                self._stuck_timers.pop(pig.id, None)
+                moved = True
             elif self._try_dodge(pig, dx, dy, delta_seconds, speed):
-                # Dodged sideways to get around blocking pig
-                if pig.target_description and "(blocked)" in pig.target_description:
-                    pig.target_description = pig.target_description.replace(" (blocked)", "")
-                self._blocked_timers[pig.id] = 0
-                self._stuck_positions.pop(pig.id, None)
-                self._stuck_timers.pop(pig.id, None)
+                moved = True
             else:
-                # Blocked and can't dodge - track how long and try to find alternative
-                blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
-                self._blocked_timers[pig.id] = blocked_time
+                self._handle_movement_blocked(pig, dx, dy, delta_seconds, speed)
+                return
+            break
 
-                # Track how long pig is stuck at the same grid cell
-                grid_pos = (int(pig.position.x), int(pig.position.y))
-                if self._stuck_positions.get(pig.id) != grid_pos:
-                    self._stuck_positions[pig.id] = grid_pos
-                    self._stuck_timers[pig.id] = 0.0
-                self._stuck_timers[pig.id] = self._stuck_timers.get(pig.id, 0.0) + delta_seconds
+        if moved:
+            if pig.target_description and "(blocked)" in pig.target_description:
+                pig.target_description = pig.target_description.replace(" (blocked)", "")
+            self._blocked_timers[pig.id] = 0
+            self._stuck_positions.pop(pig.id, None)
+            self._stuck_timers.pop(pig.id, None)
 
-                if pig.target_description and "(blocked)" not in pig.target_description:
-                    pig.target_description = f"{pig.target_description} (blocked)"
+        if not pig.path:
+            pig.target_position = None
 
-                # If stuck at the same cell too long, force give-up regardless
-                # of whether alternative facilities exist
-                if self._stuck_timers.get(pig.id, 0) > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
-                    self._give_up_and_fallback(pig)
-                    return
+    def _handle_movement_blocked(
+        self, pig: GuineaPig, dx: float, dy: float, delta_seconds: float, speed: float,
+    ) -> None:
+        """Handle a pig that is blocked during movement."""
+        # Try dodging sideways to get around the blocking pig
+        if self._try_dodge(pig, dx, dy, delta_seconds, speed):
+            if pig.target_description and "(blocked)" in pig.target_description:
+                pig.target_description = pig.target_description.replace(" (blocked)", "")
+            self._blocked_timers[pig.id] = 0
+            self._stuck_positions.pop(pig.id, None)
+            self._stuck_timers.pop(pig.id, None)
+            return
 
-                # After 2 seconds of being blocked, try to find an alternative facility
-                if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
-                    current_target = pig.target_position
-                    if current_target and self.facility_manager.try_alternative_facility(pig, current_target):
-                        # Found alternative, reset blocked timer
-                        self._blocked_timers[pig.id] = 0
-                    elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
-                        self._give_up_and_fallback(pig)
+        # Blocked and can't dodge — track how long
+        blocked_time = self._blocked_timers.get(pig.id, 0) + delta_seconds
+        self._blocked_timers[pig.id] = blocked_time
+
+        # Track how long pig is stuck at the same grid cell.
+        # Unlike _blocked_timers, this is NOT reset by facility
+        # switches — only by actual physical movement.
+        grid_pos = (int(pig.position.x), int(pig.position.y))
+        if self._stuck_positions.get(pig.id) != grid_pos:
+            self._stuck_positions[pig.id] = grid_pos
+            self._stuck_timers[pig.id] = 0.0
+        self._stuck_timers[pig.id] = self._stuck_timers.get(pig.id, 0.0) + delta_seconds
+
+        if pig.target_description and "(blocked)" not in pig.target_description:
+            pig.target_description = f"{pig.target_description} (blocked)"
+
+        # If stuck at the same cell too long, force give-up regardless
+        # of whether alternative facilities exist (prevents corridor deadlock)
+        if self._stuck_timers.get(pig.id, 0) > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
+            self._give_up_and_fallback(pig)
+            return
+
+        # After some time blocked, try to find an alternative facility
+        if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
+            current_target = pig.target_position
+            if current_target and self.facility_manager.try_alternative_facility(pig, current_target):
+                self._blocked_timers[pig.id] = 0
+            elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
+                self._give_up_and_fallback(pig)
 
     def _update_current_behavior(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior-specific effects."""
