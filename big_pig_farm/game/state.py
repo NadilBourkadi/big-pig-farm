@@ -4,11 +4,11 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from big_pig_farm.data.config import ECONOMY, GameSpeed
 from big_pig_farm.entities.guinea_pig import GuineaPig
-from big_pig_farm.entities.facilities import Facility
+from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.pigdex import Pigdex
 from big_pig_farm.economy.contracts import ContractBoard
 from big_pig_farm.simulation.breeding_program import BreedingProgram
@@ -83,6 +83,11 @@ class GameState(BaseModel):
     guinea_pigs: dict[UUID, GuineaPig] = Field(default_factory=dict)
     facilities: dict[UUID, Facility] = Field(default_factory=dict)
 
+    # Cached list snapshots — invalidated on add/remove
+    _pigs_list_cache: list[GuineaPig] | None = PrivateAttr(default=None)
+    _facilities_list_cache: list[Facility] | None = PrivateAttr(default=None)
+    _facilities_by_type_cache: dict[FacilityType, list[Facility]] | None = PrivateAttr(default=None)
+
     # World
     farm: FarmGrid = Field(default_factory=FarmGrid.create_starter)
 
@@ -120,10 +125,14 @@ class GameState(BaseModel):
     def add_guinea_pig(self, pig: GuineaPig) -> None:
         """Add a guinea pig to the game."""
         self.guinea_pigs[pig.id] = pig
+        self._pigs_list_cache = None
 
     def remove_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
         """Remove and return a guinea pig from the game."""
-        return self.guinea_pigs.pop(pig_id, None)
+        pig = self.guinea_pigs.pop(pig_id, None)
+        if pig is not None:
+            self._pigs_list_cache = None
+        return pig
 
     def get_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
         """Get a guinea pig by ID."""
@@ -133,6 +142,8 @@ class GameState(BaseModel):
         """Add a facility to the game and place it on the grid."""
         if self.farm.place_facility(facility):
             self.facilities[facility.id] = facility
+            self._facilities_list_cache = None
+            self._facilities_by_type_cache = None
             return True
         return False
 
@@ -141,15 +152,22 @@ class GameState(BaseModel):
         facility = self.facilities.pop(facility_id, None)
         if facility:
             self.farm.remove_facility(facility)
+            self._facilities_list_cache = None
+            self._facilities_by_type_cache = None
         return facility
 
     def get_facility(self, facility_id: UUID) -> Optional[Facility]:
         """Get a facility by ID."""
         return self.facilities.get(facility_id)
 
-    def get_facilities_by_type(self, facility_type) -> list[Facility]:
-        """Get all facilities of a specific type."""
-        return [f for f in self.facilities.values() if f.facility_type == facility_type]
+    def get_facilities_by_type(self, facility_type: FacilityType) -> list[Facility]:
+        """Get all facilities of a specific type. O(1) via cached index."""
+        if self._facilities_by_type_cache is None:
+            cache: dict[FacilityType, list[Facility]] = {}
+            for f in self.facilities.values():
+                cache.setdefault(f.facility_type, []).append(f)
+            self._facilities_by_type_cache = cache
+        return self._facilities_by_type_cache.get(facility_type, [])
 
     def add_money(self, amount: int) -> None:
         """Add money to the player's balance."""
@@ -201,9 +219,13 @@ class GameState(BaseModel):
         self.breeding_pair = None
 
     def get_pigs_list(self) -> list[GuineaPig]:
-        """Get all guinea pigs as a list."""
-        return list(self.guinea_pigs.values())
+        """Get all guinea pigs as a list (cached, invalidated on add/remove)."""
+        if self._pigs_list_cache is None:
+            self._pigs_list_cache = list(self.guinea_pigs.values())
+        return self._pigs_list_cache
 
     def get_facilities_list(self) -> list[Facility]:
-        """Get all facilities as a list."""
-        return list(self.facilities.values())
+        """Get all facilities as a list (cached, invalidated on add/remove)."""
+        if self._facilities_list_cache is None:
+            self._facilities_list_cache = list(self.facilities.values())
+        return self._facilities_list_cache

@@ -329,7 +329,7 @@ class TestStuckTimer:
         assert controller._stuck_timers.get(pig.id, 0) > 3.5
 
         # Remove the blocker so the pig can move
-        del state.guinea_pigs[blocker.id]
+        state.remove_guinea_pig(blocker.id)
 
         # Give the pig a new path from its current position
         pig.path = [(11, 10), (12, 10)]
