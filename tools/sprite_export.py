@@ -19,6 +19,11 @@ from big_pig_farm.data.facility_pixels import (
     FACILITY_PIXELS_FAR,
 )
 from big_pig_farm.data.facility_pixels_close import FACILITY_PIXELS_CLOSE
+from big_pig_farm.data.indicator_pixels import (
+    INDICATOR_PALETTES,
+    INDICATOR_PIXELS_CLOSE,
+    INDICATOR_PIXELS_NORMAL,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -123,11 +128,19 @@ def build_export_data() -> dict:
     """Build the complete JSON data structure for the editor."""
     pig_palettes = {name: resolve_palette(pal) for name, pal in PALETTES.items()}
     fac_palettes = {name: resolve_palette(pal) for name, pal in FACILITY_PALETTES.items()}
+    ind_palettes = {
+        name: resolve_palette(variants["bright"])
+        for name, variants in INDICATOR_PALETTES.items()
+    }
 
     pig_keys = [k for k in PALETTES["BLACK"] if k is not None]
     fac_palette_keys = {
         name: [k for k in pal if k is not None]
         for name, pal in FACILITY_PALETTES.items()
+    }
+    ind_palette_keys = {
+        name: list(variants["bright"].keys())
+        for name, variants in INDICATOR_PALETTES.items()
     }
 
     sprites = {
@@ -140,11 +153,13 @@ def build_export_data() -> dict:
         "facility_normal": collect_all(FACILITY_PIXELS),
         "facility_far": collect_all(FACILITY_PIXELS_FAR),
         "facility_close": collect_all(FACILITY_PIXELS_CLOSE),
+        "indicator_normal": collect_all(INDICATOR_PIXELS_NORMAL),
+        "indicator_close": collect_all(INDICATOR_PIXELS_CLOSE),
     }
 
     return {
         "format_version": 1,
-        "palettes": {"pig": pig_palettes, "facility": fac_palettes},
-        "palette_keys": {"pig": pig_keys, "facility": fac_palette_keys},
+        "palettes": {"pig": pig_palettes, "facility": fac_palettes, "indicator": ind_palettes},
+        "palette_keys": {"pig": pig_keys, "facility": fac_palette_keys, "indicator": ind_palette_keys},
         "sprites": sprites,
     }

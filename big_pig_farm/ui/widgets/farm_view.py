@@ -23,6 +23,12 @@ from big_pig_farm.data.sprites import (
     ZoomLevel,
     ZOOM_SCALES,
 )
+from big_pig_farm.data.indicator_sprites import (
+    IndicatorType,
+    get_pig_indicator_type,
+    get_indicator_halfblock,
+    get_far_indicator,
+)
 from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.facilities import Facility
 from big_pig_farm.game.state import GameState
@@ -49,6 +55,21 @@ _FACILITY_LABELS: dict[str, str] = {
 
 
 VIEWPORT_PADDING = 4  # world cells of extra scroll beyond farm edges
+
+# Indicator timing (in render ticks, ~15fps)
+_INDICATOR_SHOW_TICKS = 45       # ~3 seconds visible
+_INDICATOR_COOLDOWN_TICKS = 150  # ~10 seconds hidden
+_INDICATOR_PULSE_TICKS = 8       # toggle bright/dim every ~0.5s
+
+
+class _IndicatorTimer:
+    """Tracks the ephemeral show/cooldown cycle for one pig's status indicator."""
+    __slots__ = ("indicator_type", "trigger_tick", "visible")
+
+    def __init__(self, indicator_type: IndicatorType, trigger_tick: int) -> None:
+        self.indicator_type = indicator_type
+        self.trigger_tick = trigger_tick
+        self.visible = True
 
 
 class FarmView(Static):
@@ -85,6 +106,8 @@ class FarmView(Static):
         self._pig_facing: dict[UUID, Direction] = {}
         # Animation tick counter (incremented every render call)
         self._render_tick: int = 0
+        # Status indicator ephemeral timers per pig
+        self._indicator_timers: dict[UUID, _IndicatorTimer] = {}
 
     @property
     def zoom(self) -> ZoomLevel:
@@ -500,6 +523,10 @@ class FarmView(Static):
                 self._char_buffer[screen_y][screen_x] = char
                 self._style_buffer[screen_y][screen_x] = style
 
+        # Draw status indicator above pig (skip for selected pig — sidebar shows details)
+        if not is_selected:
+            self._draw_indicator(pig, width, height, anchor_x, anchor_y, base_x, sprite_w)
+
         # Draw name below pig (skip at far zoom — no room)
         if self._zoom != ZoomLevel.FAR:
             name_y = anchor_y + sprite_h
@@ -511,6 +538,95 @@ class FarmView(Static):
                     if 0 <= name_x + i < width:
                         self._char_buffer[name_y][name_x + i] = char
                         self._style_buffer[name_y][name_x + i] = name_style
+
+    # ------------------------------------------------------------------
+    # Status indicators
+    # ------------------------------------------------------------------
+
+    def _update_indicator_timer(self, pig: GuineaPig) -> Optional[IndicatorType]:
+        """Manage the show/cooldown/resurface cycle for a pig's status indicator.
+
+        Returns the IndicatorType to draw, or None if nothing should be shown.
+        """
+        current_type = get_pig_indicator_type(pig)
+        timer = self._indicator_timers.get(pig.id)
+        tick = self._render_tick
+
+        # No critical need — clear timer entirely
+        if current_type is None:
+            self._indicator_timers.pop(pig.id, None)
+            return None
+
+        # New indicator or type changed — start fresh
+        if timer is None or timer.indicator_type != current_type:
+            timer = _IndicatorTimer(current_type, tick)
+            self._indicator_timers[pig.id] = timer
+            return current_type
+
+        elapsed = tick - timer.trigger_tick
+
+        # Show phase
+        if elapsed < _INDICATOR_SHOW_TICKS:
+            return current_type
+
+        # Cooldown phase
+        if elapsed < _INDICATOR_SHOW_TICKS + _INDICATOR_COOLDOWN_TICKS:
+            return None
+
+        # Cooldown expired — resurface
+        timer.trigger_tick = tick
+        return current_type
+
+    def _draw_indicator(
+        self,
+        pig: GuineaPig,
+        width: int,
+        height: int,
+        anchor_x: int,
+        anchor_y: int,
+        base_x: int,
+        sprite_w: int,
+    ) -> None:
+        """Draw a floating status indicator icon above a pig."""
+        indicator_type = self._update_indicator_timer(pig)
+        if indicator_type is None:
+            return
+
+        # Pulse animation: toggle bright/dim
+        bright = (self._render_tick // _INDICATOR_PULSE_TICKS) % 2 == 0
+
+        zoom_val = self._zoom.value  # "far", "normal", "close"
+
+        if self._zoom == ZoomLevel.FAR:
+            char, color = get_far_indicator(indicator_type, bright)
+            icon_x = base_x
+            icon_y = anchor_y - 1
+            if 0 <= icon_x < width and 0 <= icon_y < height:
+                self._char_buffer[icon_y][icon_x] = char
+                self._style_buffer[icon_y][icon_x] = Style(color=color)
+            return
+
+        halfblock = get_indicator_halfblock(indicator_type, zoom_val, bright)
+        if halfblock is None:
+            return
+
+        icon_h = len(halfblock)
+        icon_w = len(halfblock[0]) if halfblock else 0
+
+        # Position: centered horizontally on pig, directly above sprite top
+        icon_x = base_x - icon_w // 2
+        icon_y = anchor_y - icon_h
+
+        for dy, row in enumerate(halfblock):
+            for dx, (char, fg, bg) in enumerate(row):
+                sx = icon_x + dx
+                sy = icon_y + dy
+                if not (0 <= sx < width and 0 <= sy < height):
+                    continue
+                if char == " " and fg is None and bg is None:
+                    continue
+                self._char_buffer[sy][sx] = char
+                self._style_buffer[sy][sx] = Style(color=fg, bgcolor=bg)
 
     # ------------------------------------------------------------------
     # Buffer → Text
