@@ -67,6 +67,10 @@ class BehaviorController:
         # Clamp position inside walkable bounds (walls + buffer)
         self._clamp_to_bounds(pig)
 
+        # Track current area
+        area = self.game_state.farm.get_area_at(int(pig.position.x), int(pig.position.y))
+        pig.current_area_id = area.id if area else None
+
         # Update behavior-specific logic
         self._update_current_behavior(pig, delta_seconds)
 
@@ -443,6 +447,12 @@ class BehaviorController:
                     min_pig_dist = 0.0
 
                 score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
+
+                # Prefer cells in the pig's preferred biome
+                if pig.preferred_biome:
+                    cell_biome = farm.get_biome_at(target[0], target[1])
+                    if cell_biome and cell_biome.value == pig.preferred_biome:
+                        score += 3.0
 
                 if score > best_score:
                     best_score = score

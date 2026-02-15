@@ -86,7 +86,8 @@ class SimulationRunner:
         board = state.contract_board
         board.check_expiry(game_day)
         if board.needs_refresh(game_day) or (not board.active_contracts and board.last_refresh_day == 0):
-            new_contracts = generate_contracts(state.farm.tier, game_day)
+            player_biomes = [a.biome for a in state.farm.areas]
+            new_contracts = generate_contracts(state.farm.tier, game_day, player_biomes)
             board.active_contracts.extend(new_contracts)
             board.last_refresh_day = game_day
 

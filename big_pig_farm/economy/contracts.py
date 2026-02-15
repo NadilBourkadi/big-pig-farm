@@ -7,7 +7,8 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-from big_pig_farm.data.config import CONTRACTS
+from big_pig_farm.data.config import BIOME, CONTRACTS
+from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
 from big_pig_farm.entities.guinea_pig import GuineaPig
 
@@ -28,14 +29,20 @@ class BreedingContract(BaseModel):
     required_pattern: Optional[Pattern] = None
     required_intensity: Optional[ColorIntensity] = None
     required_roan: Optional[RoanType] = None
+    required_biome: Optional[BiomeType] = None
     difficulty: ContractDifficulty = ContractDifficulty.EASY
     reward: int = 50
     deadline_day: int = 0
     created_day: int = 0
     fulfilled: bool = False
 
-    def matches_pig(self, pig: GuineaPig) -> bool:
-        """Check if a pig matches all requirements of this contract."""
+    def matches_pig(self, pig: GuineaPig, farm=None) -> bool:
+        """Check if a pig matches all requirements of this contract.
+
+        Args:
+            pig: The pig to check
+            farm: FarmGrid for biome lookups (needed if required_biome is set)
+        """
         if self.fulfilled:
             return False
         phenotype = pig.phenotype
@@ -47,6 +54,13 @@ class BreedingContract(BaseModel):
             return False
         if self.required_roan and phenotype.roan != self.required_roan:
             return False
+        if self.required_biome:
+            # Check pig's birth area biome
+            if not pig.birth_area_id or not farm:
+                return False
+            birth_area = farm.get_area_by_id(pig.birth_area_id)
+            if not birth_area or birth_area.biome != self.required_biome:
+                return False
         return True
 
     @property
@@ -89,6 +103,10 @@ class BreedingContract(BaseModel):
                 BaseColor.CREAM: "Cream",
             }
             parts.append(color_names.get(self.required_color, self.required_color.value))
+        if self.required_biome:
+            from big_pig_farm.entities.biomes import BIOMES
+            biome_name = BIOMES[self.required_biome].display_name
+            parts.append(f"(born in {biome_name})")
         if not parts:
             return "Any pig"
         return " ".join(parts)
@@ -101,10 +119,10 @@ class ContractBoard(BaseModel):
     total_contract_earnings: int = 0
     last_refresh_day: int = 0
 
-    def check_and_fulfill(self, pig: GuineaPig) -> Optional[BreedingContract]:
+    def check_and_fulfill(self, pig: GuineaPig, farm=None) -> Optional[BreedingContract]:
         """Check if a pig matches any active contract. Returns matched contract or None."""
         for contract in self.active_contracts:
-            if contract.matches_pig(pig):
+            if contract.matches_pig(pig, farm=farm):
                 contract.fulfilled = True
                 self.completed_contracts += 1
                 self.total_contract_earnings += contract.reward
@@ -126,7 +144,11 @@ class ContractBoard(BaseModel):
         return game_day - self.last_refresh_day >= CONTRACTS.REFRESH_INTERVAL_DAYS
 
 
-def generate_contracts(farm_tier: int, game_day: int) -> list[BreedingContract]:
+def generate_contracts(
+    farm_tier: int,
+    game_day: int,
+    available_biomes: list[BiomeType] | None = None,
+) -> list[BreedingContract]:
     """Generate a set of contracts appropriate for the farm tier."""
     contracts = []
     num_contracts = min(CONTRACTS.MAX_ACTIVE_CONTRACTS, max(2, farm_tier))
@@ -144,7 +166,7 @@ def generate_contracts(farm_tier: int, game_day: int) -> list[BreedingContract]:
 
     for _ in range(num_contracts):
         difficulty = random.choice(available_difficulties)
-        contract = _generate_single_contract(difficulty, game_day, farm_tier)
+        contract = _generate_single_contract(difficulty, game_day, farm_tier, available_biomes)
         contracts.append(contract)
 
     return contracts
@@ -182,7 +204,10 @@ ROAN_TIER_REQUIREMENTS: dict[RoanType, int] = {
 
 
 def _generate_single_contract(
-    difficulty: ContractDifficulty, game_day: int, farm_tier: int
+    difficulty: ContractDifficulty,
+    game_day: int,
+    farm_tier: int,
+    available_biomes: list[BiomeType] | None = None,
 ) -> BreedingContract:
     """Generate a single contract of the given difficulty."""
     available_colors = _filter_by_tier(list(BaseColor), COLOR_TIER_REQUIREMENTS, farm_tier)
@@ -190,6 +215,7 @@ def _generate_single_contract(
     required_pattern = None
     required_intensity = None
     required_roan = None
+    required_biome = None
 
     if difficulty in (ContractDifficulty.MEDIUM, ContractDifficulty.HARD, ContractDifficulty.EXPERT):
         available_patterns = _filter_by_tier(list(Pattern), PATTERN_TIER_REQUIREMENTS, farm_tier)
@@ -205,6 +231,14 @@ def _generate_single_contract(
         available_roans = _filter_by_tier(list(RoanType), ROAN_TIER_REQUIREMENTS, farm_tier)
         required_roan = random.choice(available_roans)
 
+    # Biome requirement: tier 3+, HARD/EXPERT, 30% chance
+    if (farm_tier >= 3
+            and available_biomes
+            and len(available_biomes) > 1
+            and difficulty in (ContractDifficulty.HARD, ContractDifficulty.EXPERT)
+            and random.random() < BIOME.BIOME_CONTRACT_CHANCE):
+        required_biome = random.choice(available_biomes)
+
     # Calculate reward based on difficulty
     reward_ranges = {
         ContractDifficulty.EASY: (CONTRACTS.EASY_REWARD_MIN, CONTRACTS.EASY_REWARD_MAX),
@@ -215,6 +249,10 @@ def _generate_single_contract(
     min_reward, max_reward = reward_ranges[difficulty]
     reward = random.randint(min_reward, max_reward)
 
+    # Biome contracts get a reward bonus
+    if required_biome:
+        reward = int(reward * (1 + BIOME.BIOME_CONTRACT_REWARD_BONUS))
+
     deadline_day = game_day + CONTRACTS.EXPIRY_DAYS
 
     contract = BreedingContract(
@@ -222,6 +260,7 @@ def _generate_single_contract(
         required_pattern=required_pattern,
         required_intensity=required_intensity,
         required_roan=required_roan,
+        required_biome=required_biome,
         difficulty=difficulty,
         reward=reward,
         deadline_day=deadline_day,

@@ -1,6 +1,7 @@
 """Hunger, energy, happiness calculations for guinea pigs."""
 
-from big_pig_farm.data.config import NEEDS
+from big_pig_farm.data.config import BIOME, NEEDS
+from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.entities.guinea_pig import GuineaPig, Personality, BehaviorState
 from big_pig_farm.entities.facilities import FacilityType
 
@@ -28,6 +29,12 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
                        and pig.needs.energy >= NEEDS.LOW_THRESHOLD)
     if needs_satisfied:
         pig.needs.happiness += NEEDS.HAPPINESS_CONTENTMENT_RECOVERY * hours
+
+    # Preferred biome bonus
+    if pig.preferred_biome and game_state and hasattr(game_state, 'farm'):
+        current_biome = game_state.farm.get_biome_at(int(pig.position.x), int(pig.position.y))
+        if current_biome and current_biome.value == pig.preferred_biome:
+            pig.needs.happiness += BIOME.PREFERRED_BIOME_HAPPINESS_BONUS * hours
 
     # Critical needs directly drain happiness
     if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:

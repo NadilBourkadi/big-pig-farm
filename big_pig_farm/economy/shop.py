@@ -6,6 +6,7 @@ from typing import Optional
 
 from big_pig_farm.data.config import ECONOMY, FARM_TIERS
 from big_pig_farm.economy.currency import add_money, spend_money
+from big_pig_farm.entities.biomes import BiomeType, BIOMES
 from big_pig_farm.entities.facilities import FacilityType, FACILITY_INFO, Facility
 from big_pig_farm.game.state import GameState
 
@@ -259,58 +260,62 @@ def sell_facility(state: GameState, facility) -> int:
 
 
 def get_farm_upgrade_info(state: GameState) -> Optional[dict]:
-    """Get info about the next farm upgrade, or None if at max."""
-    current_tier = state.farm.tier
-    if current_tier >= len(FARM_TIERS):
+    """Get info about the next room addition, or None if at max."""
+    next_tier = state.farm.next_room_tier
+    if next_tier is None:
         return None
 
-    next_tier = FARM_TIERS[current_tier]  # 0-indexed, so current_tier gives next
     return {
         "name": next_tier.name,
         "cost": next_tier.cost,
-        "width": next_tier.width,
-        "height": next_tier.height,
-        "capacity": next_tier.capacity,
+        "width": next_tier.room_width,
+        "height": next_tier.room_height,
+        "capacity": next_tier.capacity_add,
         "tier": next_tier.tier,
     }
 
 
-def purchase_farm_upgrade(state: GameState) -> bool:
-    """Attempt to purchase a farm upgrade. Returns True if successful."""
-    upgrade_info = get_farm_upgrade_info(state)
-    if not upgrade_info:
+def get_room_total_cost(state: GameState, biome: BiomeType) -> int:
+    """Get the total cost for adding a room with the given biome."""
+    next_tier = state.farm.next_room_tier
+    if next_tier is None:
+        return 0
+    return next_tier.cost + BIOMES[biome].cost
+
+
+def purchase_new_room(state: GameState, biome: BiomeType) -> bool:
+    """Add a new room with the given biome. Returns True if successful."""
+    total_cost = get_room_total_cost(state, biome)
+    if total_cost <= 0:
+        return False
+    if state.money < total_cost:
         return False
 
-    if state.money < upgrade_info["cost"]:
+    result = state.farm.add_room(biome)
+    if result is None:
         return False
 
-    # Calculate offsets for repositioning
-    old_width = state.farm.width
-    old_height = state.farm.height
-    new_width = upgrade_info["width"]
-    new_height = upgrade_info["height"]
-    offset_x = (new_width - old_width) // 2
-    offset_y = (new_height - old_height) // 2
+    new_area, tunnels, offset_x, offset_y = result
 
-    # Upgrade the farm grid
-    if not state.farm.upgrade_to_tier(upgrade_info["tier"]):
-        return False
+    # Shift entities if grid expanded
+    if offset_x or offset_y:
+        for facility in state.get_facilities_list():
+            facility.position_x += offset_x
+            facility.position_y += offset_y
 
-    # Update facility positions
-    for facility in state.get_facilities_list():
-        facility.position_x += offset_x
-        facility.position_y += offset_y
+        for pig in state.get_pigs_list():
+            pig.position.x += offset_x
+            pig.position.y += offset_y
+            pig.path = []
+            pig.target_position = None
 
-    # Update guinea pig positions
-    for pig in state.get_pigs_list():
-        pig.position.x += offset_x
-        pig.position.y += offset_y
-        # Clear paths since grid changed
-        pig.path = []
-        pig.target_position = None
-
-    # Deduct cost
-    state.spend_money(upgrade_info["cost"])
-    state.log_event(f"Farm upgraded to {upgrade_info['name']}!", "purchase")
+    state.spend_money(total_cost)
+    biome_name = BIOMES[biome].display_name
+    state.log_event(f"Added {new_area.name} ({biome_name} biome)!", "purchase")
 
     return True
+
+
+def purchase_farm_upgrade(state: GameState) -> bool:
+    """Legacy farm upgrade — now adds a MEADOW room."""
+    return purchase_new_room(state, BiomeType.MEADOW)

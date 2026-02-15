@@ -7,6 +7,7 @@ from uuid import UUID
 from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION, NEEDS
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.economy.market import sell_pig
+from big_pig_farm.entities.biomes import BiomeType, BIOMES
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
 from big_pig_farm.entities.genetics import (
     breed as breed_genetics,
@@ -169,10 +170,27 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     if genetics_labs:
         mutation_rate = GENETICS.MUTATION_RATE_WITH_LAB
 
+    # Build per-locus rates with biome boosts
+    mother_biome = game_state.farm.get_biome_at(int(mother.position.x), int(mother.position.y))
+    locus_rates: dict[str, float] | None = None
+    if mother_biome:
+        biome_info = BIOMES[mother_biome]
+        if biome_info.mutation_boost_loci:
+            locus_rates = {}
+            for locus in ("e_locus", "b_locus", "s_locus", "c_locus", "r_locus"):
+                locus_rates[locus] = mutation_rate + biome_info.mutation_boost_loci.get(locus, 0.0)
+
+    # Determine birth area for babies
+    birth_area = game_state.farm.get_area_at(int(mother.position.x), int(mother.position.y))
+    birth_area_id = birth_area.id if birth_area else None
+
     babies_born = []
     for _ in range(litter_size):
         # Generate genetics with mutations
-        breed_result = breed_genetics(mother.genotype, father_genotype, mutation_rate=mutation_rate)
+        breed_result = breed_genetics(
+            mother.genotype, father_genotype,
+            mutation_rate=mutation_rate, locus_rates=locus_rates,
+        )
         baby_genotype = breed_result.genotype
         baby_phenotype = calculate_phenotype(baby_genotype)
 
@@ -201,6 +219,12 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
             mother_name=mother.name,
             father_name=father_name,
         )
+
+        # Set area/biome fields
+        baby.birth_area_id = birth_area_id
+        baby.current_area_id = birth_area_id
+        if birth_area:
+            baby.preferred_biome = birth_area.biome.value
 
         game_state.add_guinea_pig(baby)
         game_state.total_pigs_born += 1
@@ -377,13 +401,10 @@ def _apply_breeding_filter(game_state, babies: list[GuineaPig]) -> None:
     if not program.enabled:
         return
 
-    # Skip filter when adult population is at or below the minimum
+    # Skip filter when still growing toward the stock limit
     adults = [p for p in game_state.get_pigs_list() if not p.is_baby]
-    if len(adults) <= BREEDING.MIN_BREEDING_POPULATION:
-        game_state.log_event(
-            "Breeding program: skipping filter — population too low",
-            event_type="filter",
-        )
+    effective_limit = max(program.stock_limit, BREEDING.MIN_BREEDING_POPULATION)
+    if len(adults) <= effective_limit:
         return
 
     has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))

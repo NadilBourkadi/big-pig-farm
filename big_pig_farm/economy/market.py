@@ -93,7 +93,7 @@ def sell_pig(state: GameState, pig: GuineaPig) -> SaleResult:
 
     # Check for contract fulfillment
     contract_bonus = 0
-    matched_contract = state.contract_board.check_and_fulfill(pig)
+    matched_contract = state.contract_board.check_and_fulfill(pig, farm=state.farm)
     if matched_contract:
         contract_bonus = matched_contract.reward
         state.contract_board.remove_fulfilled()
