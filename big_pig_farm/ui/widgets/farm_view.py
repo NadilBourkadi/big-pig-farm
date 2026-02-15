@@ -9,6 +9,7 @@ from rich.text import Text
 from rich.style import Style
 
 from big_pig_farm.data.sprites import (
+    ANIM_FRAME_COUNT,
     ANIM_TICKS_PER_FRAME,
     get_pig_halfblock_sprite,
     get_facility_sprite,
@@ -565,8 +566,12 @@ class FarmView(Static):
             pig_hash = pig.id.int
             speed_var = (pig_hash >> 8) % 3 - 1   # -1, 0, or +1
             tpf = max(2, tpf + speed_var)
-            phase = pig_hash % (tpf * 2)
-            frame = ((self._render_tick + phase) // tpf) % 2
+            frame_count = ANIM_FRAME_COUNT.get(pig.display_state, 2)
+            # Ping-pong: 3 frames → 0,1,2,1,0,1,2,1 … (cycle_len=4)
+            cycle_len = (frame_count - 1) * 2 if frame_count > 1 else 1
+            phase = pig_hash % (tpf * cycle_len)
+            pos = ((self._render_tick + phase) // tpf) % cycle_len
+            frame = pos if pos < frame_count else cycle_len - pos
         else:
             frame = 0
 

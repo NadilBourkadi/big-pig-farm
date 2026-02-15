@@ -4,6 +4,7 @@ from enum import Enum
 from typing import Optional
 
 from big_pig_farm.data.sprite_engine import (
+    ANIM_FRAME_COUNT,
     ANIM_TICKS_PER_FRAME,
     HalfBlockRows,
     convert_pixels,
