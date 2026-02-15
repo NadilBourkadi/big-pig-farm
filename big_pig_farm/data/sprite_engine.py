@@ -189,7 +189,7 @@ PALETTES: dict[str, dict[str, str]] = {
     },
     "CREAM": {
         "fur":   "wheat1",
-        "shade": "#d9c49e",
+        "shade": "#e6d0a8",
         "dark":  "tan",
         "belly": "cornsilk1",
         "pupil": "grey7",
