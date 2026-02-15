@@ -48,18 +48,18 @@ class SimulationRunner:
         state = self.state
         controller = self.behavior_controller
 
-        # 1. Update all guinea pig needs
+        # 1. Rebuild spatial grid first — used by needs, behaviors, and collision
+        controller.collision.rebuild_spatial_grid()
+
+        # 2. Update all guinea pig needs
         game_minutes = delta_seconds
         pigs = state.get_pigs_list()
-        nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS)
+        nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS, controller.collision.spatial_grid)
         for pig in pigs:
             update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
 
-        # 2. Rebuild spatial grid for fast collision/blocking checks
-        controller.collision.rebuild_spatial_grid()
-
         # 3. Update behaviors
-        for pig in state.get_pigs_list():
+        for pig in pigs:
             controller.update(pig, delta_seconds)
 
         # 4. Separate any overlapping pigs
