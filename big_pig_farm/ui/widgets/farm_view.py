@@ -273,17 +273,13 @@ class FarmView(Static):
                     if info and info.wall_tint_grain:
                         grain_palette = info.wall_tint_grain
 
-        # Check if this is a corner of ANY area (not just the outer farm)
+        # Use pre-computed wall flags (set by FarmGrid._compute_wall_flags)
         is_corner = False
         is_horizontal = False
-        for area in farm.areas:
-            if (wx in (area.x1, area.x2) and wy in (area.y1, area.y2)):
-                is_corner = True
-                break
-            if (wy in (area.y1, area.y2)
-                    and area.x1 <= wx <= area.x2):
-                is_horizontal = True
-                break
+        if farm.is_valid_position(wx, wy):
+            wall_cell = farm.cells[wy][wx]
+            is_corner = wall_cell.is_corner
+            is_horizontal = wall_cell.is_horizontal_wall
 
         h = (wx * 11 + wy * 17) & 0xFFFF
         plank = plank_palette[h % len(plank_palette)]
@@ -409,13 +405,8 @@ class FarmView(Static):
                     plank = plank_palette[h % len(plank_palette)]
                     grain = grain_palette[(h >> 3) % len(grain_palette)]
 
-                    # Determine wall orientation from area
-                    is_h = False
-                    for area in farm.areas:
-                        if wy in (area.y1, area.y2) and area.x1 <= wx <= area.x2:
-                            is_h = True
-                            break
-                    if is_h:
+                    # Use pre-computed wall flags for orientation
+                    if cell.is_horizontal_wall or cell.is_corner:
                         self._char_buffer[sy][sx] = "▀"
                         self._style_buffer[sy][sx] = Style(color=plank, bgcolor=grain)
                     else:

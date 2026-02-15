@@ -33,6 +33,9 @@ class Cell(BaseModel):
     is_walkable: bool = True
     area_id: Optional[UUID] = None  # Which FarmArea this cell belongs to
     is_tunnel: bool = False  # True for tunnel corridor cells
+    # Pre-computed wall flags (set by FarmGrid._compute_wall_flags)
+    is_corner: bool = False
+    is_horizontal_wall: bool = False
 
 
 class FarmGrid(BaseModel):
@@ -48,6 +51,8 @@ class FarmGrid(BaseModel):
 
     # Cached list of walkable interior positions (invalidated on grid changes)
     _walkable_cache: Optional[list[tuple[int, int]]] = None
+    # O(1) area lookup by UUID
+    _area_lookup: dict[UUID, FarmArea] = {}
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -59,10 +64,36 @@ class FarmGrid(BaseModel):
                 for _ in range(self.height)
             ]
         self._walkable_cache = None
+        self._area_lookup = {a.id: a for a in self.areas}
 
     def _invalidate_walkable_cache(self) -> None:
         """Invalidate the cached list of walkable positions."""
         self._walkable_cache = None
+
+    def _compute_wall_flags(self) -> None:
+        """Pre-compute is_corner and is_horizontal_wall for all wall cells.
+
+        This replaces the per-area iteration in rendering that previously
+        looped over all areas for every wall cell every frame.
+        """
+        # Reset all flags first
+        for row in self.cells:
+            for cell in row:
+                cell.is_corner = False
+                cell.is_horizontal_wall = False
+
+        for area in self.areas:
+            for x in range(area.x1, area.x2 + 1):
+                for y in range(area.y1, area.y2 + 1):
+                    if not self.is_valid_position(x, y):
+                        continue
+                    cell = self.cells[y][x]
+                    if cell.cell_type != CellType.WALL:
+                        continue
+                    if x in (area.x1, area.x2) and y in (area.y1, area.y2):
+                        cell.is_corner = True
+                    elif y in (area.y1, area.y2) and area.x1 <= x <= area.x2:
+                        cell.is_horizontal_wall = True
 
     def _add_border_walls(self) -> None:
         """Add walls around the farm perimeter."""
@@ -380,17 +411,11 @@ class FarmGrid(BaseModel):
         aid = self.cells[y][x].area_id
         if aid is None:
             return None
-        for area in self.areas:
-            if area.id == aid:
-                return area
-        return None
+        return self._area_lookup.get(aid)
 
     def get_area_by_id(self, area_id: UUID) -> Optional[FarmArea]:
         """Get an area by its UUID."""
-        for area in self.areas:
-            if area.id == area_id:
-                return area
-        return None
+        return self._area_lookup.get(area_id)
 
     def get_biome_at(self, x: int, y: int) -> Optional[BiomeType]:
         """Get the biome type at a position."""
@@ -432,6 +457,7 @@ class FarmGrid(BaseModel):
                 if cell.area_id is None and not cell.is_tunnel:
                     cell.is_walkable = False
 
+        self._compute_wall_flags()
         self._invalidate_walkable_cache()
 
     def _rebuild_tunnels(self) -> None:
@@ -478,6 +504,7 @@ class FarmGrid(BaseModel):
     def add_area(self, area: FarmArea) -> None:
         """Register an area and carve its walls and interior cells."""
         self.areas.append(area)
+        self._area_lookup[area.id] = area
         # Set wall cells around area perimeter
         for x in range(area.x1, area.x2 + 1):
             for y in range(area.y1, area.y2 + 1):
@@ -494,6 +521,7 @@ class FarmGrid(BaseModel):
                     cell.cell_type = CellType.FLOOR
                     cell.is_walkable = True
                     cell.area_id = area.id
+        self._compute_wall_flags()
         self._invalidate_walkable_cache()
 
     def connect_areas(self, area_a: FarmArea, area_b: FarmArea) -> list[TunnelConnection]:
@@ -560,6 +588,7 @@ class FarmGrid(BaseModel):
             self._carve_one_horizontal_tunnel(area_a.id, area_b.id, t_x1, t_x2, center_a),
             self._carve_one_horizontal_tunnel(area_a.id, area_b.id, t_x1, t_x2, center_b),
         ]
+        self._compute_wall_flags()
         self._invalidate_walkable_cache()
         return tunnels
 
@@ -613,6 +642,7 @@ class FarmGrid(BaseModel):
             self._carve_one_vertical_tunnel(area_a.id, area_b.id, t_y1, t_y2, center_a),
             self._carve_one_vertical_tunnel(area_a.id, area_b.id, t_y1, t_y2, center_b),
         ]
+        self._compute_wall_flags()
         self._invalidate_walkable_cache()
         return tunnels
 
