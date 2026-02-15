@@ -253,32 +253,36 @@ class BehaviorController:
             self._start_wandering(pig)
             return
 
-        # Try each facility type in order, and verify we can path there
-        for facility_type in facility_types:
-            facilities = self.facility_manager.get_reachable_facilities(pig, facility_type)
-            if not facilities:
-                continue
+        self.facility_manager.begin_decision()
+        try:
+            # Try each facility type in order, and verify we can path there
+            for facility_type in facility_types:
+                facilities = self.facility_manager.get_reachable_facilities(pig, facility_type)
+                if not facilities:
+                    continue
 
-            # Sort by spread score so we try less crowded facilities first
-            ranked = self.facility_manager.rank_facilities_by_spread(pig, facilities)
+                # Sort by spread score so we try less crowded facilities first
+                ranked = self.facility_manager.rank_facilities_by_spread(pig, facilities)
 
-            # Try each facility in order until we find one with an open point
-            for facility in ranked:
-                target = self.facility_manager.find_open_interaction_point(pig, facility)
-                if target:
-                    self._set_path_to(pig, target)
-                    # Verify path was actually set
-                    if pig.path:
-                        pig.log_behavior(f"Going to {facility.name} at ({target[0]}, {target[1]})")
-                        pig.behavior_state = BehaviorState.WANDERING
-                        pig.target_facility_id = facility.id
-                        pig.target_description = f"going to {facility.name}"
-                        return
+                # Try each facility in order until we find one with an open point
+                for facility in ranked:
+                    target = self.facility_manager.find_open_interaction_point(pig, facility)
+                    if target:
+                        self._set_path_to(pig, target)
+                        # Verify path was actually set
+                        if pig.path:
+                            pig.log_behavior(f"Going to {facility.name} at ({target[0]}, {target[1]})")
+                            pig.behavior_state = BehaviorState.WANDERING
+                            pig.target_facility_id = facility.id
+                            pig.target_description = f"going to {facility.name}"
+                            return
+                        else:
+                            pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
+                            self.facility_manager.add_failed_facility(pig.id, facility.id)
                     else:
-                        pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
-                        self.facility_manager.add_failed_facility(pig.id, facility.id)
-                else:
-                    pig.log_behavior(f"All points at {facility.name} occupied, trying alternatives")
+                        pig.log_behavior(f"All points at {facility.name} occupied, trying alternatives")
+        finally:
+            self.facility_manager.end_decision()
 
         # No reachable facilities found
         pig.log_behavior(f"No reachable {need} facility, wandering")
@@ -287,34 +291,38 @@ class BehaviorController:
 
     def _seek_sleep(self, pig: GuineaPig) -> None:
         """Find a place to sleep."""
-        hideouts = self.facility_manager.get_reachable_facilities(pig, FacilityType.HIDEOUT)
+        self.facility_manager.begin_decision()
+        try:
+            hideouts = self.facility_manager.get_reachable_facilities(pig, FacilityType.HIDEOUT)
 
-        if not hideouts:
-            # No reachable hideout - sleep where standing
-            pig.path = []
-            pig.target_position = None
-            pig.target_facility_id = None
-            pig.target_description = "sleeping"
-            pig.behavior_state = BehaviorState.SLEEPING
-            pig.log_behavior("No reachable hideout, sleeping where standing")
-            return
+            if not hideouts:
+                # No reachable hideout - sleep where standing
+                pig.path = []
+                pig.target_position = None
+                pig.target_facility_id = None
+                pig.target_description = "sleeping"
+                pig.behavior_state = BehaviorState.SLEEPING
+                pig.log_behavior("No reachable hideout, sleeping where standing")
+                return
 
-        ranked = self.facility_manager.rank_facilities_by_spread(pig, hideouts)
-        for hideout in ranked:
-            target = self.facility_manager.find_open_interaction_point(pig, hideout)
-            if target:
-                self._set_path_to(pig, target)
-                # Verify path was actually set
-                if pig.path:
-                    pig.log_behavior(f"Going to {hideout.name} to sleep")
-                    pig.behavior_state = BehaviorState.WANDERING
-                    pig.target_facility_id = hideout.id
-                    pig.target_description = f"going to {hideout.name}"
-                    return
-                else:
-                    # Path failed - mark as failed and try next hideout
-                    pig.log_behavior(f"Path to {hideout.name} failed, trying alternatives")
-                    self.facility_manager.add_failed_facility(pig.id, hideout.id)
+            ranked = self.facility_manager.rank_facilities_by_spread(pig, hideouts)
+            for hideout in ranked:
+                target = self.facility_manager.find_open_interaction_point(pig, hideout)
+                if target:
+                    self._set_path_to(pig, target)
+                    # Verify path was actually set
+                    if pig.path:
+                        pig.log_behavior(f"Going to {hideout.name} to sleep")
+                        pig.behavior_state = BehaviorState.WANDERING
+                        pig.target_facility_id = hideout.id
+                        pig.target_description = f"going to {hideout.name}"
+                        return
+                    else:
+                        # Path failed - mark as failed and try next hideout
+                        pig.log_behavior(f"Path to {hideout.name} failed, trying alternatives")
+                        self.facility_manager.add_failed_facility(pig.id, hideout.id)
+        finally:
+            self.facility_manager.end_decision()
 
         # No reachable hideout - sleep where standing
         pig.path = []
@@ -332,26 +340,30 @@ class BehaviorController:
             FacilityType.TUNNEL,
         ]
 
-        # Collect all reachable play facilities across types and rank together
-        all_play: list[Facility] = []
-        for facility_type in play_types:
-            all_play.extend(self.facility_manager.get_reachable_facilities(pig, facility_type))
+        self.facility_manager.begin_decision()
+        try:
+            # Collect all reachable play facilities across types and rank together
+            all_play: list[Facility] = []
+            for facility_type in play_types:
+                all_play.extend(self.facility_manager.get_reachable_facilities(pig, facility_type))
 
-        if all_play:
-            ranked = self.facility_manager.rank_facilities_by_spread(pig, all_play)
-            for facility in ranked:
-                target = self.facility_manager.find_open_interaction_point(pig, facility)
-                if target:
-                    self._set_path_to(pig, target)
-                    if pig.path:
-                        pig.log_behavior(f"Going to {facility.name} to play")
-                        pig.behavior_state = BehaviorState.WANDERING
-                        pig.target_facility_id = facility.id
-                        pig.target_description = f"going to {facility.name}"
-                        return
-                    else:
-                        pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
-                        self.facility_manager.add_failed_facility(pig.id, facility.id)
+            if all_play:
+                ranked = self.facility_manager.rank_facilities_by_spread(pig, all_play)
+                for facility in ranked:
+                    target = self.facility_manager.find_open_interaction_point(pig, facility)
+                    if target:
+                        self._set_path_to(pig, target)
+                        if pig.path:
+                            pig.log_behavior(f"Going to {facility.name} to play")
+                            pig.behavior_state = BehaviorState.WANDERING
+                            pig.target_facility_id = facility.id
+                            pig.target_description = f"going to {facility.name}"
+                            return
+                        else:
+                            pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
+                            self.facility_manager.add_failed_facility(pig.id, facility.id)
+        finally:
+            self.facility_manager.end_decision()
 
         # No reachable play facilities - just wander playfully
         pig.log_behavior("No reachable play facility, wandering playfully")
@@ -678,8 +690,16 @@ class BehaviorController:
         # After some time blocked, try to find an alternative facility
         if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
             current_target = pig.target_position
-            if current_target and self.facility_manager.try_alternative_facility(pig, current_target):
-                self._blocked_timers[pig.id] = 0
+            if current_target:
+                self.facility_manager.begin_decision()
+                try:
+                    found = self.facility_manager.try_alternative_facility(pig, current_target)
+                finally:
+                    self.facility_manager.end_decision()
+                if found:
+                    self._blocked_timers[pig.id] = 0
+                elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
+                    self._give_up_and_fallback(pig)
             elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:
                 self._give_up_and_fallback(pig)
 
