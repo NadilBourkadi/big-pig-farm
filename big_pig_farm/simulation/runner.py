@@ -55,36 +55,39 @@ class SimulationRunner:
         for pig in pigs:
             update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
 
-        # 2. Update behaviors
+        # 2. Rebuild spatial grid for fast collision/blocking checks
+        controller.collision.rebuild_spatial_grid()
+
+        # 3. Update behaviors
         for pig in state.get_pigs_list():
             controller.update(pig, delta_seconds)
 
-        # 3. Separate any overlapping pigs
+        # 4. Separate any overlapping pigs
         controller.separate_overlapping_pigs()
 
-        # 4. Advance pregnancies
+        # 5. Advance pregnancies
         game_hours = game_minutes / 60.0
         advance_pregnancies(state, game_hours)
 
-        # 5. Age pigs and cleanup controller state for deaths
+        # 6. Age pigs and cleanup controller state for deaths
         deaths = age_all_pigs(state, game_hours)
         for dead_pig in deaths:
             controller.cleanup_dead_pig(dead_pig.id)
 
-        # 6. Cull surplus breeders
+        # 7. Cull surplus breeders
         cull_surplus_breeders(state)
 
-        # 7. Auto-sell marked pigs that reached adulthood
+        # 8. Auto-sell marked pigs that reached adulthood
         sold_pigs = sell_marked_adults(state)
         for pig_name, total, pig_id in sold_pigs:
             controller.cleanup_dead_pig(pig_id)
             if self.on_pig_sold:
                 self.on_pig_sold(pig_name, total, pig_id)
 
-        # 8. Check for breeding
+        # 9. Check for breeding
         check_breeding_opportunities(state)
 
-        # 9. Check contract refresh/expiry
+        # 10. Check contract refresh/expiry
         game_day = state.game_time.day
         board = state.contract_board
         board.check_expiry(game_day)
@@ -94,11 +97,11 @@ class SimulationRunner:
             board.active_contracts.extend(new_contracts)
             board.last_refresh_day = game_day
 
-        # 10. Debug logging
+        # 11. Debug logging
         if self.debug_logger:
             self.debug_logger.tick(state, controller)
 
-        # 11. Auto-save every ~30 seconds (300 ticks)
+        # 12. Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1
         if self._save_counter >= 300:
             self._save_counter = 0
