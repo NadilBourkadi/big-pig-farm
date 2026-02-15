@@ -215,7 +215,11 @@ class Facility(BaseModel):
 
         Returns cells along the front and sides of the facility, filtering out
         any cells with negative coordinates (which would be out of bounds).
+        Computed once on first access (facilities are immutable once placed).
         """
+        cached = getattr(self, "_interaction_points_cache", None)
+        if cached is not None:
+            return cached
         points = []
         # Add cells along the front (bottom) of the facility
         for dx in range(self.width):
@@ -232,6 +236,7 @@ class Facility(BaseModel):
             x, y = self.position_x + self.width, self.position_y + dy
             if x >= 0 and y >= 0:
                 points.append((x, y))
+        object.__setattr__(self, "_interaction_points_cache", points)
         return points
 
     @property
