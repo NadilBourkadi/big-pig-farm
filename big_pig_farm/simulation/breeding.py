@@ -32,9 +32,10 @@ from big_pig_farm.entities.genetics import calculate_target_probability
 def check_breeding_opportunities(game_state) -> int:
     """Check for and process breeding opportunities. Returns number of births."""
     births = 0
+    pigs = game_state.get_pigs_list()
 
     # Process existing pregnancies
-    for pig in game_state.get_pigs_list():
+    for pig in pigs:
         if pig.is_pregnant:
             if _check_birth(pig, game_state):
                 births += 1
@@ -45,7 +46,7 @@ def check_breeding_opportunities(game_state) -> int:
     # Auto-pair from breeding program if slot is empty
     _auto_pair_from_program(game_state)
 
-    # Check for new breeding pairs
+    # Check for new breeding pairs (re-fetch: births may have changed the list)
     if not game_state.is_at_capacity:
         _check_for_new_breeding(game_state)
 
@@ -264,15 +265,10 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
 
 def _check_for_new_breeding(game_state) -> None:
     """Check if any pigs should start breeding."""
-    # Get eligible males and females
-    males = [
-        p for p in game_state.get_pigs_list()
-        if p.gender == Gender.MALE and p.can_breed
-    ]
-    females = [
-        p for p in game_state.get_pigs_list()
-        if p.gender == Gender.FEMALE and p.can_breed and not p.is_pregnant
-    ]
+    pigs = game_state.get_pigs_list()
+    # Get eligible males and females from a single list scan
+    males = [p for p in pigs if p.gender == Gender.MALE and p.can_breed]
+    females = [p for p in pigs if p.gender == Gender.FEMALE and p.can_breed and not p.is_pregnant]
 
     if not males or not females:
         return
@@ -496,12 +492,10 @@ def _auto_pair_from_program(game_state) -> None:
         else:
             return
 
-    males = [
-        p for p in game_state.get_pigs_list()
-        if p.gender == Gender.MALE and p.can_breed and not p.breeding_locked
-    ]
+    pigs = game_state.get_pigs_list()
+    males = [p for p in pigs if p.gender == Gender.MALE and p.can_breed and not p.breeding_locked]
     females = [
-        p for p in game_state.get_pigs_list()
+        p for p in pigs
         if p.gender == Gender.FEMALE and p.can_breed
         and not p.is_pregnant and not p.breeding_locked
     ]
