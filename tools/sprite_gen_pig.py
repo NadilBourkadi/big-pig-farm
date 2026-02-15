@@ -155,7 +155,7 @@ def generate_close_pig_source(
 ) -> str:
     """Generate pig_sprites_close.py source."""
     pig_char_map = {
-        "dark": "d", "fur": "f", "belly": "b",
+        "dark": "d", "fur": "f", "shade": "s", "belly": "b",
         "eye": "e", "pupil": "p", "nose": "n", "ear": "a", "paw": "w",
     }
 
@@ -179,7 +179,7 @@ def generate_close_pig_source(
         "",
         "# Character maps \u2014 one char per palette key",
         "_PIG_CHAR = {",
-        '    ".": None, "d": "dark", "f": "fur", "b": "belly",',
+        '    ".": None, "d": "dark", "f": "fur", "s": "shade", "b": "belly",',
         '    "e": "eye", "p": "pupil", "n": "nose", "a": "ear", "w": "paw",',
         "}",
         "",
