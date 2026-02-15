@@ -16,22 +16,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from rich.console import Console
-from rich.text import Text
 
 from big_pig_farm.data.sprite_engine import (
     convert_pixels,
     render_to_rich_text,
-    scale_pixel_grid,
     PALETTES,
 )
 from big_pig_farm.data.pig_portraits import generate_portrait
-from big_pig_farm.data.pig_sprite_lookup import get_pig_pixel_sprite
 from big_pig_farm.data.pig_sprites import PIG_PIXELS_ADULT, PIG_PIXELS_BABY
 from big_pig_farm.data.facility_pixels import (
     FACILITY_PALETTES,
     FACILITY_PIXELS,
     FACILITY_PIXELS_FAR,
 )
+from big_pig_farm.data.facility_pixels_close import FACILITY_PIXELS_CLOSE
+from big_pig_farm.data.pig_sprites_close import PIG_PIXELS_CLOSE_ADULT, PIG_PIXELS_CLOSE_BABY
 
 console = Console()
 
@@ -75,6 +74,52 @@ def preview_sprites() -> None:
         console.print(f"  {label}:")
         for line_text in str(rich_text).split("\n"):
             console.print(f"    {line_text}")
+        console.print()
+
+
+def preview_sprites_close() -> None:
+    """Render all pig sprites at close zoom for each color."""
+    console.print("\n[bold underline]PIG SPRITES (Close Zoom)[/]\n")
+
+    colors = ["BLACK", "CHOCOLATE", "GOLDEN", "CREAM"]
+    states = [
+        "idle_right", "walking_right", "walking_right_1",
+        "eating_right", "eating_right_1",
+        "sleeping_right", "sleeping_right_1",
+        "happy_right", "sad_right",
+    ]
+
+    for color in colors:
+        console.print(f"[bold]{color}[/]")
+        palette = PALETTES[color]
+
+        for state in states:
+            if state not in PIG_PIXELS_CLOSE_ADULT:
+                continue
+            grid = PIG_PIXELS_CLOSE_ADULT[state]
+            converted = convert_pixels(grid, palette)
+            rich_text = render_to_rich_text(converted)
+            label = state.replace("_", " ").title()
+            console.print(f"  {label}:")
+            for line in rich_text.split():
+                console.print(f"    ", end="")
+                console.print(line)
+            console.print()
+
+    # Baby close-zoom
+    console.print("[bold]BABY SPRITES — Close Zoom (Black)[/]")
+    palette = PALETTES["BLACK"]
+    for state in ["idle_right", "walking_right", "walking_right_1", "sleeping_right", "sleeping_right_1"]:
+        if state not in PIG_PIXELS_CLOSE_BABY:
+            continue
+        grid = PIG_PIXELS_CLOSE_BABY[state]
+        converted = convert_pixels(grid, palette)
+        rich_text = render_to_rich_text(converted)
+        label = state.replace("_", " ").title()
+        console.print(f"  {label}:")
+        for line in rich_text.split():
+            console.print(f"    ", end="")
+            console.print(line)
         console.print()
 
 
@@ -188,26 +233,30 @@ def preview_facilities() -> None:
             console.print(line)
         console.print()
 
-    # --- Close zoom (2x scaled) ---
-    console.print("[bold underline]FACILITY SPRITES (Close Zoom — 2x)[/]\n")
+    # --- Close zoom (hand-crafted) ---
+    console.print("[bold underline]FACILITY SPRITES (Close Zoom)[/]\n")
     for ftype in facility_types:
         palette = FACILITY_PALETTES.get(ftype)
         if palette is None:
             continue
 
-        grid = FACILITY_PIXELS.get(ftype)
-        if grid is None:
-            continue
-
         label = ftype.replace("_", " ").title()
-        scaled = scale_pixel_grid(grid, 2)
-        converted = convert_pixels(scaled, palette)
-        rich_text = render_to_rich_text(converted)
-        console.print(f"  [bold]{label}[/]:")
-        for line in rich_text.split():
-            console.print(f"    ", end="")
-            console.print(line)
-        console.print()
+        states = ["default"]
+        if ftype in consumable_types:
+            states = ["default", "empty", "full"]
+
+        for state_name in states:
+            key = ftype if state_name == "default" else f"{ftype}_{state_name}"
+            grid = FACILITY_PIXELS_CLOSE.get(key)
+            if grid is None:
+                continue
+            converted = convert_pixels(grid, palette)
+            rich_text = render_to_rich_text(converted)
+            console.print(f"  [bold]{label}[/] ({state_name}):")
+            for line in rich_text.split():
+                console.print(f"    ", end="")
+                console.print(line)
+            console.print()
 
 
 def main() -> None:
@@ -223,6 +272,7 @@ def main() -> None:
 
     if args.sprites or args.all:
         preview_sprites()
+        preview_sprites_close()
 
     if args.portraits or args.all:
         preview_portraits()

@@ -6,3 +6,7 @@ build/
 .pytest_cache/
 .venv/
 *.db
+
+# Sprite editor generated files
+tools/sprite_data.js
+tools/sprite_workspace/

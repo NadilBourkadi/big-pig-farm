@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A terminal-based idle simulation game where players manage a guinea pig farm"
 authors = ["Big Pig Farm Team"]
 readme = "README.md"
-packages = [{include = "big_pig_farm"}]
+packages = [{include = "big_pig_farm"}, {include = "tools"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -20,6 +20,8 @@ mypy = "^1.10.0"
 
 [tool.poetry.scripts]
 big-pig-farm = "big_pig_farm.main:main"
+sprite-editor = "tools.sprite_editor:main"
+sprite-preview = "tools.preview_sprite:main"
 
 [build-system]
 requires = ["poetry-core"]
