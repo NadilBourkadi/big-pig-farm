@@ -302,7 +302,7 @@ def get_pig_halfblock_sprite(
         base_color: Phenotype base color name (BLACK, CHOCOLATE, GOLDEN, CREAM).
         is_baby: Whether this is a baby pig.
         zoom: Current zoom level.
-        frame: Animation frame (0 = base, 1 = alternate). Ignored at far zoom.
+        frame: Animation frame index (0 or 1). Mapped to _1/_2 suffixed keys.
 
     Returns:
         Half-block rows with resolved colors for all zoom levels.
