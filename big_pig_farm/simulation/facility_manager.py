@@ -211,18 +211,20 @@ class FacilityManager:
         if not facilities:
             return []
 
+        # Pre-compute crowd counts once instead of per-facility-per-call
+        crowd_counts = {f.id: self.count_pigs_near_or_heading_to(pig, f) for f in facilities}
+
         def score(f: Facility) -> float:
             fx, fy = f.interaction_point
             dist = pig.position.distance_to(Position(x=float(fx), y=float(fy)))
-            crowd = self.count_pigs_near_or_heading_to(pig, f)
             return (dist * BEHAVIOR.FACILITY_DISTANCE_WEIGHT
-                    + crowd * BEHAVIOR.CROWDING_PENALTY
+                    + crowd_counts[f.id] * BEHAVIOR.CROWDING_PENALTY
                     + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE))
 
         ranked = sorted(facilities, key=score)
 
         # Chance to shuffle an uncrowded facility to the front
-        uncrowded = [f for f in ranked if self.count_pigs_near_or_heading_to(pig, f) == 0]
+        uncrowded = [f for f in ranked if crowd_counts[f.id] == 0]
         if uncrowded and random.random() < BEHAVIOR.UNCROWDED_CHANCE:
             pick = random.choice(uncrowded)
             ranked.remove(pick)
