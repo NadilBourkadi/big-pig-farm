@@ -1,5 +1,6 @@
 """Debug logger that writes periodic game state snapshots to a file."""
 
+import time
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
@@ -23,15 +24,19 @@ class DebugLogger:
         self._total_ticks = 0
         self._last_logs: dict[UUID, int] = {}  # pig_id -> log length at last snapshot
         self._last_event_count: int = 0
+        # Performance tracking
+        self._tick_times: list[float] = []  # ms per tick in current window
+        self._window_start: float = time.monotonic()
         # Start fresh each session
         self.path.write_text(
             f"=== Debug session started {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n\n"
         )
 
-    def tick(self, state: GameState, controller: BehaviorController) -> None:
+    def tick(self, state: GameState, controller: BehaviorController, tick_ms: float = 0.0) -> None:
         """Called every simulation tick. Writes a snapshot every SNAPSHOT_INTERVAL ticks."""
         self._total_ticks += 1
         self._tick_counter += 1
+        self._tick_times.append(tick_ms)
         if self._tick_counter < self.SNAPSHOT_INTERVAL:
             return
         self._tick_counter = 0
@@ -40,6 +45,20 @@ class DebugLogger:
     def _write_snapshot(self, state: GameState, controller: BehaviorController) -> None:
         now = datetime.now().strftime("%H:%M:%S")
         lines = [f"--- TICK {self._total_ticks} | {now} | speed={SPEED_DISPLAY[state.speed]} ---"]
+
+        # Performance stats for the window
+        if self._tick_times:
+            window_elapsed = time.monotonic() - self._window_start
+            n = len(self._tick_times)
+            avg_ms = sum(self._tick_times) / n
+            max_ms = max(self._tick_times)
+            actual_tps = n / window_elapsed if window_elapsed > 0 else 0
+            lines.append(
+                f"  PERF: {actual_tps:.1f} tps | tick avg={avg_ms:.2f}ms max={max_ms:.2f}ms"
+                f" | {n} ticks in {window_elapsed:.1f}s"
+            )
+            self._tick_times.clear()
+            self._window_start = time.monotonic()
 
         # Population summary
         pigs = state.get_pigs_list()

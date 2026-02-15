@@ -1,5 +1,6 @@
 """Simulation tick orchestration — runs all game systems each tick."""
 
+import time
 from typing import Callable, Optional, Protocol
 from uuid import UUID
 
@@ -45,6 +46,7 @@ class SimulationRunner:
 
     def tick(self, delta_seconds: float) -> None:
         """Process one simulation tick. delta_seconds is already speed-scaled."""
+        tick_start = time.perf_counter()
         state = self.state
         controller = self.behavior_controller
 
@@ -99,7 +101,8 @@ class SimulationRunner:
 
         # 11. Debug logging
         if self.debug_logger:
-            self.debug_logger.tick(state, controller)
+            tick_ms = (time.perf_counter() - tick_start) * 1000.0
+            self.debug_logger.tick(state, controller, tick_ms)
 
         # 12. Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1
