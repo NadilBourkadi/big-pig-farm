@@ -83,10 +83,10 @@ def preview_sprites_close() -> None:
 
     colors = ["BLACK", "CHOCOLATE", "GOLDEN", "CREAM"]
     states = [
-        "idle_right", "walking_right", "walking_right_1",
-        "eating_right", "eating_right_1",
-        "sleeping_right", "sleeping_right_1",
-        "happy_right", "sad_right",
+        "idle_right", "walking_right_1", "walking_right_2",
+        "eating_right_1", "eating_right_2",
+        "sleeping_right_1", "sleeping_right_2",
+        "happy_right_1", "happy_right_2", "sad_right",
     ]
 
     for color in colors:
@@ -109,7 +109,7 @@ def preview_sprites_close() -> None:
     # Baby close-zoom
     console.print("[bold]BABY SPRITES — Close Zoom (Black)[/]")
     palette = PALETTES["BLACK"]
-    for state in ["idle_right", "walking_right", "walking_right_1", "sleeping_right", "sleeping_right_1"]:
+    for state in ["idle_right", "walking_right_1", "walking_right_2", "sleeping_right_1", "sleeping_right_2"]:
         if state not in PIG_PIXELS_CLOSE_BABY:
             continue
         grid = PIG_PIXELS_CLOSE_BABY[state]

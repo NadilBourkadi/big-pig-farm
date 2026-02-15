@@ -49,26 +49,26 @@ _CLOSE_IDLE_R: PixelGrid = decode_sprite([
     "......dd............dd",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_WALKING_R: PixelGrid = decode_sprite([
+_CLOSE_WALKING_R_1: PixelGrid = decode_sprite([
     "................ddddaadd",
-    "...............dddfaafddd",
-    "......ddddddddddffffffffdd",
-    ".....dddddfffffdffffffffddd",
-    "....ddddffffffffffeeeeppffdd",
-    "...dddddffffffffffeeepppffdd",
-    "..ddffffffffffffffeeppppnndd",
-    ".dddffffffffffffffeepppfnndd",
-    "ddffffffffffffffffffffffffdd",
+    "....ddddddddddddddfaafddd",
+    "...ddssssssssffdffffffffdd",
+    "..ddsffffffffffdfffsssssddd",
+    ".ddsffffffffffffffseeeppsfdd",
+    "ddfffffffffffffffseeepppsffd",
+    "dffffffffffffffffseeppppsnnd",
+    "dfffffffffffffffffsepppsfnnd",
+    "dffffffffffffffffffssssfffdd",
     ".dffffffffffffffffffffffffd",
-    "..ddbbffffffffffffffffbbdd",
-    "...dbffffffffffffffffffbd",
-    "....ddbbbbbbbbbbbbbbbbdd",
+    "..ddsfffffffffffffffffbbdd",
+    "...dsffffffffffffffffffbd",
+    "...dddbbbbbbbbbbbbbbbbdd",
     "....ddbbbbbbbbbbbbbbbbdd",
     "...dwf................fwd",
     "...dww................wwd",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_EATING_R: PixelGrid = decode_sprite([
+_CLOSE_EATING_R_1: PixelGrid = decode_sprite([
     "................ddddaadd",
     "...............dddfaafddd",
     "......ddddddddddffffffffdd",
@@ -87,7 +87,7 @@ _CLOSE_EATING_R: PixelGrid = decode_sprite([
     ".....dww............wwd",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_HAPPY_R: PixelGrid = decode_sprite([
+_CLOSE_HAPPY_R_1: PixelGrid = decode_sprite([
     "................ddddaadd",
     "...............dddfaafddd",
     "......ddddddddddffffffffdd",
@@ -106,7 +106,7 @@ _CLOSE_HAPPY_R: PixelGrid = decode_sprite([
     ".....dww............wwd",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_WALKING_R_1: PixelGrid = decode_sprite([
+_CLOSE_WALKING_R_2: PixelGrid = decode_sprite([
     "",
     "................dddd..dd",
     "................dddd..dd",
@@ -125,7 +125,7 @@ _CLOSE_WALKING_R_1: PixelGrid = decode_sprite([
     "",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_EATING_R_1: PixelGrid = decode_sprite([
+_CLOSE_EATING_R_2: PixelGrid = decode_sprite([
     "................dddd..dd",
     "................dddd..dd",
     "......ddddddddddffffaaffdd",
@@ -144,7 +144,7 @@ _CLOSE_EATING_R_1: PixelGrid = decode_sprite([
     ".....dww............wwd",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_SLEEPING_R_1: PixelGrid = decode_sprite([
+_CLOSE_SLEEPING_R_2: PixelGrid = decode_sprite([
     "................ddddaadd",
     "...............dddfaafddd",
     "......ddddddddddffffffffdd",
@@ -163,7 +163,7 @@ _CLOSE_SLEEPING_R_1: PixelGrid = decode_sprite([
     ".....dww............wwd",
 ], _PIG_CHAR, width=28)
 
-_CLOSE_HAPPY_R_1: PixelGrid = decode_sprite([
+_CLOSE_HAPPY_R_2: PixelGrid = decode_sprite([
     "",
     "......ddddddddddffffaaffdd",
     ".....dddddfffffdffffaaffddd",
@@ -186,15 +186,15 @@ _CLOSE_HAPPY_R_1: PixelGrid = decode_sprite([
 # Build combined dict — right-facing raw grids mapped to all states
 PIG_PIXELS_CLOSE_ADULT: dict[str, PixelGrid] = build_mirrored_dict({
     "idle_right":            _CLOSE_IDLE_R,
-    "walking_right":         _CLOSE_WALKING_R,
-    "eating_right":          _CLOSE_EATING_R,
-    "sleeping_right":        _CLOSE_EATING_R,  # same as eating_right
-    "happy_right":           _CLOSE_HAPPY_R,
-    "sad_right":             _CLOSE_HAPPY_R,  # same as happy_right
     "walking_right_1":       _CLOSE_WALKING_R_1,
     "eating_right_1":        _CLOSE_EATING_R_1,
-    "sleeping_right_1":      _CLOSE_SLEEPING_R_1,
+    "sleeping_right_1":      _CLOSE_EATING_R_1,  # same as eating frame 1
     "happy_right_1":         _CLOSE_HAPPY_R_1,
+    "sad_right":             _CLOSE_HAPPY_R_1,  # same as happy frame 1
+    "walking_right_2":       _CLOSE_WALKING_R_2,
+    "eating_right_2":        _CLOSE_EATING_R_2,
+    "sleeping_right_2":      _CLOSE_SLEEPING_R_2,
+    "happy_right_2":         _CLOSE_HAPPY_R_2,
 })
 
 
@@ -219,7 +219,7 @@ _BABY_IDLE_R: PixelGrid = decode_sprite([
     "...dww....wwd",
 ], _PIG_CHAR, width=16)
 
-_BABY_WALKING_R: PixelGrid = decode_sprite([
+_BABY_WALKING_R_1: PixelGrid = decode_sprite([
     "........ddaadd",
     ".......dddfaafd",
     "..ddddddffffffdd",
@@ -234,7 +234,7 @@ _BABY_WALKING_R: PixelGrid = decode_sprite([
     ".dww........wwd",
 ], _PIG_CHAR, width=16)
 
-_BABY_SLEEPING_R: PixelGrid = decode_sprite([
+_BABY_SLEEPING_R_1: PixelGrid = decode_sprite([
     "........ddaadd",
     ".......dddfaafd",
     "..ddddddffffffdd",
@@ -249,7 +249,7 @@ _BABY_SLEEPING_R: PixelGrid = decode_sprite([
     "...dww....wwd",
 ], _PIG_CHAR, width=16)
 
-_BABY_WALKING_R_1: PixelGrid = decode_sprite([
+_BABY_WALKING_R_2: PixelGrid = decode_sprite([
     "........dd..dd",
     "........dd..dd",
     "..ddddddffaaffdd",
@@ -264,7 +264,7 @@ _BABY_WALKING_R_1: PixelGrid = decode_sprite([
     "...dww....wwd",
 ], _PIG_CHAR, width=16)
 
-_BABY_SLEEPING_R_1: PixelGrid = decode_sprite([
+_BABY_SLEEPING_R_2: PixelGrid = decode_sprite([
     "........ddaadd",
     ".......dddfaafd",
     "..ddddddffffffdd",
@@ -283,10 +283,10 @@ _BABY_SLEEPING_R_1: PixelGrid = decode_sprite([
 # Build combined dict — right-facing raw grids mapped to all states
 PIG_PIXELS_CLOSE_BABY: dict[str, PixelGrid] = build_mirrored_dict({
     "idle_right":            _BABY_IDLE_R,
-    "walking_right":         _BABY_WALKING_R,
-    "sleeping_right":        _BABY_SLEEPING_R,
     "walking_right_1":       _BABY_WALKING_R_1,
     "sleeping_right_1":      _BABY_SLEEPING_R_1,
+    "walking_right_2":       _BABY_WALKING_R_2,
+    "sleeping_right_2":      _BABY_SLEEPING_R_2,
 })
 
 # fmt: on

@@ -34,18 +34,20 @@ def get_pig_pixel_sprite(
 ) -> PixelGrid:
     """Look up the pixel grid for a pig sprite.
 
-    Falls back gracefully: missing state -> idle, missing frame -> frame 0.
+    Falls back gracefully: missing state -> idle, missing frame -> base.
+    Animation frames use 1-indexed suffixes (_1, _2) in sprite dicts.
     Close zoom checks hand-crafted sprites first, falls back to 2x scaling.
     Far zoom returns tiny 7x6 (adult) or 5x4 (baby) sprites.
     """
     key = f"{state}_{direction}"
 
+    # Animation frames use 1-indexed keys: walking_right_1 (frame 0), _2 (frame 1)
+    anim_key = f"{key}_{frame + 1}"
+
     if far_zoom:
         sprites = PIG_PIXELS_FAR_BABY if is_baby else PIG_PIXELS_FAR_ADULT
-        if frame > 0:
-            anim_key = f"{key}_{frame}"
-            if anim_key in sprites:
-                return sprites[anim_key]
+        if anim_key in sprites:
+            return sprites[anim_key]
         if key not in sprites:
             key = f"idle_{direction}"
         return sprites.get(key, sprites["idle_right"])
@@ -53,19 +55,18 @@ def get_pig_pixel_sprite(
     # Normal zoom
     sprites = PIG_PIXELS_BABY if is_baby else PIG_PIXELS_ADULT
 
-    # Try animated frame variant first
-    if frame > 0:
-        anim_key = f"{key}_{frame}"
+    # Try 1-indexed frame key first
+    if close_zoom:
+        result = _lookup_close(anim_key, direction, is_baby)
+        if result is not None:
+            return result
+    if anim_key in sprites:
+        grid = sprites[anim_key]
         if close_zoom:
-            result = _lookup_close(anim_key, direction, is_baby)
-            if result is not None:
-                return result
-        if anim_key in sprites:
-            grid = sprites[anim_key]
-            if close_zoom:
-                return scale_pixel_grid(grid, 2)
-            return grid
+            return scale_pixel_grid(grid, 2)
+        return grid
 
+    # Fall back to bare key (non-animated states like idle_right)
     if close_zoom:
         result = _lookup_close(key, direction, is_baby)
         if result is not None:
