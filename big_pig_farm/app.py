@@ -34,6 +34,7 @@ class BigPigFarmApp(App):
 
     def __init__(self, debug: bool = False):
         super().__init__()
+        self.debug_mode = debug
         self.save_manager = CombinedSaveManager()
         self.pig_to_follow: GuineaPig | None = None  # Set by pig list/detail screens
 
