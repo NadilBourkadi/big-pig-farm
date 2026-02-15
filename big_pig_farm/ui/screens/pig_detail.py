@@ -14,6 +14,7 @@ from big_pig_farm.data.sprite_engine import (
 )
 from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.market import calculate_pig_value, calculate_pig_value_breakdown
+from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.genetics import carrier_summary
@@ -97,6 +98,29 @@ class PigDetailPanel(Static):
         lines.append(f"  Rarity: {pig.phenotype.rarity.value.title()}")
         if pig.origin_tag:
             lines.append(f"  Origin: {pig.origin_tag}")
+
+        # Area/biome info
+        if pig.current_area_id:
+            current_area = self.state.farm.get_area_by_id(pig.current_area_id)
+            if current_area:
+                biome_name = BIOMES[current_area.biome].display_name
+                lines.append(f"  Area: {current_area.name} ({biome_name})")
+        if pig.birth_area_id:
+            birth_area = self.state.farm.get_area_by_id(pig.birth_area_id)
+            if birth_area:
+                biome_name = BIOMES[birth_area.biome].display_name
+                lines.append(f"  Born in: {birth_area.name} ({biome_name})")
+        if pig.preferred_biome:
+            try:
+                pref = BiomeType(pig.preferred_biome)
+                pref_name = BIOMES[pref].display_name
+                in_pref = (pig.current_area_id and self.state.farm.get_area_by_id(pig.current_area_id)
+                           and self.state.farm.get_area_by_id(pig.current_area_id).biome == pref)
+                icon = " [green]*[/]" if in_pref else ""
+                lines.append(f"  Preferred biome: {pref_name}{icon}")
+            except ValueError:
+                pass
+
         breakdown = calculate_pig_value_breakdown(pig, self.state)
         lines.append(f"  Sale Value: {format_currency(breakdown['total'])}")
         if breakdown["rarity_mult"] != 1.0:
