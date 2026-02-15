@@ -224,7 +224,17 @@ function buildSpriteTree() {
         const items = document.createElement('div');
         items.className = 'sprite-items';
 
-        for (const key of Object.keys(sprites[group])) {
+        // Sort keys so animation frames group together (walking_right_1, _2 adjacent)
+        const sortedKeys = Object.keys(sprites[group]).sort((a, b) => {
+            const baseA = a.replace(/_\d+$/, '');
+            const baseB = b.replace(/_\d+$/, '');
+            if (baseA !== baseB) return baseA.localeCompare(baseB);
+            const numA = (a.match(/_(\d+)$/) || [, '0'])[1];
+            const numB = (b.match(/_(\d+)$/) || [, '0'])[1];
+            return parseInt(numA) - parseInt(numB);
+        });
+
+        for (const key of sortedKeys) {
             const item = document.createElement('div');
             item.className = 'sprite-item';
             item.dataset.group = group;
