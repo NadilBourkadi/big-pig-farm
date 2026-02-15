@@ -16,7 +16,10 @@ from big_pig_farm.data.config import BREEDING
 from big_pig_farm.simulation.breeding_program import (
     BreedingProgram, should_keep_pig, breeding_value, diversity_value, _heterozygosity_count,
 )
-from big_pig_farm.simulation.breeding import _auto_pair_from_program, _apply_breeding_filter, cull_surplus_breeders
+from big_pig_farm.simulation.breeding import (
+    _auto_pair_from_program, _apply_breeding_filter, cull_surplus_breeders,
+    _would_break_gender_balance,
+)
 from big_pig_farm.game.state import GameState
 
 
@@ -669,10 +672,10 @@ class TestBreedingValueAge:
 class TestCullPopulationFloor:
     """Tests for the MIN_BREEDING_POPULATION floor in culling."""
 
-    def test_cull_respects_min_population(self):
-        """Should not mark adults when doing so drops below MIN_BREEDING_POPULATION."""
+    def test_cull_at_min_population_uses_active_replacement(self):
+        """At MIN_BREEDING_POPULATION, surplus culling doesn't fire but active replacement does."""
         state = GameState()
-        # Create exactly MIN_BREEDING_POPULATION adults
+        # Create exactly MIN_BREEDING_POPULATION adults (all non-matching)
         for i in range(BREEDING.MIN_BREEDING_POPULATION):
             gender = Gender.MALE if i == 0 else Gender.FEMALE
             pig = _make_pig(f"Pig{i}", gender)
@@ -686,8 +689,9 @@ class TestCullPopulationFloor:
         )
 
         cull_surplus_breeders(state)
-        # No pigs should be marked because we're at the floor
-        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+        # Active replacement marks exactly 1 non-matching pig
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
 
     def test_cull_sells_seniors_first(self):
         """Should sell seniors before young adults with equal genetics."""
@@ -843,3 +847,259 @@ class TestCullWithDiversity:
         marked_names = {p.name for p in marked}
         # Senior should be culled despite unique phenotype — can't breed
         assert "SeniorGold" in marked_names
+
+
+# ─── Active replacement tests ───
+
+
+class TestActiveReplacement:
+    """Tests for the active replacement path in cull_surplus_breeders()."""
+
+    def test_non_matching_marked_at_stock_limit(self):
+        """A non-matching adult is marked for sale even when at stock limit."""
+        state = GameState()
+        # 2 matching + 2 non-matching = 4 adults at stock_limit=4
+        state.add_guinea_pig(_make_pig("Good1", Gender.MALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("Good2", Gender.FEMALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("Bad1", Gender.MALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("Bad2", Gender.FEMALE, e_locus=("E", "E")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+        assert "Bad" in marked[0].name
+
+    def test_all_matching_no_replacement(self):
+        """No replacement when all adults match the target."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("G1", Gender.MALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("G2", Gender.FEMALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("G3", Gender.FEMALE, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_gender_balance_respected(self):
+        """Never sells the last male or last female."""
+        state = GameState()
+        # 1 male (non-matching) + 3 females (non-matching)
+        state.add_guinea_pig(_make_pig("OnlyMale", Gender.MALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("F2", Gender.FEMALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("F3", Gender.FEMALE, e_locus=("E", "E")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        # Should mark a female, not the only male
+        assert len(marked) == 1
+        assert marked[0].gender == Gender.FEMALE
+
+    def test_pregnant_pigs_skipped(self):
+        """Pregnant pigs are never marked by active replacement."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE, e_locus=("e", "e")))
+        pregnant = _make_pig("PregnantBad", Gender.FEMALE, e_locus=("E", "E"))
+        pregnant.is_pregnant = True
+        state.add_guinea_pig(pregnant)
+        # Another non-matching female (not pregnant)
+        state.add_guinea_pig(_make_pig("Bad", Gender.FEMALE, e_locus=("E", "E")))
+        # Pad to stock_limit so active replacement fires (len == limit)
+        state.add_guinea_pig(_make_pig("M2", Gender.MALE, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        assert not pregnant.marked_for_sale
+        # The non-pregnant non-matching female should be marked instead
+        bad = next(p for p in state.get_pigs_list() if p.name == "Bad")
+        assert bad.marked_for_sale
+
+    def test_disabled_program_no_replacement(self):
+        """Disabled program never triggers active replacement."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE, e_locus=("E", "E")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=False,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_no_targets_no_replacement(self):
+        """No replacement when no target traits are set."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE))
+
+        state.breeding_program = BreedingProgram(enabled=True, stock_limit=4)
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_carrier_kept_with_genetics_lab(self):
+        """Carrier pigs are not replaced when genetics lab is present and keep_carriers is on."""
+        state = GameState()
+        from big_pig_farm.entities.facilities import Facility, FacilityType
+        lab = Facility.create(FacilityType.GENETICS_LAB, 1, 1)
+        state.add_facility(lab)
+
+        # Carrier: Bb (carries chocolate allele but shows black)
+        state.add_guinea_pig(_make_pig("Carrier", Gender.MALE, b_locus=("B", "b")))
+        state.add_guinea_pig(_make_pig("Match", Gender.FEMALE, b_locus=("b", "b")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.CHOCOLATE},
+            keep_carriers=True,
+        )
+
+        cull_surplus_breeders(state)
+        carrier = next(p for p in state.get_pigs_list() if p.name == "Carrier")
+        assert not carrier.marked_for_sale
+
+    def test_below_limit_no_replacement(self):
+        """No replacement when below stock limit — need more pigs, not fewer."""
+        state = GameState()
+        # Only 3 pigs, stock_limit=4 → below limit
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("BadF", Gender.FEMALE, e_locus=("E", "E")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_worst_scoring_chosen_first(self):
+        """The non-matching pig with the lowest breeding value is sold first."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("Good", Gender.MALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("GoodF", Gender.FEMALE, e_locus=("e", "e")))
+        # Bad1: has one 'e' allele (carrier) — slightly better
+        state.add_guinea_pig(_make_pig("Bad1", Gender.MALE, e_locus=("E", "e")))
+        # Bad2: no 'e' alleles at all — worst
+        state.add_guinea_pig(_make_pig("Bad2", Gender.FEMALE, e_locus=("E", "E")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=4,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+        assert marked[0].name == "Bad2"
+
+    def test_only_one_marked_per_pass(self):
+        """Active replacement marks at most 1 pig per call."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE, e_locus=("e", "e")))
+        # 3 non-matching pigs
+        state.add_guinea_pig(_make_pig("Bad1", Gender.MALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("Bad2", Gender.FEMALE, e_locus=("E", "E")))
+        state.add_guinea_pig(_make_pig("Bad3", Gender.FEMALE, e_locus=("E", "E")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            stock_limit=5,  # Exactly at limit so active replacement fires
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+
+    def test_diversity_only_no_targets(self):
+        """With maximize_diversity and no targets, lowest-diversity pig is replaced."""
+        state = GameState()
+        # 3 black pigs (duplicates) + 1 golden pig (unique phenotype)
+        state.add_guinea_pig(_make_pig("B1", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("B2", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("B3", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("Gold", Gender.MALE, age_days=5.0, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            maximize_diversity=True,
+            stock_limit=4,
+            # No target_colors — diversity-only mode
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+        # One of the duplicate blacks should be marked, not the unique golden
+        assert "B" in marked[0].name
+
+    def test_diversity_only_skips_when_not_enabled(self):
+        """Without maximize_diversity and no targets, no replacement happens."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            maximize_diversity=False,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+
+class TestGenderBalanceHelper:
+    """Tests for the _would_break_gender_balance helper."""
+
+    def test_last_male_protected(self):
+        """Selling the only male would break balance."""
+        male = _make_pig("M1", Gender.MALE)
+        f1 = _make_pig("F1", Gender.FEMALE)
+        f2 = _make_pig("F2", Gender.FEMALE)
+        assert _would_break_gender_balance(male, [male, f1, f2])
+
+    def test_last_female_protected(self):
+        """Selling the only female would break balance."""
+        m1 = _make_pig("M1", Gender.MALE)
+        m2 = _make_pig("M2", Gender.MALE)
+        female = _make_pig("F1", Gender.FEMALE)
+        assert _would_break_gender_balance(female, [m1, m2, female])
+
+    def test_surplus_gender_ok(self):
+        """Selling one of multiple males is fine."""
+        m1 = _make_pig("M1", Gender.MALE)
+        m2 = _make_pig("M2", Gender.MALE)
+        f1 = _make_pig("F1", Gender.FEMALE)
+        assert not _would_break_gender_balance(m1, [m1, m2, f1])

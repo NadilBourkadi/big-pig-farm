@@ -494,8 +494,42 @@ def _auto_pair_from_program(game_state) -> None:
         )
 
 
+def _score_adults(
+    adults: list[GuineaPig],
+    program,
+    has_lab: bool,
+) -> list[tuple[GuineaPig, tuple]]:
+    """Score adult pigs by breeding value (or diversity + breeding value).
+
+    Returns a list of (pig, score_tuple) sorted best-first.
+    """
+    if program.maximize_diversity:
+        scored = [
+            (p, (diversity_value(p, adults), breeding_value(p, program, has_lab)))
+            for p in adults
+        ]
+    else:
+        scored = [(p, (breeding_value(p, program, has_lab),)) for p in adults]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored
+
+
+def _would_break_gender_balance(pig: GuineaPig, adults: list[GuineaPig]) -> bool:
+    """Return True if selling this pig would leave zero of its gender."""
+    same_gender = [
+        p for p in adults
+        if p.gender == pig.gender and not p.marked_for_sale and p.id != pig.id
+    ]
+    return len(same_gender) == 0
+
+
 def cull_surplus_breeders(game_state) -> None:
-    """Mark surplus pigs for sale when over the program's stock limit."""
+    """Mark surplus pigs for sale when over the program's stock limit.
+
+    Also performs active replacement: when at or below the stock limit,
+    marks the single worst non-matching adult for sale so the farm
+    turns over toward the target phenotype.
+    """
     program = game_state.breeding_program
     if not program.enabled:
         return
@@ -509,19 +543,13 @@ def cull_surplus_breeders(game_state) -> None:
     ]
 
     effective_limit = max(program.stock_limit, BREEDING.MIN_BREEDING_POPULATION)
-    if len(adults) <= effective_limit:
-        return  # Under limit, nothing to cull
+    if len(adults) < effective_limit:
+        return  # Below limit — need more pigs, not fewer
+    if len(adults) == effective_limit:
+        _active_replacement(game_state, adults, program, has_lab)
+        return
 
-    # Score each pig — diversity primary with breeding value tiebreaker,
-    # or breeding value alone.  Tuples sort lexicographically.
-    if program.maximize_diversity:
-        scored = [
-            (p, (diversity_value(p, adults), breeding_value(p, program, has_lab)))
-            for p in adults
-        ]
-    else:
-        scored = [(p, (breeding_value(p, program, has_lab),)) for p in adults]
-    scored.sort(key=lambda x: x[1], reverse=True)  # Best first
+    scored = _score_adults(adults, program, has_lab)
 
     # Ensure gender balance: keep at least 1 male + 1 female in top N
     kept = []
@@ -564,3 +592,47 @@ def cull_surplus_breeders(game_state) -> None:
             f"Breeding program: {marked_count} surplus pig(s) marked for sale",
             event_type="filter",
         )
+
+
+def _active_replacement(game_state, adults: list[GuineaPig], program, has_lab: bool) -> None:
+    """Phase out the worst adult when at or below stock limit.
+
+    Two modes:
+    - With targets: sell the worst non-matching adult
+    - Diversity-only (no targets, maximize_diversity): sell the lowest-diversity adult
+
+    Marks at most 1 pig per call. Skips pregnant pigs and preserves
+    gender balance (never sells the last male or last female).
+    """
+    if program.has_target:
+        # Target mode: only consider non-matching adults
+        candidates = [
+            p for p in adults
+            if not should_keep_pig(program, p, has_genetics_lab=has_lab)
+        ]
+        reason = "non-matching"
+    elif program.maximize_diversity:
+        # Diversity-only mode: all adults are candidates
+        candidates = list(adults)
+        reason = "low diversity"
+    else:
+        return
+
+    if not candidates:
+        return
+
+    # Score them worst-first
+    scored = _score_adults(candidates, program, has_lab)
+    scored.reverse()  # Worst first
+
+    for pig, _score in scored:
+        if pig.is_pregnant:
+            continue
+        if _would_break_gender_balance(pig, adults):
+            continue
+        pig.marked_for_sale = True
+        game_state.log_event(
+            f"Breeding program: replacing {pig.name} ({reason})",
+            event_type="filter",
+        )
+        return
