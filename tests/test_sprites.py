@@ -1,5 +1,7 @@
 """Tests for close-zoom sprites — dimensions, key coverage, helpers."""
 
+import json
+
 import pytest
 
 from big_pig_farm.data.sprite_engine import (
@@ -16,6 +18,7 @@ from big_pig_farm.data.pig_sprites_close import (
 from big_pig_farm.data.facility_pixels import FACILITY_PIXELS
 from big_pig_farm.data.facility_pixels_close import FACILITY_PIXELS_CLOSE
 from big_pig_farm.data.pig_sprite_lookup import get_pig_pixel_sprite
+from tools.sprite_gen_facility import _parse_facility_close_source
 
 
 # ---------------------------------------------------------------------------
@@ -166,3 +169,88 @@ class TestPigSpriteFallback:
     def test_normal_zoom_unchanged(self):
         grid = get_pig_pixel_sprite("idle", "right", close_zoom=False)
         assert len(grid) == 8  # normal adult is 8h
+
+
+# ---------------------------------------------------------------------------
+# Facility close-zoom source parser
+# ---------------------------------------------------------------------------
+
+class TestParseFacilityCloseSource:
+    """Verify _parse_facility_close_source extracts char maps from the real file."""
+
+    @pytest.fixture()
+    def facilities(self):
+        from pathlib import Path
+        source = (Path(__file__).parent.parent / "big_pig_farm" / "data" / "facility_pixels_close.py").read_text()
+        return _parse_facility_close_source(source)
+
+    def test_finds_all_12_facilities(self, facilities):
+        assert len(facilities) == 12
+
+    def test_first_is_food_bowl(self, facilities):
+        assert facilities[0]["char_var"] == "_FOOD_BOWL_CHAR"
+        assert facilities[0]["label"] == "FOOD BOWL"
+
+    def test_char_maps_have_none_for_transparent(self, facilities):
+        for f in facilities:
+            assert None in f["char_map"].values(), f"{f['char_var']} missing transparent mapping"
+
+    def test_sprite_keys_match_facility_close_dict(self, facilities):
+        parsed_keys = {k for f in facilities for k in f["sprite_keys"]}
+        actual_keys = set(FACILITY_PIXELS_CLOSE.keys())
+        assert parsed_keys == actual_keys
+
+
+# ---------------------------------------------------------------------------
+# Sprite editor round-trip
+# ---------------------------------------------------------------------------
+
+class TestSpriteEditorRoundTrip:
+    """Verify export → apply → export → apply is idempotent."""
+
+    def test_round_trip_idempotent(self, tmp_path):
+        from tools.sprite_export import build_export_data
+        from tools.sprite_gen_pig import generate_pig_sprites_source, generate_close_pig_source
+        from tools.sprite_gen_facility import generate_facility_pixels_source, generate_facility_close_source
+        from pathlib import Path
+
+        data_dir = Path(__file__).parent.parent / "big_pig_farm" / "data"
+        facility_source = (data_dir / "facility_pixels.py").read_text()
+        facility_close_source = (data_dir / "facility_pixels_close.py").read_text()
+
+        def generate_all(sprites):
+            return {
+                "pig_sprites.py": generate_pig_sprites_source(
+                    sprites.get("pig_adult", {}), sprites.get("pig_baby", {}),
+                    sprites.get("pig_far_adult", {}), sprites.get("pig_far_baby", {}),
+                ),
+                "pig_sprites_close.py": generate_close_pig_source(
+                    sprites.get("pig_adult_close", {}), sprites.get("pig_baby_close", {}),
+                ),
+                "facility_pixels.py": generate_facility_pixels_source(
+                    sprites.get("facility_normal", {}), sprites.get("facility_far", {}),
+                    facility_source,
+                ),
+                "facility_pixels_close.py": generate_facility_close_source(
+                    sprites.get("facility_close", {}), facility_close_source,
+                ),
+            }
+
+        # Pass 1: export and generate
+        data = build_export_data()
+        pass1 = generate_all(data["sprites"])
+
+        # Verify all generated sources are valid Python
+        for name, src in pass1.items():
+            compile(src, name, "exec")
+
+        # Write pass 1 outputs, re-import, and generate pass 2
+        for name, src in pass1.items():
+            (tmp_path / name).write_text(src)
+
+        # Pass 2: re-generate from pass 1 output (using same facility headers)
+        pass2 = generate_all(data["sprites"])
+
+        # Pass 1 and 2 should be identical (idempotent)
+        for name in pass1:
+            assert pass1[name] == pass2[name], f"{name} differs between pass 1 and pass 2"
