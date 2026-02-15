@@ -14,7 +14,8 @@ from big_pig_farm.entities.genetics import (
 )
 from big_pig_farm.data.config import BREEDING
 from big_pig_farm.simulation.breeding_program import (
-    BreedingProgram, should_keep_pig, breeding_value, diversity_value, _heterozygosity_count,
+    BreedingProgram, BreedingStrategy, should_keep_pig, breeding_value, diversity_value,
+    money_value, _heterozygosity_count,
 )
 from big_pig_farm.simulation.breeding import (
     _auto_pair_from_program, _apply_breeding_filter, cull_surplus_breeders,
@@ -788,7 +789,7 @@ class TestDiversityValue:
 
 
 class TestCullWithDiversity:
-    """Tests for culling with maximize_diversity enabled."""
+    """Tests for culling with diversity strategy enabled."""
 
     def test_keeps_unique_phenotypes(self):
         """With diversity mode, unique phenotypes should survive culling over duplicates."""
@@ -808,7 +809,7 @@ class TestCullWithDiversity:
         # effective_limit = max(stock_limit, MIN_BREEDING_POPULATION) = 4
         state.breeding_program = BreedingProgram(
             enabled=True,
-            maximize_diversity=True,
+            strategy=BreedingStrategy.DIVERSITY,
             stock_limit=3,
         )
 
@@ -838,7 +839,7 @@ class TestCullWithDiversity:
         # effective_limit = max(3, MIN_BREEDING_POPULATION) = 4
         state.breeding_program = BreedingProgram(
             enabled=True,
-            maximize_diversity=True,
+            strategy=BreedingStrategy.DIVERSITY,
             stock_limit=3,
         )
 
@@ -1042,20 +1043,20 @@ class TestActiveReplacement:
         marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
         assert len(marked) == 1
 
-    def test_diversity_only_no_targets(self):
-        """With maximize_diversity and no targets, lowest-diversity pig is replaced."""
+    def test_diversity_only_no_targets_surplus(self):
+        """With diversity strategy over limit and no targets, lowest-diversity pig is culled."""
         state = GameState()
-        # 3 black pigs (duplicates) + 1 golden pig (unique phenotype)
+        # 5 pigs, stock_limit=4 → 1 surplus
         state.add_guinea_pig(_make_pig("B1", Gender.MALE, age_days=5.0))
         state.add_guinea_pig(_make_pig("B2", Gender.FEMALE, age_days=5.0))
         state.add_guinea_pig(_make_pig("B3", Gender.FEMALE, age_days=5.0))
-        state.add_guinea_pig(_make_pig("Gold", Gender.MALE, age_days=5.0, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("B4", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("Gold", Gender.FEMALE, age_days=5.0, e_locus=("e", "e")))
 
         state.breeding_program = BreedingProgram(
             enabled=True,
-            maximize_diversity=True,
+            strategy=BreedingStrategy.DIVERSITY,
             stock_limit=4,
-            # No target_colors — diversity-only mode
         )
 
         cull_surplus_breeders(state)
@@ -1064,15 +1065,32 @@ class TestActiveReplacement:
         # One of the duplicate blacks should be marked, not the unique golden
         assert "B" in marked[0].name
 
+    def test_diversity_only_no_replacement_at_limit(self):
+        """Diversity at stock limit without targets should NOT replace anyone."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("B1", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("B2", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("B3", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("Gold", Gender.MALE, age_days=5.0, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.DIVERSITY,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
     def test_diversity_only_skips_when_not_enabled(self):
-        """Without maximize_diversity and no targets, no replacement happens."""
+        """Without diversity/money strategy and no targets, no replacement happens."""
         state = GameState()
         state.add_guinea_pig(_make_pig("M1", Gender.MALE))
         state.add_guinea_pig(_make_pig("F1", Gender.FEMALE))
 
         state.breeding_program = BreedingProgram(
             enabled=True,
-            maximize_diversity=False,
+            strategy=BreedingStrategy.TARGET,
             stock_limit=4,
         )
 
@@ -1103,3 +1121,210 @@ class TestGenderBalanceHelper:
         m2 = _make_pig("M2", Gender.MALE)
         f1 = _make_pig("F1", Gender.FEMALE)
         assert not _would_break_gender_balance(m1, [m1, m2, f1])
+
+
+# ─── Money value tests ───
+
+
+class TestMoneyValue:
+    """Tests for money_value scoring function."""
+
+    def test_himalayan_scores_higher_than_dalmatian(self):
+        """Himalayan alleles (ch) are worth more per allele than Dalmatian (s)."""
+        program = BreedingProgram()
+        state = GameState()
+        # ch/ch = 6 rarity points
+        himalayan = _make_pig("Him", Gender.MALE, age_days=5.0, c_locus=("ch", "ch"))
+        # s/s = 4 rarity points
+        dalmatian = _make_pig("Dal", Gender.MALE, age_days=5.0, s_locus=("s", "s"))
+        assert money_value(himalayan, program, False, state) > money_value(dalmatian, program, False, state)
+
+    def test_contract_bonus_increases_score(self):
+        """A pig carrying alleles for an active contract should score higher."""
+        from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty
+        program = BreedingProgram()
+        state = GameState()
+        # Add a contract requesting golden pigs
+        contract = BreedingContract(
+            required_color=BaseColor.GOLDEN,
+            difficulty=ContractDifficulty.EASY,
+            reward=200,
+            deadline_day=100,
+        )
+        state.contract_board.active_contracts = [contract]
+
+        # ee pig matches the contract's golden requirement
+        golden_carrier = _make_pig("GoldC", Gender.MALE, age_days=5.0, e_locus=("e", "e"))
+        # EE pig has no golden alleles
+        no_gold = _make_pig("NoGold", Gender.MALE, age_days=5.0, e_locus=("E", "E"))
+
+        score_with = money_value(golden_carrier, program, False, state)
+        score_without = money_value(no_gold, program, False, state)
+        assert score_with > score_without
+
+    def test_senior_penalty_applies(self):
+        """Seniors should score much lower than breeding-age pigs."""
+        program = BreedingProgram()
+        state = GameState()
+        adult = _make_pig("Adult", Gender.MALE, age_days=10.0, c_locus=("ch", "ch"))
+        senior = _make_pig("Senior", Gender.MALE, age_days=35.0, c_locus=("ch", "ch"))
+        assert money_value(adult, program, False, state) > money_value(senior, program, False, state)
+
+    def test_age_tiebreaker(self):
+        """Younger pig with same genetics should score higher."""
+        program = BreedingProgram()
+        state = GameState()
+        young = _make_pig("Young", Gender.MALE, age_days=5.0, s_locus=("s", "s"))
+        old = _make_pig("Old", Gender.MALE, age_days=25.0, s_locus=("s", "s"))
+        assert money_value(young, program, False, state) > money_value(old, program, False, state)
+
+
+class TestMoneyModeReplacement:
+    """Tests for active replacement in money mode."""
+
+    def test_low_rarity_pig_culled_when_over_limit(self):
+        """Pig with low-rarity alleles should be culled first when over stock limit."""
+        state = GameState()
+        # 5 pigs, stock_limit=4 → 1 surplus
+        state.add_guinea_pig(_make_pig("Rare1", Gender.MALE, age_days=5.0, c_locus=("ch", "ch")))
+        state.add_guinea_pig(_make_pig("Rare2", Gender.FEMALE, age_days=5.0, c_locus=("ch", "ch")))
+        state.add_guinea_pig(_make_pig("Rare3", Gender.FEMALE, age_days=5.0, s_locus=("s", "s")))
+        state.add_guinea_pig(_make_pig("Common", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("CommonF", Gender.FEMALE, age_days=5.0))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.MONEY,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+        assert "Common" in marked[0].name
+
+    def test_no_replacement_at_limit_without_targets(self):
+        """Money mode at stock limit without targets should NOT replace anyone."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE, age_days=5.0, c_locus=("ch", "ch")))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("M2", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("F2", Gender.FEMALE, age_days=5.0))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.MONEY,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_contract_relevant_pig_kept(self):
+        """Pig matching an active contract should be kept over non-relevant pig when over limit."""
+        from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty
+        state = GameState()
+
+        contract = BreedingContract(
+            required_color=BaseColor.CHOCOLATE,
+            difficulty=ContractDifficulty.MEDIUM,
+            reward=300,
+            deadline_day=100,
+        )
+        state.contract_board.active_contracts = [contract]
+
+        # 5 pigs, stock_limit=4 → 1 surplus
+        state.add_guinea_pig(_make_pig("ChocM", Gender.MALE, age_days=5.0, b_locus=("b", "b")))
+        state.add_guinea_pig(_make_pig("ChocF", Gender.FEMALE, age_days=5.0, b_locus=("b", "b")))
+        state.add_guinea_pig(_make_pig("ChocF2", Gender.FEMALE, age_days=5.0, b_locus=("b", "b")))
+        state.add_guinea_pig(_make_pig("Plain", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("PlainF", Gender.FEMALE, age_days=5.0))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.MONEY,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+        assert "Plain" in marked[0].name
+
+
+class TestMoneyModeAutoPair:
+    """Tests for auto-pairing in money mode."""
+
+    def test_derives_targets_from_contracts(self):
+        """Money mode should derive implicit targets from active contracts when no explicit targets."""
+        from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty
+        state = GameState()
+
+        contract = BreedingContract(
+            required_color=BaseColor.GOLDEN,
+            difficulty=ContractDifficulty.EASY,
+            reward=100,
+            deadline_day=100,
+        )
+        state.contract_board.active_contracts = [contract]
+
+        # Male with golden alleles (ee)
+        male_golden = _make_pig("GoldM", Gender.MALE, e_locus=("e", "e"))
+        # Male without golden alleles
+        male_plain = _make_pig("PlainM", Gender.MALE, e_locus=("E", "E"))
+        female = _make_pig("F1", Gender.FEMALE, e_locus=("E", "e"))
+
+        state.add_guinea_pig(male_golden)
+        state.add_guinea_pig(male_plain)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            strategy=BreedingStrategy.MONEY,
+            # No explicit targets — should derive from contract
+        )
+
+        _auto_pair_from_program(state)
+        # Should pick male_golden (higher golden probability)
+        assert state.breeding_pair is not None
+        assert state.breeding_pair.male_id == male_golden.id
+
+    def test_uses_explicit_targets_when_set(self):
+        """Money mode with explicit targets should use those targets for pairing."""
+        state = GameState()
+
+        male_golden = _make_pig("GoldM", Gender.MALE, e_locus=("e", "e"))
+        male_plain = _make_pig("PlainM", Gender.MALE, e_locus=("E", "E"))
+        female = _make_pig("F1", Gender.FEMALE, e_locus=("E", "e"))
+
+        state.add_guinea_pig(male_golden)
+        state.add_guinea_pig(male_plain)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            strategy=BreedingStrategy.MONEY,
+            target_colors={BaseColor.GOLDEN},
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is not None
+        assert state.breeding_pair.male_id == male_golden.id
+
+    def test_no_contracts_no_targets_skips(self):
+        """Money mode without targets or contracts should skip auto-pairing."""
+        state = GameState()
+
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            strategy=BreedingStrategy.MONEY,
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is None

@@ -4,7 +4,7 @@ from textual.widgets import Static
 from textual.events import Key
 
 from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
-from big_pig_farm.simulation.breeding_program import BreedingProgram
+from big_pig_farm.simulation.breeding_program import BreedingProgram, BreedingStrategy
 
 
 # Ordered lists of values per axis for display
@@ -37,6 +37,20 @@ _ROAN_LABELS = {
     RoanType.NONE: "None",
     RoanType.ROAN: "Roan",
 }
+
+_STRATEGY_LABELS = {
+    BreedingStrategy.TARGET: "Target",
+    BreedingStrategy.DIVERSITY: "Diversity",
+    BreedingStrategy.MONEY: "Money",
+}
+
+_STRATEGY_DESCRIPTIONS = {
+    BreedingStrategy.TARGET: "Breed toward selected phenotype targets",
+    BreedingStrategy.DIVERSITY: "Keep unique phenotypes when culling surplus",
+    BreedingStrategy.MONEY: "Maximize sale value and contract fulfillment",
+}
+
+_STRATEGY_CYCLE = list(BreedingStrategy)
 
 # All axes in order
 _AXES = [
@@ -150,8 +164,10 @@ class BreedingProgramPanel(Static, can_focus=True):
             # Auto-pair toggle
             self.breeding_program.auto_pair = not self.breeding_program.auto_pair
         elif self._cursor_axis == 6:
-            # Max diversity toggle
-            self.breeding_program.maximize_diversity = not self.breeding_program.maximize_diversity
+            # Strategy cycle: TARGET → DIVERSITY → MONEY → TARGET
+            current = self.breeding_program.strategy
+            idx = _STRATEGY_CYCLE.index(current)
+            self.breeding_program.strategy = _STRATEGY_CYCLE[(idx + 1) % len(_STRATEGY_CYCLE)]
         elif self._cursor_axis == 7:
             # Stock limit — space does nothing, use left/right
             pass
@@ -210,9 +226,15 @@ class BreedingProgramPanel(Static, can_focus=True):
         lines.append(f"  {self._fmt_check(bp.auto_pair, 'Auto-Pair', self._cursor_axis == 5)}")
         lines.append(f"       [dim]Automatically select the best breeding pair[/]")
 
-        # Max diversity toggle
-        lines.append(f"  {self._fmt_check(bp.maximize_diversity, 'Max Diversity', self._cursor_axis == 6)}")
-        lines.append(f"       [dim]Keep unique phenotypes when culling surplus[/]")
+        # Strategy cycle
+        strategy_label = _STRATEGY_LABELS[bp.strategy]
+        strategy_desc = _STRATEGY_DESCRIPTIONS[bp.strategy]
+        is_strat_cursor = self._cursor_axis == 6
+        if is_strat_cursor:
+            lines.append(f"  [reverse] ◄ {strategy_label:<10} ► [/]  Strategy")
+        else:
+            lines.append(f"  ◄ {strategy_label:<10} ►  Strategy")
+        lines.append(f"       [dim]{strategy_desc}  (space/enter to cycle)[/]")
 
         # Stock limit
         is_sl_cursor = self._cursor_axis == 7
@@ -248,5 +270,5 @@ class BreedingProgramPanel(Static, can_focus=True):
 
         trait_str = "; ".join(parts) if parts else "all traits"
         auto = " | Auto-pair ON" if bp.auto_pair else ""
-        diversity = " | Diversity" if bp.maximize_diversity else ""
-        return f"Target: {trait_str}{auto}{diversity} | Stock: {bp.stock_limit}"
+        strategy = f" | {_STRATEGY_LABELS[bp.strategy]}" if bp.strategy != BreedingStrategy.TARGET else ""
+        return f"Target: {trait_str}{auto}{strategy} | Stock: {bp.stock_limit}"

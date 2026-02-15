@@ -8,10 +8,23 @@ from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION, NEEDS
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.economy.market import sell_pig
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
-from big_pig_farm.entities.genetics import breed as breed_genetics, calculate_phenotype
+from big_pig_farm.entities.genetics import (
+    breed as breed_genetics,
+    calculate_phenotype,
+    BaseColor,
+    Pattern,
+    ColorIntensity,
+    RoanType,
+)
 from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.pigdex import phenotype_key, get_discovery_reward, key_to_rarity, get_milestone_reward
-from big_pig_farm.simulation.breeding_program import should_keep_pig, breeding_value, diversity_value
+from big_pig_farm.simulation.breeding_program import (
+    BreedingStrategy,
+    should_keep_pig,
+    breeding_value,
+    diversity_value,
+    money_value,
+)
 from big_pig_farm.entities.genetics import calculate_target_probability
 
 
@@ -444,8 +457,23 @@ def _auto_pair_from_program(game_state) -> None:
     program = game_state.breeding_program
     if not program.should_auto_pair():
         return
+
+    # Determine target traits for pairing
+    target_colors = program.target_colors
+    target_patterns = program.target_patterns
+    target_intensities = program.target_intensities
+    target_roan = program.target_roan
+
     if not program.has_target:
-        return
+        if program.strategy == BreedingStrategy.MONEY:
+            # Derive implicit targets from active contracts
+            target_colors, target_patterns, target_intensities, target_roan = (
+                _derive_contract_targets(game_state)
+            )
+            if not (target_colors or target_patterns or target_intensities or target_roan):
+                return  # No contracts to optimize toward
+        else:
+            return
 
     males = [
         p for p in game_state.get_pigs_list()
@@ -478,8 +506,8 @@ def _auto_pair_from_program(game_state) -> None:
         for female in females:
             prob = calculate_target_probability(
                 male.genotype, female.genotype,
-                program.target_colors, program.target_patterns,
-                program.target_intensities, program.target_roan,
+                target_colors, target_patterns,
+                target_intensities, target_roan,
             )
             if prob > best_prob:
                 best_prob = prob
@@ -494,18 +522,49 @@ def _auto_pair_from_program(game_state) -> None:
         )
 
 
+def _derive_contract_targets(game_state) -> tuple[set, set, set, set]:
+    """Derive implicit breeding targets from active contracts."""
+    colors: set[BaseColor] = set()
+    patterns: set[Pattern] = set()
+    intensities: set[ColorIntensity] = set()
+    roans: set[RoanType] = set()
+
+    if not hasattr(game_state, "contract_board"):
+        return colors, patterns, intensities, roans
+
+    for contract in game_state.contract_board.active_contracts:
+        if contract.fulfilled:
+            continue
+        if contract.required_color:
+            colors.add(contract.required_color)
+        if contract.required_pattern:
+            patterns.add(contract.required_pattern)
+        if contract.required_intensity:
+            intensities.add(contract.required_intensity)
+        if contract.required_roan:
+            roans.add(contract.required_roan)
+
+    return colors, patterns, intensities, roans
+
+
 def _score_adults(
     adults: list[GuineaPig],
     program,
     has_lab: bool,
+    game_state=None,
 ) -> list[tuple[GuineaPig, tuple]]:
-    """Score adult pigs by breeding value (or diversity + breeding value).
+    """Score adult pigs by strategy-appropriate value.
 
     Returns a list of (pig, score_tuple) sorted best-first.
     """
-    if program.maximize_diversity:
+    if program.strategy == BreedingStrategy.DIVERSITY:
         scored = [
             (p, (diversity_value(p, adults), breeding_value(p, program, has_lab)))
+            for p in adults
+        ]
+    elif program.strategy == BreedingStrategy.MONEY:
+        scored = [
+            (p, (money_value(p, program, has_lab, game_state),))
             for p in adults
         ]
     else:
@@ -549,7 +608,7 @@ def cull_surplus_breeders(game_state) -> None:
         _active_replacement(game_state, adults, program, has_lab)
         return
 
-    scored = _score_adults(adults, program, has_lab)
+    scored = _score_adults(adults, program, has_lab, game_state)
 
     # Ensure gender balance: keep at least 1 male + 1 female in top N
     kept = []
@@ -599,7 +658,7 @@ def _active_replacement(game_state, adults: list[GuineaPig], program, has_lab: b
 
     Two modes:
     - With targets: sell the worst non-matching adult
-    - Diversity-only (no targets, maximize_diversity): sell the lowest-diversity adult
+    - Diversity/Money (no targets): sell the lowest-scoring adult
 
     Marks at most 1 pig per call. Skips pregnant pigs and preserves
     gender balance (never sells the last male or last female).
@@ -611,18 +670,18 @@ def _active_replacement(game_state, adults: list[GuineaPig], program, has_lab: b
             if not should_keep_pig(program, p, has_genetics_lab=has_lab)
         ]
         reason = "non-matching"
-    elif program.maximize_diversity:
-        # Diversity-only mode: all adults are candidates
-        candidates = list(adults)
-        reason = "low diversity"
     else:
+        # Without targets, active replacement would sell the "worst" pig every
+        # time population hits the limit, causing it to oscillate below the
+        # stock limit permanently.  Only surplus culling (len > limit) should
+        # fire for diversity/money mode without explicit targets.
         return
 
     if not candidates:
         return
 
     # Score them worst-first
-    scored = _score_adults(candidates, program, has_lab)
+    scored = _score_adults(candidates, program, has_lab, game_state)
     scored.reverse()  # Worst first
 
     for pig, _score in scored:

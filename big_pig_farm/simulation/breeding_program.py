@@ -1,5 +1,7 @@
 """Breeding program - goal-oriented autopilot for selective breeding."""
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 from big_pig_farm.entities.genetics import (
@@ -20,6 +22,13 @@ from big_pig_farm.entities.guinea_pig import GuineaPig
 _SENIOR_PENALTY = 20.0
 
 
+class BreedingStrategy(str, Enum):
+    """Breeding program strategy for scoring and replacement."""
+    TARGET = "target"        # Breed toward specific phenotype targets
+    DIVERSITY = "diversity"  # Maximize phenotype variety
+    MONEY = "money"          # Maximize sale value + contract fulfillment
+
+
 class BreedingProgram(BaseModel):
     """Goal-oriented breeding autopilot.
 
@@ -36,7 +45,7 @@ class BreedingProgram(BaseModel):
     target_roan: set[RoanType] = Field(default_factory=set)
     keep_carriers: bool = True
     auto_pair: bool = True
-    maximize_diversity: bool = False
+    strategy: BreedingStrategy = BreedingStrategy.TARGET
     stock_limit: int = 6
     enabled: bool = False
 
@@ -258,3 +267,76 @@ def diversity_value(pig: GuineaPig, all_pigs: list[GuineaPig]) -> float:
     if pig.is_senior:
         score -= _SENIOR_PENALTY
     return score
+
+
+def money_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool, game_state) -> float:
+    """Score a pig's breeding potential for producing high-value offspring.
+
+    Components:
+    - Rarity allele score: weight alleles by how much they contribute to rarity
+    - Contract alignment bonus: reward for carrying alleles toward active contracts
+    - Age tiebreaker (0-5): younger pigs score higher
+    - Senior penalty (-20): seniors can't breed
+    """
+    g = pig.genotype
+    score = 0.0
+
+    # Rarity allele scores — rarer alleles are more valuable
+    score += g.c_locus.count("ch") * 3.0   # Himalayan (ch/ch) worth most
+    score += g.s_locus.count("s") * 2.0    # Dalmatian (s/s) is rare
+    score += g.r_locus.count("R") * 2.0    # Roan (R/r) is rare
+    score += g.b_locus.count("b") * 1.0    # Chocolate/Cream contributor
+    score += g.e_locus.count("e") * 0.5    # Cream needs both e and b
+
+    # Contract alignment bonus
+    if hasattr(game_state, "contract_board"):
+        for contract in game_state.contract_board.active_contracts:
+            if contract.fulfilled:
+                continue
+            weight = contract.reward / 100.0
+            allele_hits = _contract_allele_hits(g, contract)
+            score += allele_hits * weight
+
+    # Senior penalty
+    if pig.is_senior:
+        score -= _SENIOR_PENALTY
+
+    # Age tiebreaker
+    remaining = max(0, BREEDING.MAX_AGE_DAYS - pig.age_days)
+    age_bonus = (remaining / BREEDING.MAX_AGE_DAYS) * 5.0
+    return score + age_bonus
+
+
+def _contract_allele_hits(genotype: Genotype, contract) -> int:
+    """Count how many alleles a pig carries toward a contract's requirements."""
+    hits = 0
+    if contract.required_color:
+        color = contract.required_color
+        if color == BaseColor.GOLDEN or color == BaseColor.CREAM:
+            hits += genotype.e_locus.count("e")
+        if color == BaseColor.CHOCOLATE or color == BaseColor.CREAM:
+            hits += genotype.b_locus.count("b")
+        if color == BaseColor.BLACK:
+            hits += genotype.e_locus.count("E")
+            hits += genotype.b_locus.count("B")
+    if contract.required_pattern:
+        pattern = contract.required_pattern
+        if pattern == Pattern.DALMATIAN:
+            hits += genotype.s_locus.count("s")
+        elif pattern == Pattern.DUTCH:
+            hits += genotype.s_locus.count("s")
+        elif pattern == Pattern.SOLID:
+            hits += genotype.s_locus.count("S")
+    if contract.required_intensity:
+        intensity = contract.required_intensity
+        if intensity in (ColorIntensity.HIMALAYAN, ColorIntensity.CHINCHILLA):
+            hits += genotype.c_locus.count("ch")
+        elif intensity == ColorIntensity.FULL:
+            hits += genotype.c_locus.count("C")
+    if contract.required_roan:
+        roan = contract.required_roan
+        if roan == RoanType.ROAN:
+            hits += genotype.r_locus.count("R")
+        elif roan == RoanType.NONE:
+            hits += genotype.r_locus.count("r")
+    return hits
