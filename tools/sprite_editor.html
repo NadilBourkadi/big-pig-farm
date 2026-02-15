@@ -27,11 +27,15 @@ body { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: #
 #toolbar button { cursor: pointer; }
 #toolbar button:hover { background: #333; }
 #toolbar button.active-tool { background: #e94560; color: #fff; border-color: #e94560; }
+#toolbar button.pin-active { background: #e9a045; color: #fff; border-color: #e9a045; }
+#overlay-info { font-size: 10px; color: #e9a045; }
 #grid-container { flex: 1; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 20px; }
 #pixel-grid { display: inline-grid; border: 1px solid #444; cursor: crosshair; user-select: none; }
-.pixel-cell { border: 1px solid rgba(255,255,255,0.08); transition: none; }
-.pixel-cell:hover { outline: 2px solid #e94560; outline-offset: -2px; z-index: 1; position: relative; }
+.pixel-cell { border: 1px solid rgba(255,255,255,0.08); transition: none; position: relative; }
+.pixel-cell:hover { outline: 2px solid #e94560; outline-offset: -2px; z-index: 1; }
 .pixel-cell.transparent { background: repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 50% / 8px 8px; }
+.pixel-cell .overlay-ghost { position: absolute; inset: 0; pointer-events: none; }
+.pixel-cell.overlay-diff { box-shadow: inset 0 0 0 2px var(--overlay-diff-color); }
 
 /* Right panel — palette */
 #palette-panel { width: 180px; background: #16213e; border-left: 1px solid #333; overflow-y: auto; flex-shrink: 0; display: flex; flex-direction: column; }
@@ -74,6 +78,11 @@ body { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: #
         <button id="btn-undo" title="Undo (Ctrl+Z)">Undo</button>
         <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
         <button id="btn-grid-toggle" title="Toggle grid lines">Grid</button>
+        <span style="width:1px;height:16px;background:#444;margin:0 4px"></span>
+        <button id="btn-pin" title="Pin overlay (T)">Pin</button>
+        <label id="overlay-opacity-label" style="display:none">Opacity:</label>
+        <input type="range" id="overlay-opacity" min="10" max="100" value="55" style="display:none;width:80px">
+        <span id="overlay-info"></span>
         <span style="flex:1"></span>
         <button id="btn-export" style="background:#e94560;color:#fff;font-weight:bold;">Export Changes</button>
     </div>
@@ -83,6 +92,7 @@ body { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: #
     <div id="info-bar">
         <span id="info-pos">—</span>
         <span id="info-key">—</span>
+        <span id="info-pinned" style="display:none"></span>
         <span id="info-dims">—</span>
         <span id="info-dirty">Clean</span>
     </div>
@@ -114,6 +124,8 @@ let currentBrush = null;   // palette key string or null for transparent
 let currentTool = 'paint'; // paint, erase, pick, fill
 let cellSize = 20;
 let showGrid = true;
+let pinnedOverlay = null; // {group, key} or null
+let overlayOpacity = 0.55;
 let isPainting = false;
 let lastPaintedCell = null;
 let strokeStarted = false; // true once first pixel changed during a drag
@@ -352,8 +364,16 @@ function renderGrid() {
     const h = pixels.length;
     const w = pixels[0] ? pixels[0].length : 0;
 
+    // Ghost overlay data
+    let ghostPixels = null;
+    if (pinnedOverlay && !(pinnedOverlay.group === currentGroup && pinnedOverlay.key === currentKey)) {
+        const pinned = sprites[pinnedOverlay.group]?.[pinnedOverlay.key];
+        if (pinned) ghostPixels = pinned.pixels;
+    }
+
     grid.style.gridTemplateColumns = `repeat(${w}, ${cellSize}px)`;
     grid.style.gridTemplateRows = `repeat(${h}, ${cellSize}px)`;
+    grid.style.setProperty('--overlay-diff-color', `rgba(233, 160, 69, ${overlayOpacity})`);
 
     for (let y = 0; y < h; y++) {
         for (let x = 0; x < w; x++) {
@@ -371,6 +391,31 @@ function renderGrid() {
                 cell.classList.add('transparent');
             } else {
                 cell.style.background = palette[px] || '#ff00ff';
+            }
+
+            // Ghost overlay
+            if (ghostPixels && y < ghostPixels.length && x < (ghostPixels[y]?.length || 0)) {
+                const ghostPx = ghostPixels[y][x];
+                const differs = ghostPx !== px;
+                if (differs) cell.classList.add('overlay-diff');
+                if (ghostPx !== null) {
+                    const ghostColor = palette[ghostPx] || '#ff00ff';
+                    if (px === null) {
+                        // Current is transparent — show ghost clearly
+                        const ghost = document.createElement('div');
+                        ghost.className = 'overlay-ghost';
+                        ghost.style.background = ghostColor;
+                        ghost.style.opacity = overlayOpacity;
+                        cell.appendChild(ghost);
+                    } else if (differs) {
+                        // Both have pixels but they differ — subtle tint
+                        const ghost = document.createElement('div');
+                        ghost.className = 'overlay-ghost';
+                        ghost.style.background = ghostColor;
+                        ghost.style.opacity = overlayOpacity * 0.55;
+                        cell.appendChild(ghost);
+                    }
+                }
             }
 
             cell.dataset.x = x;
@@ -405,7 +450,20 @@ function onCellMouseEnter(e) {
     // Update info bar
     if (pixels && y < pixels.length && x < pixels[y].length) {
         document.getElementById('info-pos').textContent = `(${x}, ${y})`;
-        document.getElementById('info-key').textContent = pixels[y][x] || 'transparent';
+        const currentPx = pixels[y][x] || 'transparent';
+        const pinnedSpan = document.getElementById('info-pinned');
+        if (pinnedOverlay && !(pinnedOverlay.group === currentGroup && pinnedOverlay.key === currentKey)) {
+            const ghostPixels = sprites[pinnedOverlay.group]?.[pinnedOverlay.key]?.pixels;
+            const ghostPx = ghostPixels?.[y]?.[x] ?? null;
+            const ghostLabel = ghostPx || 'transparent';
+            document.getElementById('info-key').textContent = `Current: ${currentPx}`;
+            pinnedSpan.textContent = `Pinned: ${ghostLabel}`;
+            pinnedSpan.style.display = '';
+            pinnedSpan.style.color = ghostLabel !== currentPx ? '#e9a045' : '#777';
+        } else {
+            document.getElementById('info-key').textContent = currentPx;
+            pinnedSpan.style.display = 'none';
+        }
     }
 
     if (isPainting) {
@@ -629,6 +687,46 @@ document.getElementById('btn-grid-toggle').onclick = () => {
     renderGrid();
 };
 
+function togglePin() {
+    if (!currentGroup || !currentKey) return;
+    if (pinnedOverlay && pinnedOverlay.group === currentGroup && pinnedOverlay.key === currentKey) {
+        // Same sprite — unpin
+        pinnedOverlay = null;
+    } else {
+        // Pin current sprite (or replace existing pin)
+        pinnedOverlay = { group: currentGroup, key: currentKey };
+    }
+    updatePinUI();
+    renderGrid();
+}
+
+function updatePinUI() {
+    const btn = document.getElementById('btn-pin');
+    const info = document.getElementById('overlay-info');
+    const opacitySlider = document.getElementById('overlay-opacity');
+    const opacityLabel = document.getElementById('overlay-opacity-label');
+    if (pinnedOverlay) {
+        btn.textContent = 'Unpin';
+        btn.classList.add('pin-active');
+        info.textContent = 'Overlay: ' + pinnedOverlay.key;
+        opacitySlider.style.display = '';
+        opacityLabel.style.display = '';
+    } else {
+        btn.textContent = 'Pin';
+        btn.classList.remove('pin-active');
+        info.textContent = '';
+        opacitySlider.style.display = 'none';
+        opacityLabel.style.display = 'none';
+    }
+}
+
+document.getElementById('btn-pin').onclick = togglePin;
+
+document.getElementById('overlay-opacity').addEventListener('input', (e) => {
+    overlayOpacity = parseInt(e.target.value) / 100;
+    renderGrid();
+});
+
 document.getElementById('zoom-slider').addEventListener('input', (e) => {
     cellSize = parseInt(e.target.value);
     renderGrid();
@@ -648,6 +746,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'e') { currentTool = 'erase'; updateToolButtons(); }
     if (e.key === 'i') { currentTool = 'pick'; updateToolButtons(); }
     if (e.key === 'g') { currentTool = 'fill'; updateToolButtons(); }
+    if (e.key === 't') { togglePin(); }
 });
 
 // ---------------------------------------------------------------------------
