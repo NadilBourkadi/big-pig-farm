@@ -3,10 +3,11 @@
 from typing import Callable, Optional, Protocol
 from uuid import UUID
 
+from big_pig_farm.data.config import NEEDS
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
-from big_pig_farm.simulation.needs import update_all_needs
+from big_pig_farm.simulation.needs import update_all_needs, precompute_nearby_counts
 from big_pig_farm.simulation.breeding import (
     advance_pregnancies,
     age_all_pigs,
@@ -49,8 +50,10 @@ class SimulationRunner:
 
         # 1. Update all guinea pig needs
         game_minutes = delta_seconds
-        for pig in state.get_pigs_list():
-            update_all_needs(pig, game_minutes, state)
+        pigs = state.get_pigs_list()
+        nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS)
+        for pig in pigs:
+            update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
 
         # 2. Update behaviors
         for pig in state.get_pigs_list():

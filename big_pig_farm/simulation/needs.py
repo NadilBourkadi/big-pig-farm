@@ -1,12 +1,40 @@
 """Hunger, energy, happiness calculations for guinea pigs."""
 
+from uuid import UUID
+
 from big_pig_farm.data.config import BIOME, NEEDS
 from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.entities.guinea_pig import GuineaPig, Personality, BehaviorState
 from big_pig_farm.entities.facilities import FacilityType
 
 
-def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
+def precompute_nearby_counts(
+    pigs: list[GuineaPig], radius: float,
+) -> dict[UUID, int]:
+    """One symmetric O(n²/2) pass to count nearby pigs for every pig.
+
+    If pig A is within *radius* of pig B, both get +1.  This replaces
+    the per-pig O(n) scan that previously ran inside update_all_needs,
+    halving the total distance calculations.
+    """
+    counts: dict[UUID, int] = {p.id: 0 for p in pigs}
+    radius_sq = radius * radius
+    for i in range(len(pigs)):
+        a = pigs[i]
+        for j in range(i + 1, len(pigs)):
+            b = pigs[j]
+            dx = a.position.x - b.position.x
+            dy = a.position.y - b.position.y
+            if dx * dx + dy * dy <= radius_sq:
+                counts[a.id] += 1
+                counts[b.id] += 1
+    return counts
+
+
+def update_all_needs(
+    pig: GuineaPig, game_minutes: float, game_state,
+    nearby_count: int | None = None,
+) -> None:
     """Update all needs for a guinea pig based on elapsed game time."""
     hours = game_minutes / 60.0
 
@@ -50,7 +78,7 @@ def update_all_needs(pig: GuineaPig, game_minutes: float, game_state) -> None:
         pig.needs.happiness -= NEEDS.BOREDOM_EXTRA_HAPPINESS_DRAIN * hours
 
     # Social need decay - reduced if near other pigs
-    nearby_pigs = _count_nearby_pigs(pig, game_state, radius=NEEDS.SOCIAL_RADIUS)
+    nearby_pigs = nearby_count if nearby_count is not None else _count_nearby_pigs(pig, game_state, radius=NEEDS.SOCIAL_RADIUS)
     if nearby_pigs > 0:
         # Being near other pigs satisfies social need passively
         # More pigs nearby = more social satisfaction
