@@ -67,9 +67,11 @@ class GameEngine:
         """Set the game speed."""
         self.state.speed = speed
 
-    def cycle_speed(self) -> GameSpeed:
+    def cycle_speed(self, debug: bool = False) -> GameSpeed:
         """Cycle through speed settings. Returns new speed."""
         speeds = [GameSpeed.NORMAL, GameSpeed.FAST, GameSpeed.FASTER, GameSpeed.FASTEST]
+        if debug:
+            speeds.extend([GameSpeed.DEBUG, GameSpeed.DEBUG_FAST])
         current_idx = speeds.index(self.state.speed) if self.state.speed in speeds else 0
         new_idx = (current_idx + 1) % len(speeds)
         self.state.speed = speeds[new_idx]

@@ -164,12 +164,14 @@ class MainGameScreen(Screen):
 
     def action_speed_up(self) -> None:
         """Increase game speed."""
-        new_speed = self.app.engine.cycle_speed()
+        new_speed = self.app.engine.cycle_speed(debug=self.app.debug_mode)
         self.notify(f"Speed: {SPEED_DISPLAY[new_speed]}")
 
     def action_slow_down(self) -> None:
         """Decrease game speed."""
         speeds = [GameSpeed.NORMAL, GameSpeed.FAST, GameSpeed.FASTER, GameSpeed.FASTEST]
+        if self.app.debug_mode:
+            speeds.extend([GameSpeed.DEBUG, GameSpeed.DEBUG_FAST])
         current = self.state.speed
         if current in speeds:
             idx = speeds.index(current)

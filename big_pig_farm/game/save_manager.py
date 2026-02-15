@@ -11,7 +11,7 @@ from uuid import UUID
 
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty, ContractBoard
-from big_pig_farm.simulation.breeding_program import BreedingProgram
+from big_pig_farm.simulation.breeding_program import BreedingProgram, BreedingStrategy
 from big_pig_farm.game.state import GameState, GameTime, EventLog, BreedingPair
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Personality, Needs, Position
 from big_pig_farm.entities.genetics import Genotype, Phenotype, calculate_phenotype, BaseColor, Pattern, ColorIntensity, RoanType
@@ -193,6 +193,7 @@ class SaveManager:
             # Breeding program migrations
             for col, typedef in [
                 ("maximize_diversity", "INTEGER DEFAULT 0"),
+                ("strategy", "TEXT DEFAULT 'target'"),
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE breeding_program ADD COLUMN {col} {typedef}")
@@ -368,7 +369,7 @@ class SaveManager:
             # Save breeding program
             bp = state.breeding_program
             cursor.execute(
-                "INSERT INTO breeding_program VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO breeding_program VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     json.dumps([c.value for c in bp.target_colors]),
                     json.dumps([p.value for p in bp.target_patterns]),
@@ -378,7 +379,8 @@ class SaveManager:
                     1 if bp.auto_pair else 0,
                     bp.stock_limit,
                     1 if bp.enabled else 0,
-                    1 if bp.maximize_diversity else 0,
+                    0,  # legacy maximize_diversity column
+                    bp.strategy.value,
                 ),
             )
 
@@ -588,6 +590,16 @@ class SaveManager:
                 bp_row = cursor.fetchone()
                 if bp_row:
                     bp_keys = bp_row.keys()
+                    # Load strategy: prefer new column, fall back to migrating maximize_diversity
+                    if "strategy" in bp_keys and bp_row["strategy"]:
+                        try:
+                            strategy = BreedingStrategy(bp_row["strategy"])
+                        except ValueError:
+                            strategy = BreedingStrategy.TARGET
+                    elif "maximize_diversity" in bp_keys and bool(bp_row["maximize_diversity"]):
+                        strategy = BreedingStrategy.DIVERSITY
+                    else:
+                        strategy = BreedingStrategy.TARGET
                     state.breeding_program = BreedingProgram(
                         target_colors={BaseColor("cream" if v == "light_golden" else v) for v in json.loads(bp_row["target_colors_json"])},
                         target_patterns={Pattern(v) for v in json.loads(bp_row["target_patterns_json"])},
@@ -595,7 +607,7 @@ class SaveManager:
                         target_roan={RoanType(v) for v in json.loads(bp_row["target_roan_json"])},
                         keep_carriers=bool(bp_row["keep_carriers"]),
                         auto_pair=bool(bp_row["auto_pair"]),
-                        maximize_diversity=bool(bp_row["maximize_diversity"]) if "maximize_diversity" in bp_keys else False,
+                        strategy=strategy,
                         stock_limit=bp_row["stock_limit"],
                         enabled=bool(bp_row["enabled"]),
                     )

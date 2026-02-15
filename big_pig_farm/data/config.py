@@ -11,6 +11,8 @@ class GameSpeed(Enum):
     FAST = 6
     FASTER = 15
     FASTEST = 60
+    DEBUG = 300  # 100x — only available with --debug flag
+    DEBUG_FAST = 900  # 300x — only available with --debug flag
 
 
 # Display labels for speed (decoupled from internal multiplier)
@@ -23,6 +25,8 @@ def _init_speed_display() -> None:
     SPEED_DISPLAY[GameSpeed.FAST] = "2x"
     SPEED_DISPLAY[GameSpeed.FASTER] = "5x"
     SPEED_DISPLAY[GameSpeed.FASTEST] = "20x"
+    SPEED_DISPLAY[GameSpeed.DEBUG] = "100x"
+    SPEED_DISPLAY[GameSpeed.DEBUG_FAST] = "300x"
 
 
 _init_speed_display()
@@ -239,7 +243,7 @@ class SimulationConfig:
     TICKS_PER_SECOND: int = 10
 
     # Movement
-    BASE_MOVE_SPEED: float = 3.5  # Cells per game minute
+    BASE_MOVE_SPEED: float = 1.0  # Cells per game minute
 
     # Pathfinding
     MAX_PATHFINDING_ITERATIONS: int = 3000
