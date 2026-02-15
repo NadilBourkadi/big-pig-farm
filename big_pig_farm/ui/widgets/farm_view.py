@@ -19,6 +19,9 @@ from big_pig_farm.data.sprites import (
     FLOOR_COLORS,
     FLOOR_COLORS_FAR,
     TERRAIN,
+    WALL_PLANK,
+    WALL_GRAIN,
+    WALL_POST,
     Direction,
     ZoomLevel,
     ZOOM_SCALES,
@@ -206,6 +209,76 @@ class FarmView(Static):
         color = colors[(h >> 4) % len(colors)]
         return char, Style(color=color, bgcolor="#4a3d28")
 
+    def _wall_texture(
+        self,
+        wx: int,
+        wy: int,
+        farm_w: int,
+        farm_h: int,
+        dx: int = 0,
+        dy: int = 0,
+        cell_w: int = 1,
+        cell_h: int = 1,
+    ) -> tuple[str, Style]:
+        """Return (char, style) for a wall cell with wooden fence texture.
+
+        dx/dy are sub-cell offsets (0..cell_w-1, 0..cell_h-1) used at close
+        zoom for per-character detail within a single world cell.
+        """
+        is_corner = (
+            (wy == 0 or wy == farm_h - 1)
+            and (wx == 0 or wx == farm_w - 1)
+        )
+        is_horizontal = wy == 0 or wy == farm_h - 1
+
+        h = (wx * 11 + wy * 17) & 0xFFFF
+        plank = WALL_PLANK[h % len(WALL_PLANK)]
+        grain = WALL_GRAIN[(h >> 3) % len(WALL_GRAIN)]
+
+        if is_corner:
+            return "█", Style(color=WALL_POST)
+
+        if is_horizontal:
+            if cell_h > 1:
+                # Close zoom: thick plank + grain line at bottom
+                if dy == 0:
+                    return "█", Style(color=plank)
+                return "▀", Style(color=plank, bgcolor=grain)
+            # Normal zoom: two-tone plank
+            return "▀", Style(color=plank, bgcolor=grain)
+
+        # Vertical wall
+        if cell_w > 1:
+            # Close zoom: highlight / shadow columns
+            color = grain if dx == 0 else plank
+            return "█", Style(color=color)
+        return "█", Style(color=plank)
+
+    def _draw_outer_wall(
+        self, width: int, height: int, offset_x: int, offset_y: int,
+        scale: float, cell_w: int, cell_h: int, farm_w: int, farm_h: int,
+    ) -> None:
+        """Draw a darker outer ring around the farm perimeter for wall thickness."""
+        # Iterate the ring of cells just outside the grid bounds
+        for world_y in range(-1, farm_h + 1):
+            for world_x in range(-1, farm_w + 1):
+                # Skip cells inside the grid — those are drawn by _draw_terrain
+                if 0 <= world_x < farm_w and 0 <= world_y < farm_h:
+                    continue
+                screen_x = int((world_x - self._viewport_x) * scale) + offset_x
+                screen_y = int((world_y - self._viewport_y) * scale) + offset_y
+                h = (world_x * 11 + world_y * 17) & 0xFFFF
+                color = WALL_GRAIN[h % len(WALL_GRAIN)]
+                style = Style(color=color)
+                for dy in range(cell_h):
+                    for dx in range(cell_w):
+                        sx = screen_x + dx
+                        sy = screen_y + dy
+                        if 0 <= sx < width and 0 <= sy < height:
+                            self._char_buffer[sy][sx] = "█"
+                            self._style_buffer[sy][sx] = style
+                            self._terrain_bg_buffer[sy][sx] = style
+
     def _draw_terrain(self, width: int, height: int, offset_x: int, offset_y: int) -> None:
         """Draw the terrain/floor."""
         farm = self.state.farm
@@ -218,6 +291,12 @@ class FarmView(Static):
         cell_w = max(1, int(scale))
         cell_h = max(1, int(scale))
 
+        # Outer wall ring (darker blocks for extra thickness)
+        self._draw_outer_wall(
+            width, height, offset_x, offset_y,
+            scale, cell_w, cell_h, farm.width, farm.height,
+        )
+
         for world_y in range(farm.height):
             for world_x in range(farm.width):
                 screen_x = int((world_x - self._viewport_x) * scale) + offset_x
@@ -229,20 +308,22 @@ class FarmView(Static):
                 cell = farm.cells[world_y][world_x]
 
                 if cell.cell_type.value == "wall":
-                    if world_y == 0 and world_x == 0:
-                        char = TERRAIN["corner_tl"]
-                    elif world_y == 0 and world_x == farm.width - 1:
-                        char = TERRAIN["corner_tr"]
-                    elif world_y == farm.height - 1 and world_x == 0:
-                        char = TERRAIN["corner_bl"]
-                    elif world_y == farm.height - 1 and world_x == farm.width - 1:
-                        char = TERRAIN["corner_br"]
-                    elif world_y == 0 or world_y == farm.height - 1:
-                        char = TERRAIN["wall_h"]
-                    else:
-                        char = TERRAIN["wall_v"]
-                    style = Style(color="bright_white")
-                elif cell.cell_type.value == "bedding":
+                    for dy in range(cell_h):
+                        for dx in range(cell_w):
+                            sx = screen_x + dx
+                            sy = screen_y + dy
+                            if 0 <= sx < width and 0 <= sy < height:
+                                wc, ws = self._wall_texture(
+                                    world_x, world_y,
+                                    farm.width, farm.height,
+                                    dx, dy, cell_w, cell_h,
+                                )
+                                self._char_buffer[sy][sx] = wc
+                                self._style_buffer[sy][sx] = ws
+                                self._terrain_bg_buffer[sy][sx] = ws
+                    continue
+
+                if cell.cell_type.value == "bedding":
                     char = TERRAIN["bedding"]
                     style = Style(color="yellow4")
                 elif cell.cell_type.value == "grass":
@@ -269,13 +350,35 @@ class FarmView(Static):
         """
         farm = self.state.farm
         scale = self._scale()
-        wall_style = Style(color="bright_white")
+        post_style = Style(color=WALL_POST)
+        outer_style = Style(color=WALL_GRAIN[0])
 
-        # Screen extents of the farm rectangle
+        # Screen extents of the farm rectangle (inner wall ring)
         x0 = int((0 - self._viewport_x) * scale) + offset_x
         y0 = int((0 - self._viewport_y) * scale) + offset_y
         x1 = int(((farm.width - 1) - self._viewport_x) * scale) + offset_x
         y1 = int(((farm.height - 1) - self._viewport_y) * scale) + offset_y
+
+        # Outer wall ring (one screen cell outside inner walls)
+        ox0 = int((-1 - self._viewport_x) * scale) + offset_x
+        oy0 = int((-1 - self._viewport_y) * scale) + offset_y
+        ox1 = int((farm.width - self._viewport_x) * scale) + offset_x
+        oy1 = int((farm.height - self._viewport_y) * scale) + offset_y
+
+        for sx in range(max(0, ox0), min(width, ox1 + 1)):
+            if 0 <= oy0 < height:
+                self._char_buffer[oy0][sx] = "█"
+                self._style_buffer[oy0][sx] = outer_style
+            if 0 <= oy1 < height:
+                self._char_buffer[oy1][sx] = "█"
+                self._style_buffer[oy1][sx] = outer_style
+        for sy in range(max(0, oy0 + 1), min(height, oy1)):
+            if 0 <= ox0 < width:
+                self._char_buffer[sy][ox0] = "█"
+                self._style_buffer[sy][ox0] = outer_style
+            if 0 <= ox1 < width:
+                self._char_buffer[sy][ox1] = "█"
+                self._style_buffer[sy][ox1] = outer_style
 
         # Fill interior with textured floor
         inv_scale = 1.0 / scale
@@ -288,32 +391,36 @@ class FarmView(Static):
                 self._style_buffer[sy][sx] = style
                 self._terrain_bg_buffer[sy][sx] = style
 
-        # Draw horizontal walls (top + bottom)
+        # Draw inner horizontal walls (top + bottom)
         for sx in range(max(0, x0), min(width, x1 + 1)):
+            h = (sx * 7 + 3) & 0xFF
+            plank = WALL_PLANK[h % len(WALL_PLANK)]
+            grain = WALL_GRAIN[(h >> 3) % len(WALL_GRAIN)]
+            ws = Style(color=plank, bgcolor=grain)
             if 0 <= y0 < height:
-                self._char_buffer[y0][sx] = TERRAIN["wall_h"]
-                self._style_buffer[y0][sx] = wall_style
+                self._char_buffer[y0][sx] = "▀"
+                self._style_buffer[y0][sx] = ws
             if 0 <= y1 < height:
-                self._char_buffer[y1][sx] = TERRAIN["wall_h"]
-                self._style_buffer[y1][sx] = wall_style
+                self._char_buffer[y1][sx] = "▀"
+                self._style_buffer[y1][sx] = ws
 
-        # Draw vertical walls (left + right)
+        # Draw inner vertical walls (left + right)
         for sy in range(max(0, y0 + 1), min(height, y1)):
+            h = (sy * 11 + 5) & 0xFF
+            plank = WALL_PLANK[h % len(WALL_PLANK)]
+            ws = Style(color=plank)
             if 0 <= x0 < width:
-                self._char_buffer[sy][x0] = TERRAIN["wall_v"]
-                self._style_buffer[sy][x0] = wall_style
+                self._char_buffer[sy][x0] = "█"
+                self._style_buffer[sy][x0] = ws
             if 0 <= x1 < width:
-                self._char_buffer[sy][x1] = TERRAIN["wall_v"]
-                self._style_buffer[sy][x1] = wall_style
+                self._char_buffer[sy][x1] = "█"
+                self._style_buffer[sy][x1] = ws
 
         # Corners
-        for cx, cy, key in [
-            (x0, y0, "corner_tl"), (x1, y0, "corner_tr"),
-            (x0, y1, "corner_bl"), (x1, y1, "corner_br"),
-        ]:
+        for cx, cy in [(x0, y0), (x1, y0), (x0, y1), (x1, y1)]:
             if 0 <= cx < width and 0 <= cy < height:
-                self._char_buffer[cy][cx] = TERRAIN[key]
-                self._style_buffer[cy][cx] = wall_style
+                self._char_buffer[cy][cx] = "█"
+                self._style_buffer[cy][cx] = post_style
 
     # ------------------------------------------------------------------
     # Facilities
