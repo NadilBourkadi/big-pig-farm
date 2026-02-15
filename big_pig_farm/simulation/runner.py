@@ -1,5 +1,6 @@
 """Simulation tick orchestration — runs all game systems each tick."""
 
+import time
 from typing import Callable, Optional, Protocol
 from uuid import UUID
 
@@ -45,21 +46,22 @@ class SimulationRunner:
 
     def tick(self, delta_seconds: float) -> None:
         """Process one simulation tick. delta_seconds is already speed-scaled."""
+        tick_start = time.perf_counter()
         state = self.state
         controller = self.behavior_controller
 
-        # 1. Update all guinea pig needs
+        # 1. Rebuild spatial grid first — used by needs, behaviors, and collision
+        controller.collision.rebuild_spatial_grid()
+
+        # 2. Update all guinea pig needs
         game_minutes = delta_seconds
         pigs = state.get_pigs_list()
-        nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS)
+        nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS, controller.collision.spatial_grid)
         for pig in pigs:
             update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
 
-        # 2. Rebuild spatial grid for fast collision/blocking checks
-        controller.collision.rebuild_spatial_grid()
-
         # 3. Update behaviors
-        for pig in state.get_pigs_list():
+        for pig in pigs:
             controller.update(pig, delta_seconds)
 
         # 4. Separate any overlapping pigs
@@ -99,7 +101,8 @@ class SimulationRunner:
 
         # 11. Debug logging
         if self.debug_logger:
-            self.debug_logger.tick(state, controller)
+            tick_ms = (time.perf_counter() - tick_start) * 1000.0
+            self.debug_logger.tick(state, controller, tick_ms)
 
         # 12. Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1

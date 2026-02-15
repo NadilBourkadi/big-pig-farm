@@ -127,6 +127,7 @@ class FacilityManager:
         """Find an unoccupied interaction point around a facility."""
         farm = self.game_state.farm
         start = pig.position.grid_pos()
+        grid = self.collision.spatial_grid
 
         # Use the facility-use blocking radius for occupancy checks so that
         # points marked "open" are genuinely reachable (consistent with the
@@ -146,7 +147,7 @@ class FacilityManager:
             point_pos = Position(x=float(point[0]), y=float(point[1]))
             occupied = False
 
-            for other_pig in self.game_state.get_pigs_list():
+            for other_pig in grid.get_nearby(float(point[0]), float(point[1])):
                 if other_pig.id == pig.id:
                     continue
 
@@ -189,21 +190,35 @@ class FacilityManager:
         """Count pigs near or heading to a facility (excluding the given pig)."""
         fx, fy = facility.interaction_point
         facility_pos = Position(x=float(fx), y=float(fy))
+        grid = self.collision.spatial_grid
+        counted_ids: set[UUID] = set()
         count = 0
-        for other_pig in self.game_state.get_pigs_list():
+
+        # Use spatial grid for distance-based proximity check
+        for other_pig in grid.get_nearby(float(fx), float(fy)):
             if other_pig.id == pig.id:
                 continue
-            # Check if pig is near the facility
             dist = other_pig.position.distance_to(facility_pos)
             if dist < BEHAVIOR.FACILITY_NEARBY_RADIUS:
                 count += 1
-            # Check if pig is heading toward this facility
+                counted_ids.add(other_pig.id)
             elif other_pig.target_facility_id == facility.id:
                 count += 1
+                counted_ids.add(other_pig.id)
             elif other_pig.target_position:
                 target_dist = other_pig.target_position.distance_to(facility_pos)
                 if target_dist < BEHAVIOR.FACILITY_HEADING_RADIUS:
                     count += 1
+                    counted_ids.add(other_pig.id)
+
+        # Also count distant pigs targeting this specific facility by ID
+        # (they wouldn't appear in the spatial neighborhood)
+        for other_pig in self.game_state.get_pigs_list():
+            if other_pig.id == pig.id or other_pig.id in counted_ids:
+                continue
+            if other_pig.target_facility_id == facility.id:
+                count += 1
+
         return count
 
     def rank_facilities_by_spread(self, pig: GuineaPig, facilities: list[Facility]) -> list[Facility]:
@@ -234,27 +249,34 @@ class FacilityManager:
 
     def count_pigs_using_facility(self, facility: Facility, exclude_pig: Optional[GuineaPig] = None) -> int:
         """Count how many pigs are currently using a facility (within interaction range)."""
-        count = 0
+        grid = self.collision.spatial_grid
+        using_states = (BehaviorState.SLEEPING, BehaviorState.EATING,
+                        BehaviorState.DRINKING, BehaviorState.PLAYING)
+        counted: set[UUID] = set()
+        exclude_id = exclude_pig.id if exclude_pig else None
         for point in facility.interaction_points:
-            for other_pig in self.game_state.get_pigs_list():
-                if exclude_pig and other_pig.id == exclude_pig.id:
+            for other_pig in grid.get_nearby(float(point[0]), float(point[1])):
+                if other_pig.id == exclude_id or other_pig.id in counted:
                     continue
-                # Check if pig is near this interaction point and in a using state
                 dist = other_pig.position.distance_to(Position(x=float(point[0]), y=float(point[1])))
-                if dist < BEHAVIOR.OCCUPANCY_RADIUS:
-                    # Check if actually using (not just passing by)
-                    if other_pig.behavior_state in (BehaviorState.SLEEPING, BehaviorState.EATING,
-                                                     BehaviorState.DRINKING, BehaviorState.PLAYING):
-                        count += 1
-                        break  # Don't double-count same pig at multiple points
-        return count
+                if dist < BEHAVIOR.OCCUPANCY_RADIUS and other_pig.behavior_state in using_states:
+                    counted.add(other_pig.id)
+        return len(counted)
+
+    def _get_candidate_facilities(self, pig: GuineaPig) -> list[Facility]:
+        """Get facilities to check for arrival — target facility first, then nearby."""
+        if pig.target_facility_id:
+            target = self.game_state.get_facility(pig.target_facility_id)
+            if target:
+                return [target]
+        return self.game_state.get_facilities_list()
 
     def check_arrived_at_facility(self, pig: GuineaPig) -> None:
         """Check if pig arrived at a facility and update behavior state."""
         grid_pos = pig.position.grid_pos()
         successfully_using_facility = False
 
-        for facility in self.game_state.get_facilities_list():
+        for facility in self._get_candidate_facilities(pig):
             # Check if pig is at an interaction point for this facility
             # Must be at exact position or orthogonally adjacent (not diagonal)
             for ix, iy in facility.interaction_points:
@@ -332,7 +354,7 @@ class FacilityManager:
         """Consume resources from a nearby facility."""
         grid_pos = pig.position.grid_pos()
 
-        for facility in self.game_state.get_facilities_list():
+        for facility in self._get_candidate_facilities(pig):
             ix, iy = facility.interaction_point
             if abs(grid_pos[0] - ix) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE and abs(grid_pos[1] - iy) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE:
                 if pig.behavior_state == BehaviorState.EATING:

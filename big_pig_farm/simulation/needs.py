@@ -1,5 +1,6 @@
 """Hunger, energy, happiness calculations for guinea pigs."""
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from big_pig_farm.data.config import BIOME, NEEDS
@@ -7,27 +8,42 @@ from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.entities.guinea_pig import GuineaPig, Personality, BehaviorState
 from big_pig_farm.entities.facilities import FacilityType
 
+if TYPE_CHECKING:
+    from big_pig_farm.simulation.collision import SpatialGrid
+
 
 def precompute_nearby_counts(
     pigs: list[GuineaPig], radius: float,
+    spatial_grid: "SpatialGrid | None" = None,
 ) -> dict[UUID, int]:
-    """One symmetric O(n²/2) pass to count nearby pigs for every pig.
+    """Count nearby pigs for every pig.
 
-    If pig A is within *radius* of pig B, both get +1.  This replaces
-    the per-pig O(n) scan that previously ran inside update_all_needs,
-    halving the total distance calculations.
+    When a spatial_grid is provided (rebuilt earlier in the tick), uses
+    O(n * k) bucket lookups instead of O(n²/2) all-pairs.
     """
     counts: dict[UUID, int] = {p.id: 0 for p in pigs}
     radius_sq = radius * radius
-    for i in range(len(pigs)):
-        a = pigs[i]
-        for j in range(i + 1, len(pigs)):
-            b = pigs[j]
-            dx = a.position.x - b.position.x
-            dy = a.position.y - b.position.y
-            if dx * dx + dy * dy <= radius_sq:
-                counts[a.id] += 1
-                counts[b.id] += 1
+
+    if spatial_grid is not None:
+        for pig in pigs:
+            for other in spatial_grid.get_nearby(pig.position.x, pig.position.y):
+                if other.id == pig.id:
+                    continue
+                dx = pig.position.x - other.position.x
+                dy = pig.position.y - other.position.y
+                if dx * dx + dy * dy <= radius_sq:
+                    counts[pig.id] += 1
+    else:
+        for i in range(len(pigs)):
+            a = pigs[i]
+            for j in range(i + 1, len(pigs)):
+                b = pigs[j]
+                dx = a.position.x - b.position.x
+                dy = a.position.y - b.position.y
+                if dx * dx + dy * dy <= radius_sq:
+                    counts[a.id] += 1
+                    counts[b.id] += 1
+
     return counts
 
 
