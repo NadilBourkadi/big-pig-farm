@@ -56,6 +56,10 @@ class FarmGrid(BaseModel):
     # O(1) area lookup by UUID
     _area_lookup: dict[UUID, FarmArea] = {}
 
+    # Performance counters (reset each debug snapshot window)
+    _pathfind_calls: int = 0
+    _pathfind_nodes: int = 0
+
     model_config = {"arbitrary_types_allowed": True}
 
     def model_post_init(self, __context) -> None:
@@ -319,6 +323,8 @@ class FarmGrid(BaseModel):
         goal: tuple[int, int],
     ) -> list[tuple[int, int]]:
         """Find path from start to goal using A* algorithm."""
+        self._pathfind_calls += 1
+
         if not self.is_walkable(goal[0], goal[1]):
             # Try to find nearest walkable cell to goal
             goal = self._find_nearest_walkable(goal)
@@ -342,6 +348,7 @@ class FarmGrid(BaseModel):
             _, current = heapq.heappop(open_set)
 
             if current == goal:
+                self._pathfind_nodes += iterations
                 # Reconstruct path
                 path = [current]
                 while current in came_from:
@@ -360,7 +367,13 @@ class FarmGrid(BaseModel):
                     f_score[neighbor] = f
                     heapq.heappush(open_set, (f, neighbor))
 
+        self._pathfind_nodes += iterations
         return []  # No path found
+
+    def reset_perf_counters(self) -> None:
+        """Reset pathfinding performance counters for the next snapshot window."""
+        self._pathfind_calls = 0
+        self._pathfind_nodes = 0
 
     def _heuristic(self, a: tuple[int, int], b: tuple[int, int]) -> float:
         """Manhattan distance heuristic for A*."""

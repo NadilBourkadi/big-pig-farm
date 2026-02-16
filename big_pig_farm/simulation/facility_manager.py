@@ -24,6 +24,9 @@ class FacilityManager:
         # get_reachable_facilities, find_open_interaction_point, and
         # try_alternative_facility all pathfind to the same points.
         self._path_cache: dict[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int]]] = {}
+        # Performance counters (reset each debug snapshot window)
+        self.cache_hits: int = 0
+        self.cache_misses: int = 0
 
     def begin_decision(self) -> None:
         """Start a facility decision — enable path caching."""
@@ -37,7 +40,15 @@ class FacilityManager:
         self, start: tuple[int, int], goal: tuple[int, int],
     ) -> list[tuple[int, int]] | None:
         """Look up a previously cached path. Returns None on cache miss."""
-        return self._path_cache.get((start, goal))
+        result = self._path_cache.get((start, goal))
+        if result is not None:
+            self.cache_hits += 1
+        return result
+
+    def reset_perf_counters(self) -> None:
+        """Reset cache performance counters for the next snapshot window."""
+        self.cache_hits = 0
+        self.cache_misses = 0
 
     def _cached_find_path(
         self, start: tuple[int, int], goal: tuple[int, int],
@@ -46,7 +57,9 @@ class FacilityManager:
         key = (start, goal)
         result = self._path_cache.get(key)
         if result is not None:
+            self.cache_hits += 1
             return result
+        self.cache_misses += 1
         path = self.game_state.farm.find_path(start, goal)
         self._path_cache[key] = path
         return path
