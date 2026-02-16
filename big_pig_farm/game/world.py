@@ -56,6 +56,11 @@ class FarmGrid(BaseModel):
     # O(1) area lookup by UUID
     _area_lookup: dict[UUID, FarmArea] = {}
 
+    # Grid generation counter — incremented whenever the walkable grid changes
+    # (facility placed/removed, area added, tunnels carved).  Used by the
+    # cross-tick path cache to invalidate stale entries.
+    _grid_generation: int = 0
+
     # Performance counters (reset each debug snapshot window)
     _pathfind_calls: int = 0
     _pathfind_nodes: int = 0
@@ -77,6 +82,7 @@ class FarmGrid(BaseModel):
         """Invalidate the cached list of walkable positions."""
         self._walkable_cache = None
         self._area_walkable_cache = {}
+        self._grid_generation += 1
 
     def _compute_wall_flags(self) -> None:
         """Pre-compute is_corner and is_horizontal_wall for all wall cells.
