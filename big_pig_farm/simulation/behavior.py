@@ -256,11 +256,16 @@ class BehaviorController:
             self._start_wandering(pig)
         else:
             # Idle drift: if another pig is nearby, wander away instead of idling
-            has_nearby_pig = any(
-                pig.position.distance_to(p.position) < BEHAVIOR.IDLE_DRIFT_RADIUS
-                for p in self.game_state.get_pigs_list()
-                if p.id != pig.id
-            )
+            drift_r_sq = BEHAVIOR.IDLE_DRIFT_RADIUS ** 2
+            has_nearby_pig = False
+            for p in self.collision.spatial_grid.get_nearby(pig.position.x, pig.position.y):
+                if p.id == pig.id:
+                    continue
+                dx = pig.position.x - p.position.x
+                dy = pig.position.y - p.position.y
+                if dx * dx + dy * dy < drift_r_sq:
+                    has_nearby_pig = True
+                    break
             if has_nearby_pig:
                 pig.log_behavior("Too close to another pig, drifting away")
                 pig.target_description = None
