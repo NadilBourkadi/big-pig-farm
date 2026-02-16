@@ -409,18 +409,32 @@ class BehaviorController:
 
     def _seek_social_interaction(self, pig: GuineaPig) -> None:
         """Find another guinea pig to socialize with."""
-        other_pigs = [
-            p for p in self.game_state.get_pigs_list()
-            if p.id != pig.id and not p.has_trait(Personality.SHY)
-        ]
+        # Try spatial grid first for nearest non-shy pig
+        nearest = None
+        best_dist_sq = float('inf')
+        px, py = pig.position.x, pig.position.y
+        for p in self.collision.spatial_grid.get_nearby(px, py):
+            if p.id == pig.id or p.has_trait(Personality.SHY):
+                continue
+            dsq = (px - p.position.x) ** 2 + (py - p.position.y) ** 2
+            if dsq < best_dist_sq:
+                best_dist_sq = dsq
+                nearest = p
 
-        if not other_pigs:
+        # Fall back to full list if no one nearby
+        if nearest is None:
+            for p in self.game_state.get_pigs_list():
+                if p.id == pig.id or p.has_trait(Personality.SHY):
+                    continue
+                dsq = (px - p.position.x) ** 2 + (py - p.position.y) ** 2
+                if dsq < best_dist_sq:
+                    best_dist_sq = dsq
+                    nearest = p
+
+        if nearest is None:
             pig.target_description = None
             self._start_wandering(pig)
             return
-
-        # Find nearest other pig
-        nearest = min(other_pigs, key=lambda p: pig.position.distance_to(p.position))
 
         # Move to a cell adjacent to the other pig, not on top of them
         target_pos = self._find_adjacent_cell(
