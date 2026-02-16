@@ -1,18 +1,20 @@
 """Farm grid and spatial management with A* pathfinding."""
 
+import heapq
 import random
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from uuid import UUID
-import heapq
+
+if TYPE_CHECKING:
+    from big_pig_farm.game.state import GameState
 
 from pydantic import BaseModel, Field
 
 from big_pig_farm.data.config import FARM_TIERS, ROOM_TIERS, SIMULATION
 from big_pig_farm.entities.areas import FarmArea, TunnelConnection
 from big_pig_farm.entities.biomes import BiomeType
-from big_pig_farm.entities.facilities import Facility, FacilityType
-
+from big_pig_farm.entities.facilities import Facility
 
 # Tunnel dimensions: 5 cells wide (half-width 2 → range -2..+2)
 TUNNEL_HALF_WIDTH = 2
@@ -89,12 +91,14 @@ class FarmGrid(BaseModel):
 
         This replaces the per-area iteration in rendering that previously
         looped over all areas for every wall cell every frame.
+        Tunnel cells with manually-set flags are preserved (barrier walls).
         """
-        # Reset all flags first
+        # Reset flags on non-tunnel cells only (tunnel barrier walls keep theirs)
         for row in self.cells:
             for cell in row:
-                cell.is_corner = False
-                cell.is_horizontal_wall = False
+                if not cell.is_tunnel:
+                    cell.is_corner = False
+                    cell.is_horizontal_wall = False
 
         for area in self.areas:
             for x in range(area.x1, area.x2 + 1):
@@ -489,27 +493,33 @@ class FarmGrid(BaseModel):
         self._compute_wall_flags()
         self._invalidate_walkable_cache()
 
+    def _get_adjacent_pairs(self) -> list[tuple[FarmArea, FarmArea]]:
+        """Return all pairs of rooms in horizontally/vertically adjacent grid slots."""
+        pairs: list[tuple[FarmArea, FarmArea]] = []
+        by_slot: dict[tuple[int, int], FarmArea] = {}
+        for area in self.areas:
+            by_slot[(area.grid_col, area.grid_row)] = area
+
+        for (col, row), area in by_slot.items():
+            # Right neighbor
+            right = by_slot.get((col + 1, row))
+            if right is not None:
+                pairs.append((area, right))
+            # Below neighbor
+            below = by_slot.get((col, row + 1))
+            if below is not None:
+                pairs.append((area, below))
+
+        return pairs
+
     def _rebuild_tunnels(self) -> None:
         """Re-carve all tunnel connections using current tunnel dimensions.
 
-        Clears old tunnel cells and re-carves using the current width/count
-        settings so existing saves pick up tunnel improvements.
+        Uses _get_adjacent_pairs() so newly adjacent rooms after relayout
+        get connected, and connections to non-adjacent rooms are dropped.
         """
-        if len(self.areas) < 2 or not self.tunnels:
+        if len(self.areas) < 2:
             return
-
-        # Collect unique area pairs from existing tunnels
-        pairs: list[tuple[FarmArea, FarmArea]] = []
-        seen: set[tuple[str, str]] = set()
-        for tunnel in self.tunnels:
-            key = tuple(sorted((str(tunnel.area_a_id), str(tunnel.area_b_id))))
-            if key in seen:
-                continue
-            seen.add(key)
-            area_a = self.get_area_by_id(tunnel.area_a_id)
-            area_b = self.get_area_by_id(tunnel.area_b_id)
-            if area_a and area_b:
-                pairs.append((area_a, area_b))
 
         # Clear all existing tunnel cells back to their base state
         for tunnel in self.tunnels:
@@ -517,6 +527,7 @@ class FarmGrid(BaseModel):
                 if self.is_valid_position(x, y):
                     cell = self.cells[y][x]
                     cell.is_tunnel = False
+                    cell.is_horizontal_wall = False
                     # Restore to wall if on an area border, otherwise void
                     if cell.area_id is not None:
                         cell.cell_type = CellType.WALL
@@ -526,8 +537,8 @@ class FarmGrid(BaseModel):
                         cell.is_walkable = False
         self.tunnels.clear()
 
-        # Re-carve each connection with current settings
-        for area_a, area_b in pairs:
+        # Re-carve each adjacent pair with current settings
+        for area_a, area_b in self._get_adjacent_pairs():
             self.connect_areas(area_a, area_b)
 
     def add_area(self, area: FarmArea) -> None:
@@ -570,11 +581,12 @@ class FarmGrid(BaseModel):
     def _carve_one_horizontal_tunnel(
         self, area_a_id, area_b_id, t_x1: int, t_x2: int, center_y: int,
     ) -> TunnelConnection:
-        """Carve a single horizontal 5-wide tunnel at the given center_y."""
+        """Carve a single horizontal 5-wide tunnel with barrier walls."""
         hw = TUNNEL_HALF_WIDTH
         tunnel_cells = []
 
         for x in range(t_x1, t_x2 + 1):
+            # Walkable corridor
             for dy in range(-hw, hw + 1):
                 y = center_y + dy
                 if self.is_valid_position(x, y):
@@ -582,6 +594,17 @@ class FarmGrid(BaseModel):
                     cell.cell_type = CellType.FLOOR
                     cell.is_walkable = True
                     cell.is_tunnel = True
+                    tunnel_cells.append((x, y))
+
+            # Barrier walls on both sides of the corridor
+            for barrier_dy in (-(hw + 1), hw + 1):
+                y = center_y + barrier_dy
+                if self.is_valid_position(x, y):
+                    cell = self.cells[y][x]
+                    cell.cell_type = CellType.WALL
+                    cell.is_walkable = False
+                    cell.is_tunnel = True
+                    cell.is_horizontal_wall = True
                     tunnel_cells.append((x, y))
 
         tunnel = TunnelConnection(
@@ -624,11 +647,16 @@ class FarmGrid(BaseModel):
     def _carve_one_vertical_tunnel(
         self, area_a_id, area_b_id, t_y1: int, t_y2: int, center_x: int,
     ) -> TunnelConnection:
-        """Carve a single vertical 5-wide tunnel at the given center_x."""
-        hw = TUNNEL_HALF_WIDTH
+        """Carve a single vertical tunnel with barrier walls.
+
+        Uses double the half-width of horizontal tunnels to compensate
+        for terminal characters being ~2x taller than wide.
+        """
+        hw = TUNNEL_HALF_WIDTH * 2 + 1
         tunnel_cells = []
 
         for y in range(t_y1, t_y2 + 1):
+            # Walkable corridor
             for dx in range(-hw, hw + 1):
                 x = center_x + dx
                 if self.is_valid_position(x, y):
@@ -636,6 +664,17 @@ class FarmGrid(BaseModel):
                     cell.cell_type = CellType.FLOOR
                     cell.is_walkable = True
                     cell.is_tunnel = True
+                    tunnel_cells.append((x, y))
+
+            # Barrier walls on both sides of the corridor
+            for barrier_dx in (-(hw + 1), hw + 1):
+                x = center_x + barrier_dx
+                if self.is_valid_position(x, y):
+                    cell = self.cells[y][x]
+                    cell.cell_type = CellType.WALL
+                    cell.is_walkable = False
+                    cell.is_tunnel = True
+                    # Vertical tunnel barrier walls are vertical walls (not horizontal)
                     tunnel_cells.append((x, y))
 
         tunnel = TunnelConnection(
@@ -721,12 +760,55 @@ class FarmGrid(BaseModel):
 
         self._invalidate_walkable_cache()
 
+    def _compute_grid_layout(self) -> dict[int, tuple[int, int]]:
+        """Compute world-coordinate origins for each area using 2-column grid.
+
+        Returns {area_index: (x1, y1)} for each area.
+        """
+        gap = 1  # Gap between room walls for tunnel corridor
+
+        # Collect room dimensions per slot
+        slots: list[tuple[int, int, int, int]] = []  # (col, row, width, height)
+        for i, area in enumerate(self.areas):
+            col = area.grid_col
+            row = area.grid_row
+            room_w = area.x2 - area.x1 + 1
+            room_h = area.y2 - area.y1 + 1
+            slots.append((col, row, room_w, room_h))
+
+        # Compute max width per column and max height per row
+        max_col = max(s[0] for s in slots) if slots else 0
+        max_row = max(s[1] for s in slots) if slots else 0
+
+        col_widths = [0] * (max_col + 1)
+        row_heights = [0] * (max_row + 1)
+        for col, row, w, h in slots:
+            col_widths[col] = max(col_widths[col], w)
+            row_heights[row] = max(row_heights[row], h)
+
+        # Cumulative offsets
+        col_offsets = [0] * (max_col + 1)
+        for c in range(1, max_col + 1):
+            col_offsets[c] = col_offsets[c - 1] + col_widths[c - 1] + gap
+        row_offsets = [0] * (max_row + 1)
+        for r in range(1, max_row + 1):
+            row_offsets[r] = row_offsets[r - 1] + row_heights[r - 1] + gap
+
+        # Compute origin for each area, centered within its slot
+        origins: dict[int, tuple[int, int]] = {}
+        for i, (col, row, w, h) in enumerate(slots):
+            cx = col_offsets[col] + (col_widths[col] - w) // 2
+            cy = row_offsets[row] + (row_heights[row] - h) // 2
+            origins[i] = (cx, cy)
+
+        return origins
+
     def add_room(
         self,
         biome: BiomeType,
         room_name: Optional[str] = None,
     ) -> Optional[tuple[FarmArea, list[TunnelConnection], int, int]]:
-        """Add a new room with the given biome, connected to the most recent area.
+        """Add a new room with the given biome using 2-column grid layout.
 
         Returns (new_area, tunnels, offset_x, offset_y) or None if at max rooms.
         offset_x/offset_y are the grid expansion offsets that entities need
@@ -748,71 +830,216 @@ class FarmGrid(BaseModel):
             from big_pig_farm.entities.biomes import BIOMES
             room_name = f"{BIOMES[biome].display_name} Room"
 
-        # Attach to the most recently added area
-        attach_area = self.areas[-1]
+        # Assign next grid slot (reading order, 2 columns)
+        new_col = room_idx % 2
+        new_row = room_idx // 2
 
-        # Try placement directions: RIGHT, BELOW, LEFT, ABOVE
-        gap = 4  # Gap between room walls for tunnel corridor
-        candidates = [
-            # (new_x1, new_y1, direction)
-            (attach_area.x2 + gap, attach_area.center_y - rh // 2, "right"),
-            (attach_area.center_x - rw // 2, attach_area.y2 + gap, "below"),
-            (attach_area.x1 - gap - rw, attach_area.center_y - rh // 2, "left"),
-            (attach_area.center_x - rw // 2, attach_area.y1 - gap - rh, "above"),
-        ]
+        # Create the area with placeholder coordinates (will be repositioned)
+        new_area = FarmArea(
+            name=room_name,
+            biome=biome,
+            x1=0, y1=0,
+            x2=rw - 1, y2=rh - 1,
+            grid_col=new_col, grid_row=new_row,
+        )
 
-        for new_x1, new_y1, _direction in candidates:
-            new_x2 = new_x1 + rw - 1
-            new_y2 = new_y1 + rh - 1
+        # Temporarily add to areas list to compute full grid layout
+        self.areas.append(new_area)
+        self._area_lookup[new_area.id] = new_area
+        origins = self._compute_grid_layout()
 
-            # Calculate required grid expansion
-            need_left = max(0, -new_x1)
-            need_top = max(0, -new_y1)
-            need_right = max(0, new_x2 + 1 - self.width)
-            need_bottom = max(0, new_y2 + 1 - self.height)
+        # Compute required grid size
+        total_w = 0
+        total_h = 0
+        for i, area in enumerate(self.areas):
+            ox, oy = origins[i]
+            aw = area.x2 - area.x1 + 1
+            ah = area.y2 - area.y1 + 1
+            total_w = max(total_w, ox + aw)
+            total_h = max(total_h, oy + ah)
 
-            offset_x = need_left
-            offset_y = need_top
-            new_grid_w = self.width + need_left + need_right
-            new_grid_h = self.height + need_top + need_bottom
+        # Remove the temporarily added area (we'll re-add via add_area below)
+        self.areas.pop()
+        del self._area_lookup[new_area.id]
 
-            # Expand if needed
-            if new_grid_w > self.width or new_grid_h > self.height:
-                self.expand_grid(new_grid_w, new_grid_h, offset_x, offset_y)
+        # Compute offset needed to shift existing content
+        # (existing areas already have world coords, new layout may differ)
+        offset_x = 0
+        offset_y = 0
+        if len(self.areas) > 0:
+            # Check if existing areas need shifting
+            old_origin_0 = (self.areas[0].x1, self.areas[0].y1)
+            new_origin_0 = origins[0]
+            offset_x = new_origin_0[0] - old_origin_0[0]
+            offset_y = new_origin_0[1] - old_origin_0[1]
 
-            # Recalculate position after expansion
-            actual_x1 = new_x1 + offset_x
-            actual_y1 = new_y1 + offset_y
+        # Expand grid if needed
+        need_w = max(self.width + max(0, offset_x), total_w)
+        need_h = max(self.height + max(0, offset_y), total_h)
 
-            # Check the area doesn't overlap existing areas
-            actual_x2 = actual_x1 + rw - 1
-            actual_y2 = actual_y1 + rh - 1
-            overlap = False
-            for existing in self.areas:
-                if (actual_x1 <= existing.x2 and actual_x2 >= existing.x1
-                        and actual_y1 <= existing.y2 and actual_y2 >= existing.y1):
-                    overlap = True
-                    break
-            if overlap:
-                continue
+        # If there's negative offset (existing content needs to shift right/down)
+        shift_x = max(0, -offset_x) if offset_x < 0 else 0
+        shift_y = max(0, -offset_y) if offset_y < 0 else 0
+        if shift_x > 0 or shift_y > 0:
+            need_w = max(need_w, self.width + shift_x)
+            need_h = max(need_h, self.height + shift_y)
 
-            # Create the area
-            new_area = FarmArea(
-                name=room_name,
-                biome=biome,
-                x1=actual_x1,
-                y1=actual_y1,
-                x2=actual_x2,
-                y2=actual_y2,
-            )
-            self.add_area(new_area)
+        # Only shift existing content if offset changed
+        entity_offset_x = 0
+        entity_offset_y = 0
+        if offset_x != 0 or offset_y != 0:
+            # We need to rebuild the entire grid with proper positions
+            # Clear tunnel cells first
+            for tunnel in self.tunnels:
+                for x, y in tunnel.cells:
+                    if self.is_valid_position(x, y):
+                        cell = self.cells[y][x]
+                        cell.is_tunnel = False
+                        cell.is_horizontal_wall = False
+            self.tunnels.clear()
 
-            # Update tier (highest room index + 1)
-            self.tier = max(self.tier, room_tier.tier)
+            # Expand and shift
+            if need_w > self.width or need_h > self.height or shift_x > 0 or shift_y > 0:
+                self.expand_grid(need_w, need_h, shift_x, shift_y)
+                entity_offset_x = shift_x
+                entity_offset_y = shift_y
 
-            # Connect with tunnels
-            tunnels = self.connect_areas(attach_area, new_area)
+            # Reposition existing areas to their new grid positions
+            for i, area in enumerate(self.areas):
+                target_x1, target_y1 = origins[i]
+                aw = area.x2 - area.x1 + 1
+                ah = area.y2 - area.y1 + 1
+                area.x1 = target_x1
+                area.y1 = target_y1
+                area.x2 = target_x1 + aw - 1
+                area.y2 = target_y1 + ah - 1
 
-            return new_area, tunnels, offset_x, offset_y
+            # Rebuild cells for all existing areas
+            self._repair_area_cells()
+        elif need_w > self.width or need_h > self.height:
+            self.expand_grid(need_w, need_h, 0, 0)
 
-        return None
+        # Place the new area at its computed position
+        new_origin = origins[room_idx]
+        new_area.x1 = new_origin[0]
+        new_area.y1 = new_origin[1]
+        new_area.x2 = new_origin[0] + rw - 1
+        new_area.y2 = new_origin[1] + rh - 1
+        self.add_area(new_area)
+
+        # Update tier
+        self.tier = max(self.tier, room_tier.tier)
+
+        # Rebuild all tunnel connections based on adjacency
+        self._rebuild_tunnels()
+
+        return new_area, list(self.tunnels), entity_offset_x, entity_offset_y
+
+
+def relayout_areas(state: "GameState") -> bool:
+    """Migrate a legacy or outdated layout to the 2-column grid layout.
+
+    Assigns grid_col/grid_row to each area, computes new world positions,
+    relocates pigs and facilities, and rebuilds the grid fresh.
+    Returns True if a relayout was performed, False if already up-to-date.
+    """
+    farm = state.farm
+    if len(farm.areas) < 2:
+        return False
+
+    # Step 1: Assign grid slots (idempotent if already set)
+    for i, area in enumerate(farm.areas):
+        area.grid_col = i % 2
+        area.grid_row = i // 2
+
+    # Step 2: Compute expected positions using grid layout
+    origins = farm._compute_grid_layout()
+
+    # Check if any area is out of position (covers both legacy linear
+    # layouts and gap-size changes)
+    needs_relayout = any(
+        (area.x1, area.y1) != origins[i]
+        for i, area in enumerate(farm.areas)
+    )
+    if not needs_relayout:
+        return False
+
+    # Step 3: Compute deltas and relocate entities
+    deltas: dict[UUID, tuple[int, int]] = {}
+    for i, area in enumerate(farm.areas):
+        target_x1, target_y1 = origins[i]
+        dx = target_x1 - area.x1
+        dy = target_y1 - area.y1
+        deltas[area.id] = (dx, dy)
+
+    # Relocate pigs (those in tunnel corridors will be clamped later)
+    for pig in state.get_pigs_list():
+        area = farm.get_area_at(int(pig.position.x), int(pig.position.y))
+        if area and area.id in deltas:
+            dx, dy = deltas[area.id]
+            pig.position.x += dx
+            pig.position.y += dy
+        pig.path = []
+        pig.target_position = None
+        pig.target_facility_id = None
+
+    # Relocate facilities
+    for facility in state.get_facilities_list():
+        area = farm.get_area_at(facility.position_x, facility.position_y)
+        if area and area.id in deltas:
+            dx, dy = deltas[area.id]
+            farm.remove_facility(facility)
+            facility.position_x += dx
+            facility.position_y += dy
+
+    # Step 4: Update area coordinates
+    for i, area in enumerate(farm.areas):
+        target_x1, target_y1 = origins[i]
+        aw = area.x2 - area.x1 + 1
+        ah = area.y2 - area.y1 + 1
+        area.x1 = target_x1
+        area.y1 = target_y1
+        area.x2 = target_x1 + aw - 1
+        area.y2 = target_y1 + ah - 1
+
+    # Step 5: Compute required grid size and rebuild
+    total_w = 0
+    total_h = 0
+    for area in farm.areas:
+        total_w = max(total_w, area.x2 + 1)
+        total_h = max(total_h, area.y2 + 1)
+
+    # Rebuild grid fresh
+    farm.width = total_w
+    farm.height = total_h
+    farm.cells = [
+        [Cell(is_walkable=False) for _ in range(total_w)]
+        for _ in range(total_h)
+    ]
+    farm.tunnels.clear()
+
+    # Re-carve all areas
+    saved_areas = list(farm.areas)
+    farm.areas.clear()
+    farm._area_lookup.clear()
+    for area in saved_areas:
+        farm.add_area(area)
+
+    # Re-place facilities
+    for facility in state.get_facilities_list():
+        farm.place_facility(facility)
+
+    # Rebuild tunnels using adjacency pairs
+    farm._rebuild_tunnels()
+
+    # Clamp any orphaned pigs (e.g. those that were in tunnel corridors)
+    # to the nearest walkable cell
+    for pig in state.get_pigs_list():
+        px, py = int(pig.position.x), int(pig.position.y)
+        if not farm.is_walkable(px, py):
+            walkable = farm._find_nearest_walkable((px, py), max_distance=20)
+            if walkable:
+                pig.position.x = float(walkable[0])
+                pig.position.y = float(walkable[1])
+
+    return True
