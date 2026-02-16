@@ -469,9 +469,10 @@ class BehaviorController:
     def _start_wandering(self, pig: GuineaPig) -> None:
         """Start random wandering within the pig's current area."""
         farm = self.game_state.farm
-        other_pigs = [p for p in self.game_state.get_pigs_list() if p.id != pig.id]
+        grid = self.collision.spatial_grid
         pig_gx, pig_gy = pig.position.grid_pos()
         max_wander = BEHAVIOR.WANDER_MAX_DISTANCE
+        density_r_sq = BEHAVIOR.WANDER_DENSITY_RADIUS ** 2
 
         best_target = None
         best_score = float('-inf')
@@ -492,19 +493,20 @@ class BehaviorController:
             if self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
                 continue
 
-            # Local density scoring: count nearby pigs and track closest
+            # Local density scoring using spatial grid
             nearby_count = 0
-            min_pig_dist = float('inf')
-            for other_pig in other_pigs:
-                dist = ((target[0] - other_pig.position.x) ** 2 +
-                        (target[1] - other_pig.position.y) ** 2) ** 0.5
-                if dist < BEHAVIOR.WANDER_DENSITY_RADIUS:
+            min_dist_sq = float('inf')
+            for other_pig in grid.get_nearby(float(target[0]), float(target[1])):
+                if other_pig.id == pig.id:
+                    continue
+                dsq = ((target[0] - other_pig.position.x) ** 2 +
+                       (target[1] - other_pig.position.y) ** 2)
+                if dsq < density_r_sq:
                     nearby_count += 1
-                min_pig_dist = min(min_pig_dist, dist)
+                if dsq < min_dist_sq:
+                    min_dist_sq = dsq
 
-            if min_pig_dist == float('inf'):
-                min_pig_dist = 0.0
-
+            min_pig_dist = min_dist_sq ** 0.5 if min_dist_sq != float('inf') else 0.0
             score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
 
             # Prefer cells in the pig's preferred biome
