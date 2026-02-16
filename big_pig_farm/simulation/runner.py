@@ -49,25 +49,40 @@ class SimulationRunner:
         tick_start = time.perf_counter()
         state = self.state
         controller = self.behavior_controller
+        profiling = self.debug_logger is not None
 
         # 1. Rebuild spatial grid first — used by needs, behaviors, and collision
         controller.collision.rebuild_spatial_grid()
 
         # 2. Update all guinea pig needs
+        if profiling:
+            phase_start = time.perf_counter()
         game_minutes = delta_seconds
         pigs = state.get_pigs_list()
         nearby_counts = precompute_nearby_counts(pigs, NEEDS.SOCIAL_RADIUS, controller.collision.spatial_grid)
         for pig in pigs:
             update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
+        if profiling:
+            needs_ms = (time.perf_counter() - phase_start) * 1000.0
 
         # 3. Update behaviors
+        if profiling:
+            phase_start = time.perf_counter()
         for pig in pigs:
             controller.update(pig, delta_seconds)
+        if profiling:
+            behavior_ms = (time.perf_counter() - phase_start) * 1000.0
 
         # 4. Separate any overlapping pigs
+        if profiling:
+            phase_start = time.perf_counter()
         controller.separate_overlapping_pigs()
+        if profiling:
+            collision_ms = (time.perf_counter() - phase_start) * 1000.0
 
         # 5. Advance pregnancies
+        if profiling:
+            phase_start = time.perf_counter()
         game_hours = game_minutes / 60.0
         advance_pregnancies(state, game_hours)
 
@@ -98,11 +113,19 @@ class SimulationRunner:
             new_contracts = generate_contracts(state.farm.tier, game_day, player_biomes)
             board.active_contracts.extend(new_contracts)
             board.last_refresh_day = game_day
+        if profiling:
+            breeding_ms = (time.perf_counter() - phase_start) * 1000.0
 
         # 11. Debug logging
-        if self.debug_logger:
+        if profiling:
             tick_ms = (time.perf_counter() - tick_start) * 1000.0
-            self.debug_logger.tick(state, controller, tick_ms)
+            phase_times = {
+                "needs": needs_ms,
+                "behavior": behavior_ms,
+                "collision": collision_ms,
+                "breeding": breeding_ms,
+            }
+            self.debug_logger.tick(state, controller, tick_ms, phase_times)
 
         # 12. Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1

@@ -394,10 +394,8 @@ class BehaviorController:
             pig
         )
         if target_pos:
-            start = pig.position.grid_pos()
-            path = self.game_state.farm.find_path(start, target_pos)
-            if path:
-                self._set_path_to(pig, target_pos)
+            self._set_path_to(pig, target_pos)
+            if pig.path:
                 pig.log_behavior(f"Going to socialize with {nearest.name}")
                 pig.behavior_state = BehaviorState.SOCIALIZING
                 pig.target_facility_id = None  # Not going to a facility
@@ -435,49 +433,71 @@ class BehaviorController:
         return target  # Fallback to original target
 
     def _start_wandering(self, pig: GuineaPig) -> None:
-        """Start random wandering, preferring less crowded areas of the farm."""
+        """Start random wandering within the pig's current area."""
         farm = self.game_state.farm
         other_pigs = [p for p in self.game_state.get_pigs_list() if p.id != pig.id]
+        pig_gx, pig_gy = pig.position.grid_pos()
+        max_wander = BEHAVIOR.WANDER_MAX_DISTANCE
 
         best_target = None
         best_score = float('-inf')
 
         for _ in range(BEHAVIOR.WANDER_ATTEMPTS):
-            target = farm.find_random_walkable()
-            if target and not self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
-                # Local density scoring: count nearby pigs and track closest
-                nearby_count = 0
-                min_pig_dist = float('inf')
-                for other_pig in other_pigs:
-                    dist = ((target[0] - other_pig.position.x) ** 2 +
-                            (target[1] - other_pig.position.y) ** 2) ** 0.5
-                    if dist < BEHAVIOR.WANDER_DENSITY_RADIUS:
-                        nearby_count += 1
-                    min_pig_dist = min(min_pig_dist, dist)
+            # Prefer same-area targets to avoid long cross-map paths
+            target = None
+            if pig.current_area_id:
+                target = farm.find_random_walkable_in_area(pig.current_area_id)
+            if target is None:
+                target = farm.find_random_walkable()
 
-                if min_pig_dist == float('inf'):
-                    min_pig_dist = 0.0
+            if not target:
+                continue
+            # Skip candidates that are too far away
+            if abs(target[0] - pig_gx) + abs(target[1] - pig_gy) > max_wander:
+                continue
+            if self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
+                continue
 
-                score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
+            # Local density scoring: count nearby pigs and track closest
+            nearby_count = 0
+            min_pig_dist = float('inf')
+            for other_pig in other_pigs:
+                dist = ((target[0] - other_pig.position.x) ** 2 +
+                        (target[1] - other_pig.position.y) ** 2) ** 0.5
+                if dist < BEHAVIOR.WANDER_DENSITY_RADIUS:
+                    nearby_count += 1
+                min_pig_dist = min(min_pig_dist, dist)
 
-                # Prefer cells in the pig's preferred biome
-                if pig.preferred_biome:
-                    cell_biome = farm.get_biome_at(target[0], target[1])
-                    if cell_biome and cell_biome.value == pig.preferred_biome:
-                        score += 3.0
+            if min_pig_dist == float('inf'):
+                min_pig_dist = 0.0
 
-                if score > best_score:
-                    best_score = score
-                    best_target = target
+            score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
+
+            # Prefer cells in the pig's preferred biome
+            if pig.preferred_biome:
+                cell_biome = farm.get_biome_at(target[0], target[1])
+                if cell_biome and cell_biome.value == pig.preferred_biome:
+                    score += 3.0
+
+            if score > best_score:
+                best_score = score
+                best_target = target
 
         if best_target:
             self._set_path_to(pig, best_target)
         pig.behavior_state = BehaviorState.WANDERING
 
     def _set_path_to(self, pig: GuineaPig, target: tuple[int, int]) -> None:
-        """Calculate and set path to target."""
+        """Calculate and set path to target.
+
+        Reuses a cached path from FacilityManager when available (the
+        same start→goal was already computed during get_reachable_facilities
+        or find_open_interaction_point in the same decision block).
+        """
         start = pig.position.grid_pos()
-        path = self.game_state.farm.find_path(start, target)
+        path = self.facility_manager.get_cached_path(start, target)
+        if path is None:
+            path = self.game_state.farm.find_path(start, target)
 
         if path:
             pig.path = path[1:]  # Skip current position
@@ -539,15 +559,17 @@ class BehaviorController:
         self._stuck_positions.pop(pig.id, None)
         self._stuck_timers.pop(pig.id, None)
 
-        # If hunger or thirst is critical, clear failed list so the pig
-        # immediately retries on next decision — don't let cooldowns kill it
+        # If hunger or thirst is critical, use a shorter cooldown (1 cycle
+        # instead of 3) so the pig retries faster but doesn't spam every
+        # single decision tick with the same blocked facility
         has_critical_need = (
             pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
             or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD
         )
         if has_critical_need:
-            self.facility_manager.clear_failed_facilities(pig.id)
-            self.facility_manager.clear_failed_cooldown(pig.id)
+            self.facility_manager.set_failed_cooldown(
+                pig.id, BEHAVIOR.CRITICAL_FAILED_COOLDOWN_CYCLES,
+            )
         else:
             # Keep failed facilities for 3 decision cycles (~6 seconds) before retrying
             self.facility_manager.set_failed_cooldown(pig.id, BEHAVIOR.FAILED_COOLDOWN_CYCLES)

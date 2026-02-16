@@ -24,6 +24,9 @@ class FacilityManager:
         # get_reachable_facilities, find_open_interaction_point, and
         # try_alternative_facility all pathfind to the same points.
         self._path_cache: dict[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int]]] = {}
+        # Performance counters (reset each debug snapshot window)
+        self.cache_hits: int = 0
+        self.cache_misses: int = 0
 
     def begin_decision(self) -> None:
         """Start a facility decision — enable path caching."""
@@ -33,6 +36,20 @@ class FacilityManager:
         """End a facility decision — discard cached paths."""
         self._path_cache.clear()
 
+    def get_cached_path(
+        self, start: tuple[int, int], goal: tuple[int, int],
+    ) -> list[tuple[int, int]] | None:
+        """Look up a previously cached path. Returns None on cache miss."""
+        result = self._path_cache.get((start, goal))
+        if result is not None:
+            self.cache_hits += 1
+        return result
+
+    def reset_perf_counters(self) -> None:
+        """Reset cache performance counters for the next snapshot window."""
+        self.cache_hits = 0
+        self.cache_misses = 0
+
     def _cached_find_path(
         self, start: tuple[int, int], goal: tuple[int, int],
     ) -> list[tuple[int, int]]:
@@ -40,7 +57,9 @@ class FacilityManager:
         key = (start, goal)
         result = self._path_cache.get(key)
         if result is not None:
+            self.cache_hits += 1
             return result
+        self.cache_misses += 1
         path = self.game_state.farm.find_path(start, goal)
         self._path_cache[key] = path
         return path
@@ -83,7 +102,12 @@ class FacilityManager:
                 self._failed_cooldowns[pig_id] = cooldown
 
     def get_reachable_facilities(self, pig: GuineaPig, facility_type: FacilityType) -> list[Facility]:
-        """Get facilities of a type that the pig can actually path to."""
+        """Get facilities of a type that the pig can actually path to.
+
+        Prioritizes facilities in the pig's current area to avoid
+        expensive cross-map A* calls. Falls back to all facilities
+        if none are reachable in the same area.
+        """
         facilities = self.game_state.get_facilities_by_type(facility_type)
 
         if not facilities:
@@ -98,21 +122,42 @@ class FacilityManager:
         if failed:
             facilities = [f for f in facilities if f.id not in failed]
 
-        # Filter to only facilities we can path to at least one interaction point
+        if not facilities:
+            return []
+
+        # Try same-area facilities first to avoid cross-map pathfinding
+        pig_area = pig.current_area_id
+        if pig_area:
+            same_area = [f for f in facilities if f.area_id == pig_area]
+            if same_area:
+                reachable = self._filter_reachable(pig, same_area)
+                if reachable:
+                    return reachable
+
+        # Fall back to all facilities (cross-area)
+        return self._filter_reachable(pig, facilities)
+
+    def _filter_reachable(
+        self, pig: GuineaPig, facilities: list[Facility],
+    ) -> list[Facility]:
+        """Filter facilities to those the pig can actually path to."""
         reachable = []
         start = pig.position.grid_pos()
         farm = self.game_state.farm
+        max_dist = BEHAVIOR.MAX_FACILITY_PATHFIND_DISTANCE
 
         for facility in facilities:
-            # Check if ANY interaction point is reachable (not just primary)
             found_reachable_point = False
             for point in facility.interaction_points:
-                # Bounds check first
                 if not farm.is_valid_position(point[0], point[1]):
                     continue
                 if not farm.is_walkable(point[0], point[1]):
                     continue
-                # Try to path there
+                # Manhattan distance pre-check — skip expensive A* for
+                # points that are unreasonably far away
+                manhattan = abs(start[0] - point[0]) + abs(start[1] - point[1])
+                if manhattan > max_dist:
+                    continue
                 path = self._cached_find_path(start, point)
                 if path:
                     found_reachable_point = True
