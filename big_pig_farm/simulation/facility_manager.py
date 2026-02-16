@@ -256,12 +256,11 @@ class FacilityManager:
                     count += 1
                     counted_ids.add(other_pig.id)
 
-        # Also count distant pigs targeting this specific facility by ID
-        # (they wouldn't appear in the spatial neighborhood)
-        for other_pig in self.game_state.get_pigs_list():
-            if other_pig.id == pig.id or other_pig.id in counted_ids:
-                continue
-            if other_pig.target_facility_id == facility.id:
+        # Also count distant pigs targeting this facility by ID
+        # (they wouldn't appear in the spatial neighborhood).
+        # Uses the facility target index instead of scanning all pigs.
+        for pid in self.collision.get_pigs_targeting_facility(facility.id):
+            if pid != pig.id and pid not in counted_ids:
                 count += 1
 
         return count

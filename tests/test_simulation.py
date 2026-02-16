@@ -530,6 +530,7 @@ class TestIdleDrift:
 
         # Force the pig to make a decision where it would normally idle
         # by patching random to return > WANDER_CHANCE
+        controller.collision.rebuild_spatial_grid()
         with patch('big_pig_farm.simulation.behavior.random') as mock_random:
             mock_random.random.return_value = 0.99  # > WANDER_CHANCE (0.8), would normally idle
             mock_random.uniform.return_value = 0.0

@@ -90,10 +90,33 @@ class CollisionHandler:
     def __init__(self, game_state: GameState):
         self.game_state = game_state
         self.spatial_grid = SpatialGrid()
+        # Index: facility UUID → set of pig UUIDs targeting that facility
+        self._facility_targets: dict[UUID, set[UUID]] = {}
 
     def rebuild_spatial_grid(self) -> None:
-        """Re-bin all pigs.  Call once per tick before behavior updates."""
-        self.spatial_grid.rebuild(self.game_state.get_pigs_list())
+        """Re-bin all pigs and rebuild facility target index.
+
+        Call once per tick before behavior updates.
+        """
+        pigs = self.game_state.get_pigs_list()
+        self.spatial_grid.rebuild(pigs)
+        # Rebuild facility target index in the same O(N) pass
+        ft: dict[UUID, set[UUID]] = {}
+        for pig in pigs:
+            fid = pig.target_facility_id
+            if fid is not None:
+                bucket = ft.get(fid)
+                if bucket is None:
+                    bucket = set()
+                    ft[fid] = bucket
+                bucket.add(pig.id)
+        self._facility_targets = ft
+
+    _NO_PIGS: frozenset[UUID] = frozenset()
+
+    def get_pigs_targeting_facility(self, facility_id: UUID) -> set[UUID] | frozenset[UUID]:
+        """Return pig IDs currently heading to a facility."""
+        return self._facility_targets.get(facility_id, self._NO_PIGS)
 
     def is_cell_occupied_by_pig(self, x: int, y: int, exclude_pig: Optional[GuineaPig] = None) -> bool:
         """Check if a cell is occupied by another guinea pig."""

@@ -48,13 +48,42 @@ class BehaviorController:
         """Delegate to collision handler."""
         self.collision.separate_overlapping_pigs()
 
+    def _is_content(self, pig: GuineaPig) -> bool:
+        """Check if a pig is content (no urgent needs, not heading to a facility).
+
+        Content pigs use a longer decision interval to save CPU — they would
+        just wander/idle anyway since get_most_urgent_need() returns "none".
+        """
+        if pig.behavior_state not in (BehaviorState.IDLE, BehaviorState.WANDERING):
+            return False
+        if pig.target_facility_id:
+            return False
+        needs = pig.needs
+        return (
+            needs.hunger >= NEEDS.HIGH_THRESHOLD
+            and needs.thirst >= NEEDS.HIGH_THRESHOLD
+            and needs.energy >= NEEDS.HIGH_THRESHOLD
+            and needs.happiness >= NEEDS.HIGH_THRESHOLD
+            and needs.social >= NEEDS.HIGH_THRESHOLD
+            and needs.boredom < BEHAVIOR.BOREDOM_PLAY_THRESHOLD
+        )
+
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
         # Check if it's time to make a new decision
         timer = self._decision_timers.get(pig.id, random.uniform(0, 1))  # Stagger initial timers
         timer += delta_seconds
 
-        if timer >= SIMULATION.DECISION_INTERVAL_SECONDS:
+        # Emergency override: critical hunger/thirst fires immediately
+        if (pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD):
+            interval = 0.0
+        elif self._is_content(pig):
+            interval = BEHAVIOR.CONTENT_DECISION_INTERVAL
+        else:
+            interval = SIMULATION.DECISION_INTERVAL_SECONDS
+
+        if timer >= interval:
             self._make_decision(pig)
             # Add small random offset to prevent synchronized decisions
             timer = random.uniform(0, SIMULATION.DECISION_INTERVAL_SECONDS / 4)
@@ -227,11 +256,16 @@ class BehaviorController:
             self._start_wandering(pig)
         else:
             # Idle drift: if another pig is nearby, wander away instead of idling
-            has_nearby_pig = any(
-                pig.position.distance_to(p.position) < BEHAVIOR.IDLE_DRIFT_RADIUS
-                for p in self.game_state.get_pigs_list()
-                if p.id != pig.id
-            )
+            drift_r_sq = BEHAVIOR.IDLE_DRIFT_RADIUS ** 2
+            has_nearby_pig = False
+            for p in self.collision.spatial_grid.get_nearby(pig.position.x, pig.position.y):
+                if p.id == pig.id:
+                    continue
+                dx = pig.position.x - p.position.x
+                dy = pig.position.y - p.position.y
+                if dx * dx + dy * dy < drift_r_sq:
+                    has_nearby_pig = True
+                    break
             if has_nearby_pig:
                 pig.log_behavior("Too close to another pig, drifting away")
                 pig.target_description = None
@@ -375,18 +409,32 @@ class BehaviorController:
 
     def _seek_social_interaction(self, pig: GuineaPig) -> None:
         """Find another guinea pig to socialize with."""
-        other_pigs = [
-            p for p in self.game_state.get_pigs_list()
-            if p.id != pig.id and not p.has_trait(Personality.SHY)
-        ]
+        # Try spatial grid first for nearest non-shy pig
+        nearest = None
+        best_dist_sq = float('inf')
+        px, py = pig.position.x, pig.position.y
+        for p in self.collision.spatial_grid.get_nearby(px, py):
+            if p.id == pig.id or p.has_trait(Personality.SHY):
+                continue
+            dsq = (px - p.position.x) ** 2 + (py - p.position.y) ** 2
+            if dsq < best_dist_sq:
+                best_dist_sq = dsq
+                nearest = p
 
-        if not other_pigs:
+        # Fall back to full list if no one nearby
+        if nearest is None:
+            for p in self.game_state.get_pigs_list():
+                if p.id == pig.id or p.has_trait(Personality.SHY):
+                    continue
+                dsq = (px - p.position.x) ** 2 + (py - p.position.y) ** 2
+                if dsq < best_dist_sq:
+                    best_dist_sq = dsq
+                    nearest = p
+
+        if nearest is None:
             pig.target_description = None
             self._start_wandering(pig)
             return
-
-        # Find nearest other pig
-        nearest = min(other_pigs, key=lambda p: pig.position.distance_to(p.position))
 
         # Move to a cell adjacent to the other pig, not on top of them
         target_pos = self._find_adjacent_cell(
@@ -435,9 +483,10 @@ class BehaviorController:
     def _start_wandering(self, pig: GuineaPig) -> None:
         """Start random wandering within the pig's current area."""
         farm = self.game_state.farm
-        other_pigs = [p for p in self.game_state.get_pigs_list() if p.id != pig.id]
+        grid = self.collision.spatial_grid
         pig_gx, pig_gy = pig.position.grid_pos()
         max_wander = BEHAVIOR.WANDER_MAX_DISTANCE
+        density_r_sq = BEHAVIOR.WANDER_DENSITY_RADIUS ** 2
 
         best_target = None
         best_score = float('-inf')
@@ -458,19 +507,20 @@ class BehaviorController:
             if self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
                 continue
 
-            # Local density scoring: count nearby pigs and track closest
+            # Local density scoring using spatial grid
             nearby_count = 0
-            min_pig_dist = float('inf')
-            for other_pig in other_pigs:
-                dist = ((target[0] - other_pig.position.x) ** 2 +
-                        (target[1] - other_pig.position.y) ** 2) ** 0.5
-                if dist < BEHAVIOR.WANDER_DENSITY_RADIUS:
+            min_dist_sq = float('inf')
+            for other_pig in grid.get_nearby(float(target[0]), float(target[1])):
+                if other_pig.id == pig.id:
+                    continue
+                dsq = ((target[0] - other_pig.position.x) ** 2 +
+                       (target[1] - other_pig.position.y) ** 2)
+                if dsq < density_r_sq:
                     nearby_count += 1
-                min_pig_dist = min(min_pig_dist, dist)
+                if dsq < min_dist_sq:
+                    min_dist_sq = dsq
 
-            if min_pig_dist == float('inf'):
-                min_pig_dist = 0.0
-
+            min_pig_dist = min_dist_sq ** 0.5 if min_dist_sq != float('inf') else 0.0
             score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
 
             # Prefer cells in the pig's preferred biome
