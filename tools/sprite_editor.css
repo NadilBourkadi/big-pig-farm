@@ -45,6 +45,9 @@ body { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; background: #
 .preview-item .label { font-size: 10px; color: #999; margin-bottom: 4px; }
 .preview-canvas { image-rendering: pixelated; }
 
+/* Selection overlay */
+.pixel-cell.selected { outline: 2px dashed #00bfff; outline-offset: -2px; z-index: 1; }
+
 /* Duplicate dropdown */
 #duplicate-dropdown { display: none; position: absolute; top: 100%; left: 0; background: #16213e; border: 1px solid #444; border-radius: 3px; max-height: 300px; overflow-y: auto; z-index: 100; min-width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
 #duplicate-dropdown.open { display: block; }

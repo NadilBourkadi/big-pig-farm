@@ -12,7 +12,7 @@ let currentGroup = null;   // e.g. "pig_adult"
 let currentKey = null;     // e.g. "idle_right"
 let currentPaletteName = null; // e.g. "BLACK"
 let currentBrush = null;   // palette key string or null for transparent
-let currentTool = 'paint'; // paint, erase, pick, fill
+let currentTool = 'paint'; // paint, erase, pick, fill, select
 let cellSize = 20;
 let showGrid = true;
 let pinnedOverlay = null; // {group, key} or null
@@ -31,6 +31,12 @@ const dirtySprites = new Set();
 // undoStacks["group/key"] = [{pixels: ...}, ...]
 const undoStacks = {};
 const redoStacks = {};
+
+// Selection state (for select tool)
+let selection = null;      // {x1, y1, x2, y2} normalised rect, or null
+let selectionStart = null; // {x, y} drag start
+let isSelecting = false;
+let selectionBuffer = null; // 2D pixel array — floating content that moves with the selection
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -146,6 +152,10 @@ function buildSpriteTree() {
 function selectSprite(group, key) {
     currentGroup = group;
     currentKey = key;
+    selection = null;
+    selectionStart = null;
+    isSelecting = false;
+    selectionBuffer = null;
 
     // Update active class
     document.querySelectorAll('.sprite-item').forEach(el => {
@@ -332,21 +342,47 @@ function renderGrid() {
     }
 
     document.getElementById('info-dims').textContent = `${w}×${h}px`;
+
+    // Re-apply selection overlay after grid rebuild
+    if (selection) renderSelectionOverlay();
 }
 
 function onCellMouseDown(e) {
     if (e.button === 2) return; // right-click handled separately
     e.preventDefault();
+    const x = parseInt(e.target.dataset.x);
+    const y = parseInt(e.target.dataset.y);
+
+    if (currentTool === 'select') {
+        isSelecting = true;
+        selectionStart = { x, y };
+        selection = { x1: x, y1: y, x2: x, y2: y };
+        selectionBuffer = null;
+        renderSelectionOverlay();
+        return;
+    }
+
     isPainting = true;
     lastPaintedCell = null;
     strokeStarted = false;
-    applyTool(parseInt(e.target.dataset.x), parseInt(e.target.dataset.y));
+    applyTool(x, y);
 }
 
 function onCellMouseEnter(e) {
     const x = parseInt(e.target.dataset.x);
     const y = parseInt(e.target.dataset.y);
     const pixels = getPixels();
+
+    // Selection drag
+    if (isSelecting && selectionStart) {
+        selection = {
+            x1: Math.min(selectionStart.x, x),
+            y1: Math.min(selectionStart.y, y),
+            x2: Math.max(selectionStart.x, x),
+            y2: Math.max(selectionStart.y, y),
+        };
+        renderSelectionOverlay();
+    }
 
     // Update info bar
     if (pixels && y < pixels.length && x < pixels[y].length) {
@@ -386,7 +422,7 @@ function onCellRightClick(e) {
     }
 }
 
-document.addEventListener('mouseup', () => { isPainting = false; lastPaintedCell = null; strokeStarted = false; });
+document.addEventListener('mouseup', () => { isPainting = false; lastPaintedCell = null; strokeStarted = false; isSelecting = false; });
 
 // ---------------------------------------------------------------------------
 // Tools
@@ -574,12 +610,14 @@ function updateToolButtons() {
     document.getElementById('tool-erase').classList.toggle('active-tool', currentTool === 'erase');
     document.getElementById('tool-pick').classList.toggle('active-tool', currentTool === 'pick');
     document.getElementById('tool-fill').classList.toggle('active-tool', currentTool === 'fill');
+    document.getElementById('tool-select').classList.toggle('active-tool', currentTool === 'select');
 }
 
 document.getElementById('tool-paint').onclick = () => { currentTool = 'paint'; updateToolButtons(); };
 document.getElementById('tool-erase').onclick = () => { currentTool = 'erase'; updateToolButtons(); };
 document.getElementById('tool-pick').onclick = () => { currentTool = 'pick'; updateToolButtons(); };
 document.getElementById('tool-fill').onclick = () => { currentTool = 'fill'; updateToolButtons(); };
+document.getElementById('tool-select').onclick = () => { currentTool = 'select'; updateToolButtons(); };
 document.getElementById('btn-undo').onclick = undo;
 document.getElementById('btn-redo').onclick = redo;
 
@@ -632,6 +670,104 @@ document.getElementById('zoom-slider').addEventListener('input', (e) => {
     cellSize = parseInt(e.target.value);
     renderGrid();
 });
+
+// ---------------------------------------------------------------------------
+// Selection overlay + shift
+// ---------------------------------------------------------------------------
+function renderSelectionOverlay() {
+    // Toggle .selected class on cells inside the selection rect
+    const grid = document.getElementById('pixel-grid');
+    const cells = grid.querySelectorAll('.pixel-cell');
+    cells.forEach(cell => {
+        const cx = parseInt(cell.dataset.x);
+        const cy = parseInt(cell.dataset.y);
+        if (selection && cx >= selection.x1 && cx <= selection.x2 && cy >= selection.y1 && cy <= selection.y2) {
+            cell.classList.add('selected');
+        } else {
+            cell.classList.remove('selected');
+        }
+    });
+}
+
+function shiftPixels(dx, dy) {
+    const pixels = getPixels();
+    if (!pixels) return;
+    const h = pixels.length;
+    const w = pixels[0].length;
+
+    if (selection) {
+        // The selectionBuffer is a floating copy of the content that travels
+        // with the selection. It is the source of truth — pixels that move
+        // off-grid are preserved in the buffer and reappear when moved back.
+        const { x1, y1, x2, y2 } = selection;
+        const selW = x2 - x1 + 1;
+        const selH = y2 - y1 + 1;
+
+        pushUndo();
+
+        // First move: lift content into the buffer
+        if (!selectionBuffer) {
+            selectionBuffer = [];
+            for (let sy = 0; sy < selH; sy++) {
+                const row = [];
+                for (let sx = 0; sx < selW; sx++) {
+                    row.push(pixels[y1 + sy][x1 + sx]);
+                }
+                selectionBuffer.push(row);
+            }
+        }
+
+        // Erase the buffer's current footprint from the grid
+        for (let sy = 0; sy < selH; sy++) {
+            for (let sx = 0; sx < selW; sx++) {
+                const gy = y1 + sy, gx = x1 + sx;
+                if (gy >= 0 && gy < h && gx >= 0 && gx < w) {
+                    pixels[gy][gx] = null;
+                }
+            }
+        }
+
+        // Move selection coordinates (allowed to go out of bounds)
+        selection.x1 += dx;
+        selection.y1 += dy;
+        selection.x2 += dx;
+        selection.y2 += dy;
+
+        // Stamp the buffer onto the grid at the new position
+        const nx1 = selection.x1, ny1 = selection.y1;
+        for (let sy = 0; sy < selH; sy++) {
+            for (let sx = 0; sx < selW; sx++) {
+                const gy = ny1 + sy, gx = nx1 + sx;
+                if (gy >= 0 && gy < h && gx >= 0 && gx < w) {
+                    pixels[gy][gx] = selectionBuffer[sy][sx];
+                }
+            }
+        }
+    } else {
+        // Shift entire sprite
+        pushUndo();
+        const copy = pixels.map(row => [...row]);
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                pixels[y][x] = null;
+            }
+        }
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const nx = x + dx;
+                const ny = y + dy;
+                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                    pixels[ny][nx] = copy[y][x];
+                }
+            }
+        }
+    }
+
+    markDirty();
+    renderGrid();
+    renderSelectionOverlay();
+    renderPreview();
+}
 
 // ---------------------------------------------------------------------------
 // Duplicate from source
@@ -697,8 +833,17 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'e') { currentTool = 'erase'; updateToolButtons(); }
     if (e.key === 'i') { currentTool = 'pick'; updateToolButtons(); }
     if (e.key === 'g') { currentTool = 'fill'; updateToolButtons(); }
+    if (e.key === 's') { currentTool = 'select'; updateToolButtons(); }
     if (e.key === 't') { togglePin(); }
     if (e.key === 'd') { showDuplicateDropdown(); }
+    if (e.key === 'Escape') { selection = null; selectionStart = null; selectionBuffer = null; renderSelectionOverlay(); }
+    // Arrow keys: shift pixels (only when select tool is active)
+    if (currentTool === 'select' && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        const dx = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        const dy = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+        shiftPixels(dx, dy);
+    }
 });
 
 // ---------------------------------------------------------------------------
