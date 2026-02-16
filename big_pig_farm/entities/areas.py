@@ -1,6 +1,5 @@
 """Farm area and tunnel connection models."""
 
-from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -18,6 +17,8 @@ class FarmArea(BaseModel):
     x2: int  # Bottom-right corner (inclusive, wall)
     y2: int  # Bottom-right corner (inclusive, wall)
     is_starter: bool = False
+    grid_col: int = 0  # Column in the 2-column grid layout
+    grid_row: int = 0  # Row in the 2-column grid layout
 
     @property
     def interior_x1(self) -> int:

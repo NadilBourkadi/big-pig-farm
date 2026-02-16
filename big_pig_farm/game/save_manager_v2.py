@@ -12,6 +12,7 @@ from typing import Optional
 
 from big_pig_farm.game.save_manager import SaveManager, get_save_path
 from big_pig_farm.game.state import GameState
+from big_pig_farm.game.world import relayout_areas
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +89,10 @@ class SaveManagerV2:
             # Migrate saves from before multi-area support
             if not state.farm.areas:
                 state.farm._create_legacy_starter_area()
-            else:
-                # Repair border cells that lack area_id (pre-add_area saves)
+            elif not relayout_areas(state):
+                # relayout_areas already rebuilds everything when it fires;
+                # only run repair + tunnel rebuild when it was a no-op
                 state.farm._repair_area_cells()
-                # Re-carve tunnels with current width/count settings
                 state.farm._rebuild_tunnels()
 
             return state

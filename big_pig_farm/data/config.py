@@ -150,14 +150,17 @@ class FarmTier:
     tier: int
 
 
-# Legacy farm tiers — kept for save migration only
+# Legacy farm tiers — kept for save migration only.
+# Dimensions match ROOM_TIERS so resize_to_match_config is a no-op for
+# new saves.  Old v1 saves with larger dimensions won't be resized
+# because multi-area farms skip resize_to_match_config entirely.
 FARM_TIERS: list[FarmTier] = [
-    FarmTier("Starter Hutch", 78, 46, 8, 0, 1),
-    FarmTier("Cozy Enclosure", 54, 27, 8, 500, 2),
-    FarmTier("Family Pen", 70, 35, 14, 2000, 3),
-    FarmTier("Guinea Grove", 86, 43, 16, 8000, 4),
-    FarmTier("Piggy Paradise", 108, 54, 24, 25000, 5),
-    FarmTier("Ultimate Farm", 140, 70, 35, 100000, 6),
+    FarmTier("Starter Hutch", 62, 37, 8, 0, 1),
+    FarmTier("Cozy Enclosure", 62, 37, 8, 500, 2),
+    FarmTier("Family Pen", 70, 42, 14, 2000, 3),
+    FarmTier("Guinea Grove", 78, 45, 16, 8000, 4),
+    FarmTier("Piggy Paradise", 86, 50, 24, 25000, 5),
+    FarmTier("Ultimate Farm", 96, 54, 35, 100000, 6),
 ]
 
 
@@ -174,12 +177,12 @@ class RoomTier:
 
 # Room tiers — each room addition uses the next tier in sequence
 ROOM_TIERS: list[RoomTier] = [
-    RoomTier("Starter Hutch",   78, 46,  8,      0, 1),
-    RoomTier("Cozy Enclosure",  78, 46,  8,    500, 2),
-    RoomTier("Family Pen",      88, 52, 12,   2000, 3),
-    RoomTier("Guinea Grove",    98, 56, 14,   8000, 4),
-    RoomTier("Piggy Paradise", 108, 62, 18,  25000, 5),
-    RoomTier("Ultimate Farm",  120, 68, 24, 100000, 6),
+    RoomTier("Starter Hutch",   62, 37,  8,      0, 1),
+    RoomTier("Cozy Enclosure",  62, 37,  8,    500, 2),
+    RoomTier("Family Pen",      70, 42, 12,   2000, 3),
+    RoomTier("Guinea Grove",    78, 45, 14,   8000, 4),
+    RoomTier("Piggy Paradise",  86, 50, 18,  25000, 5),
+    RoomTier("Ultimate Farm",   96, 54, 24, 100000, 6),
 ]
 
 
