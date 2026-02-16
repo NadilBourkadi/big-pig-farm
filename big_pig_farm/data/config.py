@@ -345,6 +345,9 @@ class BehaviorConfig:
     # Facility pathfinding limits
     MAX_FACILITY_PATHFIND_DISTANCE: int = 100  # Skip A* when Manhattan distance exceeds this
 
+    # Content pig throttle — pigs with no urgent needs decide less often
+    CONTENT_DECISION_INTERVAL: float = 8.0  # Seconds between decisions for content pigs
+
     # Critical-need retry throttle
     CRITICAL_FAILED_COOLDOWN_CYCLES: int = 1   # Reduced cooldown for critical pigs (vs 3 normal)
 

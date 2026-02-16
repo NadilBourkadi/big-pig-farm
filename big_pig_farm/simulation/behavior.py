@@ -48,13 +48,42 @@ class BehaviorController:
         """Delegate to collision handler."""
         self.collision.separate_overlapping_pigs()
 
+    def _is_content(self, pig: GuineaPig) -> bool:
+        """Check if a pig is content (no urgent needs, not heading to a facility).
+
+        Content pigs use a longer decision interval to save CPU — they would
+        just wander/idle anyway since get_most_urgent_need() returns "none".
+        """
+        if pig.behavior_state not in (BehaviorState.IDLE, BehaviorState.WANDERING):
+            return False
+        if pig.target_facility_id:
+            return False
+        needs = pig.needs
+        return (
+            needs.hunger >= NEEDS.HIGH_THRESHOLD
+            and needs.thirst >= NEEDS.HIGH_THRESHOLD
+            and needs.energy >= NEEDS.HIGH_THRESHOLD
+            and needs.happiness >= NEEDS.HIGH_THRESHOLD
+            and needs.social >= NEEDS.HIGH_THRESHOLD
+            and needs.boredom < BEHAVIOR.BOREDOM_PLAY_THRESHOLD
+        )
+
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
         # Check if it's time to make a new decision
         timer = self._decision_timers.get(pig.id, random.uniform(0, 1))  # Stagger initial timers
         timer += delta_seconds
 
-        if timer >= SIMULATION.DECISION_INTERVAL_SECONDS:
+        # Emergency override: critical hunger/thirst fires immediately
+        if (pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD):
+            interval = 0.0
+        elif self._is_content(pig):
+            interval = BEHAVIOR.CONTENT_DECISION_INTERVAL
+        else:
+            interval = SIMULATION.DECISION_INTERVAL_SECONDS
+
+        if timer >= interval:
             self._make_decision(pig)
             # Add small random offset to prevent synchronized decisions
             timer = random.uniform(0, SIMULATION.DECISION_INTERVAL_SECONDS / 4)
