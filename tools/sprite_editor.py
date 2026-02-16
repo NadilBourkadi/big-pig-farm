@@ -35,6 +35,11 @@ from tools.sprite_gen_facility import (
     generate_facility_pixels_source,
 )
 from tools.sprite_gen_indicator import generate_indicator_pixels_source
+from tools.sprite_gen_palette import (
+    apply_facility_palettes,
+    apply_indicator_palettes,
+    apply_pig_palettes,
+)
 from tools.sprite_gen_pig import (
     generate_close_pig_source,
     generate_pig_sprites_source,
@@ -52,6 +57,7 @@ PIG_SPRITES_CLOSE_FILE = DATA_DIR / "pig_sprites_close.py"
 FACILITY_PIXELS_FILE = DATA_DIR / "facility_pixels.py"
 FACILITY_PIXELS_CLOSE_FILE = DATA_DIR / "facility_pixels_close.py"
 INDICATOR_PIXELS_FILE = DATA_DIR / "indicator_pixels.py"
+SPRITE_ENGINE_FILE = DATA_DIR / "sprite_engine.py"
 
 
 def _write_sprite_data_js(json_str: str) -> None:
@@ -142,8 +148,50 @@ def apply_sprite_data(data: dict) -> list[str]:
             indicator_source,
         )))
 
+    # Palette changes — chain on top of sprite changes for shared files
+    editor_palettes = data.get("palettes")
+    editor_palette_keys = data.get("palette_keys")
+    if editor_palettes:
+        original_palettes = original["palettes"]
+
+        # Helper: find already-generated source for a file, or None
+        def _find_generated(path: Path) -> str | None:
+            for p, src in generated:
+                if p == path:
+                    return src
+            return None
+
+        if editor_palettes.get("pig") != original_palettes.get("pig"):
+            pig_keys = editor_palette_keys["pig"] if editor_palette_keys else []
+            base = _find_generated(SPRITE_ENGINE_FILE)
+            generated.append((
+                SPRITE_ENGINE_FILE,
+                apply_pig_palettes(editor_palettes["pig"], pig_keys, base),
+            ))
+
+        if editor_palettes.get("facility") != original_palettes.get("facility"):
+            base = _find_generated(FACILITY_PIXELS_FILE)
+            generated.append((
+                FACILITY_PIXELS_FILE,
+                apply_facility_palettes(editor_palettes["facility"], base),
+            ))
+
+        if editor_palettes.get("indicator") != original_palettes.get("indicator"):
+            base = _find_generated(INDICATOR_PIXELS_FILE)
+            generated.append((
+                INDICATOR_PIXELS_FILE,
+                apply_indicator_palettes(editor_palettes["indicator"], base),
+            ))
+
     if not generated:
-        return ["No sprite changes detected — nothing to apply."]
+        return ["No changes detected — nothing to apply."]
+
+    # Deduplicate: if a file appears multiple times, keep the last entry
+    # (palette writes chain on top of sprite writes)
+    seen: dict[Path, int] = {}
+    for i, (path, _) in enumerate(generated):
+        seen[path] = i
+    generated = [generated[i] for i in sorted(seen.values())]
 
     # Create backup of files we're about to write
     BACKUP_DIR.mkdir(parents=True, exist_ok=True)
