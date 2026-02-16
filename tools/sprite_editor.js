@@ -21,11 +21,14 @@ let isPainting = false;
 let lastPaintedCell = null;
 let strokeStarted = false; // true once first pixel changed during a drag
 
-// Working copy of all sprites (mutated on edit)
+// Working copies (mutated on edit)
 const sprites = JSON.parse(JSON.stringify(DATA.sprites));
+const palettes = JSON.parse(JSON.stringify(DATA.palettes));
+const paletteKeys = JSON.parse(JSON.stringify(DATA.palette_keys));
 
 // Dirty tracking: set of "group/key" strings
 const dirtySprites = new Set();
+let paletteDirty = false;
 
 // Undo/redo per sprite
 // undoStacks["group/key"] = [{pixels: ...}, ...]
@@ -51,30 +54,29 @@ function getPixels() {
 function getPalette() {
     if (!currentGroup) return {};
     if (currentGroup.startsWith('indicator')) {
-        return DATA.palettes.indicator[currentKey] || {};
+        return palettes.indicator[currentKey] || {};
     }
     if (currentGroup.startsWith('facility')) {
-        // Determine facility type from the sprite key
         const ftype = currentKey.replace(/_empty$/, '').replace(/_full$/, '');
-        return DATA.palettes.facility[ftype] || {};
+        return palettes.facility[ftype] || {};
     }
-    return DATA.palettes.pig[currentPaletteName] || {};
+    return palettes.pig[currentPaletteName] || {};
 }
 
 function getPaletteKeys() {
     if (!currentGroup) return [];
     if (currentGroup.startsWith('indicator')) {
-        return DATA.palette_keys.indicator[currentKey] || [];
+        return paletteKeys.indicator[currentKey] || [];
     }
     if (currentGroup.startsWith('facility')) {
         const ftype = currentKey.replace(/_empty$/, '').replace(/_full$/, '');
-        return DATA.palette_keys.facility[ftype] || [];
+        return paletteKeys.facility[ftype] || [];
     }
-    return DATA.palette_keys.pig || [];
+    return paletteKeys.pig || [];
 }
 
 function getAllPigPaletteNames() {
-    return Object.keys(DATA.palettes.pig);
+    return Object.keys(palettes.pig);
 }
 
 function getFacilityType(key) {
@@ -257,6 +259,10 @@ function buildPalettePanel() {
             updateToolButtons();
             buildPalettePanel();
         };
+        swatch.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            openColorEditor(key, swatch);
+        });
         container.appendChild(div);
     }
 }
@@ -533,8 +539,10 @@ function markDirty() {
         const elId = spriteId(el.dataset.group, el.dataset.key);
         el.classList.toggle('dirty', dirtySprites.has(elId));
     });
-    document.getElementById('info-dirty').textContent =
-        dirtySprites.size > 0 ? `${dirtySprites.size} changed` : 'Clean';
+    const parts = [];
+    if (dirtySprites.size > 0) parts.push(`${dirtySprites.size} sprites`);
+    if (paletteDirty) parts.push('palette');
+    document.getElementById('info-dirty').textContent = parts.length > 0 ? parts.join(' + ') + ' changed' : 'Clean';
 }
 
 // ---------------------------------------------------------------------------
@@ -586,7 +594,7 @@ function renderPreview() {
         bar.appendChild(item);
     } else {
         // Show all 4 pig palettes
-        for (const [name, palette] of Object.entries(DATA.palettes.pig)) {
+        for (const [name, pal] of Object.entries(palettes.pig)) {
             const item = document.createElement('div');
             item.className = 'preview-item';
             const label = document.createElement('div');
@@ -595,7 +603,7 @@ function renderPreview() {
             item.appendChild(label);
             const canvas = document.createElement('canvas');
             canvas.className = 'preview-canvas';
-            renderHalfBlockPreview(pixels, palette, canvas);
+            renderHalfBlockPreview(pixels, pal, canvas);
             item.appendChild(canvas);
             bar.appendChild(item);
         }
@@ -820,6 +828,213 @@ function duplicateFrom(group, sourceKey) {
 document.getElementById('btn-duplicate').onclick = showDuplicateDropdown;
 
 // ---------------------------------------------------------------------------
+// Palette colour editing
+// ---------------------------------------------------------------------------
+function isPigGroup() {
+    return currentGroup && !currentGroup.startsWith('facility') && !currentGroup.startsWith('indicator');
+}
+
+function openColorEditor(paletteKey, swatchEl) {
+    const popup = document.getElementById('color-editor-popup');
+    popup.innerHTML = '';
+    popup.classList.add('open');
+
+    const title = document.createElement('h4');
+    title.textContent = `Edit: ${paletteKey}`;
+    popup.appendChild(title);
+
+    if (isPigGroup()) {
+        // Pig sprites: show one row per variant (BLACK, CHOCOLATE, GOLDEN, CREAM)
+        for (const variantName of Object.keys(palettes.pig)) {
+            const pal = palettes.pig[variantName];
+            const currentHex = pal[paletteKey] || '#ff00ff';
+            const row = document.createElement('div');
+            row.className = 'color-editor-row';
+            const label = document.createElement('label');
+            label.textContent = variantName;
+            row.appendChild(label);
+            const colorInput = document.createElement('input');
+            colorInput.type = 'color';
+            colorInput.value = currentHex;
+            row.appendChild(colorInput);
+            const textInput = document.createElement('input');
+            textInput.type = 'text';
+            textInput.value = currentHex;
+            row.appendChild(textInput);
+            // Sync inputs and update palette live
+            colorInput.addEventListener('input', () => {
+                textInput.value = colorInput.value;
+                palettes.pig[variantName][paletteKey] = colorInput.value;
+                paletteDirty = true;
+                renderGrid();
+                renderPreview();
+                buildPalettePanel();
+            });
+            textInput.addEventListener('change', () => {
+                const hex = textInput.value.trim();
+                if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                    colorInput.value = hex;
+                    palettes.pig[variantName][paletteKey] = hex;
+                    paletteDirty = true;
+                    renderGrid();
+                    renderPreview();
+                    buildPalettePanel();
+                }
+            });
+            popup.appendChild(row);
+        }
+    } else if (currentGroup.startsWith('facility')) {
+        const ftype = getFacilityType(currentKey);
+        const pal = palettes.facility[ftype];
+        const currentHex = pal[paletteKey] || '#ff00ff';
+        const row = document.createElement('div');
+        row.className = 'color-editor-row';
+        const label = document.createElement('label');
+        label.textContent = ftype;
+        row.appendChild(label);
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = currentHex;
+        row.appendChild(colorInput);
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.value = currentHex;
+        row.appendChild(textInput);
+        colorInput.addEventListener('input', () => {
+            textInput.value = colorInput.value;
+            palettes.facility[ftype][paletteKey] = colorInput.value;
+            paletteDirty = true;
+            renderGrid();
+            renderPreview();
+            buildPalettePanel();
+        });
+        textInput.addEventListener('change', () => {
+            const hex = textInput.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                colorInput.value = hex;
+                palettes.facility[ftype][paletteKey] = hex;
+                paletteDirty = true;
+                renderGrid();
+                renderPreview();
+                buildPalettePanel();
+            }
+        });
+        popup.appendChild(row);
+    } else if (currentGroup.startsWith('indicator')) {
+        const pal = palettes.indicator[currentKey];
+        const currentHex = pal[paletteKey] || '#ff00ff';
+        const row = document.createElement('div');
+        row.className = 'color-editor-row';
+        const label = document.createElement('label');
+        label.textContent = currentKey;
+        row.appendChild(label);
+        const colorInput = document.createElement('input');
+        colorInput.type = 'color';
+        colorInput.value = currentHex;
+        row.appendChild(colorInput);
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.value = currentHex;
+        row.appendChild(textInput);
+        colorInput.addEventListener('input', () => {
+            textInput.value = colorInput.value;
+            palettes.indicator[currentKey][paletteKey] = colorInput.value;
+            paletteDirty = true;
+            renderGrid();
+            renderPreview();
+            buildPalettePanel();
+        });
+        textInput.addEventListener('change', () => {
+            const hex = textInput.value.trim();
+            if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
+                colorInput.value = hex;
+                palettes.indicator[currentKey][paletteKey] = hex;
+                paletteDirty = true;
+                renderGrid();
+                renderPreview();
+                buildPalettePanel();
+            }
+        });
+        popup.appendChild(row);
+    }
+
+    // Close button
+    const actions = document.createElement('div');
+    actions.className = 'editor-actions';
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = () => popup.classList.remove('open');
+    actions.appendChild(closeBtn);
+    popup.appendChild(actions);
+
+    // Position popup near the swatch
+    const rect = swatchEl.getBoundingClientRect();
+    popup.style.left = Math.max(0, rect.left - 260) + 'px';
+    popup.style.top = rect.top + 'px';
+}
+
+function addNewPaletteKey() {
+    const name = prompt('New palette key name (lowercase, a-z0-9_):');
+    if (!name) return;
+    if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+        alert('Invalid key name. Must start with a-z and contain only a-z, 0-9, _');
+        return;
+    }
+
+    // Check for duplicates
+    const existingKeys = getPaletteKeys();
+    if (existingKeys.includes(name)) {
+        alert('Key already exists: ' + name);
+        return;
+    }
+
+    const defaultColor = '#ff00ff';
+
+    if (isPigGroup()) {
+        // Add to all 4 pig variant palettes + paletteKeys.pig
+        for (const variantName of Object.keys(palettes.pig)) {
+            palettes.pig[variantName][name] = defaultColor;
+        }
+        paletteKeys.pig.push(name);
+    } else if (currentGroup.startsWith('facility')) {
+        const ftype = getFacilityType(currentKey);
+        palettes.facility[ftype][name] = defaultColor;
+        paletteKeys.facility[ftype].push(name);
+    } else if (currentGroup.startsWith('indicator')) {
+        palettes.indicator[currentKey][name] = defaultColor;
+        paletteKeys.indicator[currentKey].push(name);
+    }
+
+    paletteDirty = true;
+    currentBrush = name;
+    buildPalettePanel();
+
+    // Open colour editor for the new key immediately
+    // Use setTimeout to let the DOM update so we can find the new swatch
+    setTimeout(() => {
+        const swatches = document.querySelectorAll('#palette-keys .palette-key');
+        const lastSwatch = swatches[swatches.length - 1];
+        if (lastSwatch) {
+            const swatchEl = lastSwatch.querySelector('.palette-swatch');
+            if (swatchEl) openColorEditor(name, swatchEl);
+        }
+    }, 50);
+}
+
+document.getElementById('btn-add-color').onclick = addNewPaletteKey;
+
+// Close colour editor on Escape
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const popup = document.getElementById('color-editor-popup');
+        if (popup.classList.contains('open')) {
+            popup.classList.remove('open');
+            e.stopPropagation();
+        }
+    }
+}, true);
+
+// ---------------------------------------------------------------------------
 // Keyboard shortcuts
 // ---------------------------------------------------------------------------
 document.addEventListener('keydown', (e) => {
@@ -852,6 +1067,8 @@ document.addEventListener('keydown', (e) => {
 document.getElementById('btn-export').onclick = async () => {
     const exportData = JSON.parse(JSON.stringify(DATA));
     exportData.sprites = JSON.parse(JSON.stringify(sprites));
+    exportData.palettes = JSON.parse(JSON.stringify(palettes));
+    exportData.palette_keys = JSON.parse(JSON.stringify(paletteKeys));
     const json = JSON.stringify(exportData, null, 2);
 
     try {
@@ -862,6 +1079,7 @@ document.getElementById('btn-export').onclick = async () => {
         });
         if (resp.ok) {
             dirtySprites.clear();
+            paletteDirty = false;
             document.querySelectorAll('.sprite-item.dirty').forEach(el => el.classList.remove('dirty'));
             document.getElementById('info-dirty').textContent = 'Saved!';
         } else {
@@ -882,8 +1100,10 @@ function updateInfo() {
         const h = pixels.length;
         document.getElementById('info-dims').textContent = `${w}×${h}px`;
     }
-    document.getElementById('info-dirty').textContent =
-        dirtySprites.size > 0 ? `${dirtySprites.size} changed` : 'Clean';
+    const parts = [];
+    if (dirtySprites.size > 0) parts.push(`${dirtySprites.size} sprites`);
+    if (paletteDirty) parts.push('palette');
+    document.getElementById('info-dirty').textContent = parts.length > 0 ? parts.join(' + ') + ' changed' : 'Clean';
 }
 
 // ---------------------------------------------------------------------------
