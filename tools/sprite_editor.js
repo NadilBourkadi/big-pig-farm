@@ -634,6 +634,56 @@ document.getElementById('zoom-slider').addEventListener('input', (e) => {
 });
 
 // ---------------------------------------------------------------------------
+// Duplicate from source
+// ---------------------------------------------------------------------------
+function showDuplicateDropdown() {
+    if (!currentGroup || !currentKey) return;
+    const dropdown = document.getElementById('duplicate-dropdown');
+    dropdown.innerHTML = '';
+
+    const groupSprites = sprites[currentGroup];
+    const keys = Object.keys(groupSprites).filter(k => k !== currentKey).sort();
+    if (keys.length === 0) return;
+
+    for (const key of keys) {
+        const item = document.createElement('div');
+        item.className = 'dup-item';
+        item.textContent = key;
+        item.onclick = () => {
+            duplicateFrom(currentGroup, key);
+            closeDuplicateDropdown();
+        };
+        dropdown.appendChild(item);
+    }
+
+    dropdown.classList.add('open');
+    // Close on outside click (next tick so current click doesn't trigger it)
+    setTimeout(() => document.addEventListener('click', closeDuplicateOnOutsideClick, { once: true }), 0);
+}
+
+function closeDuplicateDropdown() {
+    document.getElementById('duplicate-dropdown').classList.remove('open');
+}
+
+function closeDuplicateOnOutsideClick(e) {
+    const dropdown = document.getElementById('duplicate-dropdown');
+    if (!dropdown.contains(e.target) && e.target.id !== 'btn-duplicate') {
+        closeDuplicateDropdown();
+    }
+}
+
+function duplicateFrom(group, sourceKey) {
+    pushUndo();
+    const source = sprites[group][sourceKey].pixels;
+    sprites[currentGroup][currentKey].pixels = JSON.parse(JSON.stringify(source));
+    markDirty();
+    renderGrid();
+    renderPreview();
+}
+
+document.getElementById('btn-duplicate').onclick = showDuplicateDropdown;
+
+// ---------------------------------------------------------------------------
 // Keyboard shortcuts
 // ---------------------------------------------------------------------------
 document.addEventListener('keydown', (e) => {
@@ -648,6 +698,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'i') { currentTool = 'pick'; updateToolButtons(); }
     if (e.key === 'g') { currentTool = 'fill'; updateToolButtons(); }
     if (e.key === 't') { togglePin(); }
+    if (e.key === 'd') { showDuplicateDropdown(); }
 });
 
 // ---------------------------------------------------------------------------
