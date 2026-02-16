@@ -3,42 +3,40 @@
 from typing import Optional
 from uuid import UUID
 
-from textual.widgets import Static
-from textual.reactive import reactive
-from rich.text import Text
 from rich.style import Style
+from rich.text import Text
+from textual.reactive import reactive
+from textual.widgets import Static
 
+from big_pig_farm.data.indicator_sprites import (
+    IndicatorType,
+    get_far_indicator,
+    get_indicator_halfblock,
+    get_pig_indicator_type,
+)
 from big_pig_farm.data.sprites import (
     ANIM_FRAME_COUNT,
     ANIM_TICKS_PER_FRAME,
-    get_pig_halfblock_sprite,
-    get_facility_sprite,
-    get_facility_halfblock_sprite,
-    FAR_FACILITY_SPRITES,
     FLOOR_CHARS,
     FLOOR_CHARS_FAR,
     FLOOR_COLORS,
     FLOOR_COLORS_FAR,
     TERRAIN,
-    WALL_PLANK,
     WALL_GRAIN,
+    WALL_PLANK,
     WALL_POST,
+    ZOOM_SCALES,
     Direction,
     ZoomLevel,
-    ZOOM_SCALES,
+    get_facility_halfblock_sprite,
+    get_facility_sprite,
+    get_pig_halfblock_sprite,
 )
 from big_pig_farm.entities.biomes import BIOMES, BiomeType
-from big_pig_farm.data.indicator_sprites import (
-    IndicatorType,
-    get_pig_indicator_type,
-    get_indicator_halfblock,
-    get_far_indicator,
-)
-from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.entities.facilities import Facility
+from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.world import CellType
-
 
 # Ordered cycle for zoom toggle
 _ZOOM_ORDER = [ZoomLevel.FAR, ZoomLevel.NORMAL, ZoomLevel.CLOSE]
@@ -366,27 +364,54 @@ class FarmView(Static):
 
         At sub-1x scales, world->screen mapping is lossy (multiple world cells
         map to the same screen cell). We iterate screen cells, map back to
-        world coordinates, and draw floor/wall based on cell type. This handles
-        multi-area layouts with different biome palettes and tunnel corridors.
+        world coordinates, and check a 2×2 block of world cells so that
+        single-cell-thick walls are never missed by sub-sampling.
         """
         farm = self.state.farm
         scale = self._scale()
         inv_scale = 1.0 / scale
+        vp_x = self._viewport_x
+        vp_y = self._viewport_y
+        farm_w = farm.width
+        farm_h = farm.height
+        cells = farm.cells
 
         # Draw each screen pixel by mapping back to world coordinates
         for sy in range(height):
-            wy = int((sy - offset_y) * inv_scale) + self._viewport_y
+            wy0 = int((sy - offset_y) * inv_scale) + vp_y
+            wy1 = int((sy + 1 - offset_y) * inv_scale) + vp_y
             for sx in range(width):
-                wx = int((sx - offset_x) * inv_scale) + self._viewport_x
+                wx0 = int((sx - offset_x) * inv_scale) + vp_x
+                wx1 = int((sx + 1 - offset_x) * inv_scale) + vp_x
 
-                if not farm.is_valid_position(wx, wy):
+                # Check 2×2 world neighborhood, prefer walls
+                wall_cell = None
+                floor_cell = None
+                for cy in range(wy0, min(wy1, farm_h)):
+                    if cy < 0:
+                        continue
+                    row = cells[cy]
+                    for cx in range(wx0, min(wx1, farm_w)):
+                        if cx < 0:
+                            continue
+                        c = row[cx]
+                        if c.area_id is None and not c.is_tunnel:
+                            continue  # void cell
+                        if c.cell_type == CellType.WALL:
+                            wall_cell = c
+                            break
+                        elif floor_cell is None:
+                            floor_cell = c
+                    if wall_cell is not None:
+                        break
+
+                cell = wall_cell or floor_cell
+                if cell is None:
                     continue
 
-                cell = farm.cells[wy][wx]
-
-                # Skip void cells (not part of any area or tunnel)
-                if cell.area_id is None and not cell.is_tunnel:
-                    continue
+                # Use the primary sample coordinates for texture hashing
+                wx = max(0, min(wx0, farm_w - 1))
+                wy = max(0, min(wy0, farm_h - 1))
 
                 if cell.cell_type == CellType.WALL:
                     # Wall — use biome tint if available
