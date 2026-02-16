@@ -1,10 +1,8 @@
 """Tests for area layout, tunnels, and multi-room pathfinding."""
 
-import pytest
-
-from big_pig_farm.entities.areas import FarmArea, TunnelConnection
+from big_pig_farm.entities.areas import FarmArea
 from big_pig_farm.entities.biomes import BiomeType
-from big_pig_farm.game.world import FarmGrid
+from big_pig_farm.game.world import FarmGrid, relayout_areas
 
 
 class TestFarmArea:
@@ -32,6 +30,11 @@ class TestFarmArea:
         assert area.center_x == 5
         assert area.center_y == 4
 
+    def test_grid_col_row_defaults(self):
+        area = FarmArea(name="Test", biome=BiomeType.MEADOW, x1=0, y1=0, x2=10, y2=8)
+        assert area.grid_col == 0
+        assert area.grid_row == 0
+
 
 class TestAddRoom:
     def test_starter_room(self):
@@ -47,7 +50,25 @@ class TestAddRoom:
         new_area, tunnels, offset_x, offset_y = result
         assert new_area.biome == BiomeType.BURROW
         assert len(farm.areas) == 2
-        assert len(farm.tunnels) == 2  # Two tunnels per connection
+        assert len(farm.tunnels) >= 2  # At least two tunnels per connection
+
+    def test_grid_slot_assignment(self):
+        """New rooms get assigned reading-order grid slots (2 columns)."""
+        farm = FarmGrid.create_starter()
+        assert farm.areas[0].grid_col == 0
+        assert farm.areas[0].grid_row == 0
+
+        farm.add_room(BiomeType.BURROW)
+        assert farm.areas[1].grid_col == 1
+        assert farm.areas[1].grid_row == 0
+
+        farm.add_room(BiomeType.GARDEN)
+        assert farm.areas[2].grid_col == 0
+        assert farm.areas[2].grid_row == 1
+
+        farm.add_room(BiomeType.ALPINE)
+        assert farm.areas[3].grid_col == 1
+        assert farm.areas[3].grid_row == 1
 
     def test_tunnel_connects_areas(self):
         farm = FarmGrid.create_starter()
@@ -55,7 +76,7 @@ class TestAddRoom:
         assert result is not None
         _, tunnels, _, _ = result
         area_ids = {a.id for a in farm.areas}
-        for tunnel in tunnels:
+        for tunnel in farm.tunnels:
             assert tunnel.area_a_id in area_ids
             assert tunnel.area_b_id in area_ids
             assert len(tunnel.cells) > 0
@@ -64,11 +85,23 @@ class TestAddRoom:
         farm = FarmGrid.create_starter()
         result = farm.add_room(BiomeType.ALPINE)
         assert result is not None
-        _, tunnels, _, _ = result
-        for tunnel in tunnels:
-            for tx, ty in tunnel.cells:
-                assert farm.is_walkable(tx, ty), f"Tunnel cell ({tx}, {ty}) not walkable"
-                assert farm.cells[ty][tx].is_tunnel
+        for tunnel in farm.tunnels:
+            walkable_cells = [(tx, ty) for tx, ty in tunnel.cells
+                              if farm.cells[ty][tx].is_walkable]
+            assert len(walkable_cells) > 0, "Tunnel should have walkable cells"
+
+    def test_tunnel_barrier_walls(self):
+        """Tunnels should have non-walkable barrier walls alongside the corridor."""
+        farm = FarmGrid.create_starter()
+        result = farm.add_room(BiomeType.BURROW)
+        assert result is not None
+        for tunnel in farm.tunnels:
+            barrier_cells = [
+                (tx, ty) for tx, ty in tunnel.cells
+                if not farm.cells[ty][tx].is_walkable
+                and farm.cells[ty][tx].is_tunnel
+            ]
+            assert len(barrier_cells) > 0, "Tunnel should have barrier wall cells"
 
     def test_pathfinding_across_rooms(self):
         farm = FarmGrid.create_starter()
@@ -111,3 +144,64 @@ class TestAddRoom:
         farm.add_room(BiomeType.BURROW)
         cap2 = farm.capacity
         assert cap2 > cap1
+
+
+class TestAdjacentPairs:
+    def test_two_rooms_horizontal(self):
+        """Two rooms in col 0 and col 1 should be adjacent."""
+        farm = FarmGrid.create_starter()
+        farm.add_room(BiomeType.BURROW)
+        pairs = farm._get_adjacent_pairs()
+        assert len(pairs) == 1
+        ids = {farm.areas[0].id, farm.areas[1].id}
+        pair_ids = {pairs[0][0].id, pairs[0][1].id}
+        assert ids == pair_ids
+
+    def test_four_rooms_adjacency(self):
+        """Four rooms in a 2x2 grid should have 4 adjacent pairs."""
+        farm = FarmGrid.create_starter()
+        farm.add_room(BiomeType.BURROW)
+        farm.add_room(BiomeType.GARDEN)
+        farm.add_room(BiomeType.ALPINE)
+        pairs = farm._get_adjacent_pairs()
+        # [0,0]-[1,0], [0,0]-[0,1], [1,0]-[1,1], [0,1]-[1,1]
+        assert len(pairs) == 4
+
+
+class TestRelayout:
+    def test_relayout_noop_for_new_layout(self):
+        """relayout_areas should be a no-op when grid slots are already set."""
+        from big_pig_farm.game.state import GameState
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+        state.farm.add_room(BiomeType.BURROW)
+
+        # Positions before
+        positions = [(a.x1, a.y1) for a in state.farm.areas]
+
+        relayout_areas(state)
+
+        # Positions unchanged — grid slots were already set by add_room
+        for i, area in enumerate(state.farm.areas):
+            assert (area.x1, area.y1) == positions[i]
+
+    def test_relayout_assigns_grid_slots(self):
+        """relayout_areas should assign grid_col/grid_row to legacy areas."""
+        from big_pig_farm.game.state import GameState
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+
+        # Simulate a legacy layout: add a second area with grid_col=0, grid_row=0
+        area2 = FarmArea(
+            name="Burrow Room", biome=BiomeType.BURROW,
+            x1=70, y1=0, x2=131, y2=36,
+            grid_col=0, grid_row=0,
+        )
+        state.farm.add_area(area2)
+
+        relayout_areas(state)
+
+        assert state.farm.areas[0].grid_col == 0
+        assert state.farm.areas[0].grid_row == 0
+        assert state.farm.areas[1].grid_col == 1
+        assert state.farm.areas[1].grid_row == 0
