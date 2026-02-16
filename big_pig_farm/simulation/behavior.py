@@ -23,6 +23,13 @@ class BehaviorController:
         self._blocked_timers: dict[UUID, float] = {}  # Track how long pigs have been blocked
         self._stuck_positions: dict[UUID, tuple[int, int]] = {}  # Last known grid cell while blocked
         self._stuck_timers: dict[UUID, float] = {}  # Time stuck at same grid cell (not reset by facility switches)
+        # Unreachable facility backoff: {pig_id: {need_type: remaining_cycles}}
+        # Prevents pigs from re-running the full facility lookup + A* every 2s
+        # when no reachable facility of that type exists.
+        self._unreachable_needs: dict[UUID, dict[str, int]] = {}
+        # Track grid generation to clear unreachable backoff when the
+        # walkable grid changes (facility built/removed/refilled).
+        self._last_grid_gen: int = 0
 
     def cleanup_dead_pig(self, pig_id: UUID) -> None:
         """Remove tracking state for a pig that is no longer alive."""
@@ -30,6 +37,7 @@ class BehaviorController:
         self._blocked_timers.pop(pig_id, None)
         self._stuck_positions.pop(pig_id, None)
         self._stuck_timers.pop(pig_id, None)
+        self._unreachable_needs.pop(pig_id, None)
         self.facility_manager.cleanup_pig(pig_id)
 
     def reset_all_tracking(self) -> None:
@@ -42,6 +50,7 @@ class BehaviorController:
         self._blocked_timers.clear()
         self._stuck_positions.clear()
         self._stuck_timers.clear()
+        self._unreachable_needs.clear()
         self.facility_manager.reset_all()
 
     def separate_overlapping_pigs(self) -> None:
@@ -70,6 +79,13 @@ class BehaviorController:
 
     def update(self, pig: GuineaPig, delta_seconds: float) -> None:
         """Update behavior for a guinea pig."""
+        # Clear unreachable backoff when the walkable grid changes
+        # (facility built/removed) so pigs notice new facilities immediately
+        grid_gen = self.game_state.farm._grid_generation
+        if grid_gen != self._last_grid_gen:
+            self._unreachable_needs.clear()
+            self._last_grid_gen = grid_gen
+
         # Check if it's time to make a new decision
         timer = self._decision_timers.get(pig.id, random.uniform(0, 1))  # Stagger initial timers
         timer += delta_seconds
@@ -96,9 +112,12 @@ class BehaviorController:
         # Clamp position inside walkable bounds (walls + buffer)
         self._clamp_to_bounds(pig)
 
-        # Track current area
+        # Track current area — clear unreachable backoff on area change
         area = self.game_state.farm.get_area_at(int(pig.position.x), int(pig.position.y))
-        pig.current_area_id = area.id if area else None
+        new_area_id = area.id if area else None
+        if new_area_id != pig.current_area_id:
+            self._unreachable_needs.pop(pig.id, None)
+        pig.current_area_id = new_area_id
 
         # Update behavior-specific logic
         self._update_current_behavior(pig, delta_seconds)
@@ -204,6 +223,17 @@ class BehaviorController:
             self._start_wandering(pig)
             return
 
+        # Tick down unreachable facility backoff counters
+        pig_backoffs = self._unreachable_needs.get(pig.id)
+        if pig_backoffs:
+            expired = [k for k, v in pig_backoffs.items() if v <= 1]
+            for k in expired:
+                del pig_backoffs[k]
+            for k in pig_backoffs:
+                pig_backoffs[k] -= 1
+            if not pig_backoffs:
+                del self._unreachable_needs[pig.id]
+
         # Check for urgent needs
         urgent_need = get_most_urgent_need(pig)
 
@@ -280,6 +310,14 @@ class BehaviorController:
 
     def _seek_facility_for_need(self, pig: GuineaPig, need: str) -> None:
         """Find and move towards a facility that addresses a need."""
+        # Unreachable facility backoff — skip the expensive facility search
+        # if we recently determined no reachable facility exists for this need
+        backoff = self._unreachable_needs.get(pig.id, {}).get(need, 0)
+        if backoff > 0:
+            pig.target_description = None
+            self._start_wandering(pig)
+            return
+
         facility_types = get_target_facility_for_need(need)
         if facility_types is None:
             pig.log_behavior(f"No facility type for {need}, wandering")
@@ -287,76 +325,75 @@ class BehaviorController:
             self._start_wandering(pig)
             return
 
-        self.facility_manager.begin_decision()
-        try:
-            # Try each facility type in order, and verify we can path there
-            for facility_type in facility_types:
-                facilities = self.facility_manager.get_reachable_facilities(pig, facility_type)
-                if not facilities:
-                    continue
+        # Try each facility type in order, and verify we can path there
+        for facility_type in facility_types:
+            facilities = self.facility_manager.get_reachable_facilities(pig, facility_type)
+            if not facilities:
+                continue
 
-                # Sort by spread score so we try less crowded facilities first
-                ranked = self.facility_manager.rank_facilities_by_spread(pig, facilities)
+            # Sort by spread score so we try less crowded facilities first
+            ranked = self.facility_manager.rank_facilities_by_spread(pig, facilities)
 
-                # Try each facility in order until we find one with an open point
-                for facility in ranked:
-                    target = self.facility_manager.find_open_interaction_point(pig, facility)
-                    if target:
-                        self._set_path_to(pig, target)
-                        # Verify path was actually set
-                        if pig.path:
-                            pig.log_behavior(f"Going to {facility.name} at ({target[0]}, {target[1]})")
-                            pig.behavior_state = BehaviorState.WANDERING
-                            pig.target_facility_id = facility.id
-                            pig.target_description = f"going to {facility.name}"
-                            return
-                        else:
-                            pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
-                            self.facility_manager.add_failed_facility(pig.id, facility.id)
+            # Try each facility in order until we find one with an open point
+            for facility in ranked:
+                target = self.facility_manager.find_open_interaction_point(pig, facility)
+                if target:
+                    self._set_path_to(pig, target)
+                    # Verify path was actually set
+                    if pig.path:
+                        pig.log_behavior(f"Going to {facility.name} at ({target[0]}, {target[1]})")
+                        pig.behavior_state = BehaviorState.WANDERING
+                        pig.target_facility_id = facility.id
+                        pig.target_description = f"going to {facility.name}"
+                        return
                     else:
-                        pig.log_behavior(f"All points at {facility.name} occupied, trying alternatives")
-        finally:
-            self.facility_manager.end_decision()
+                        pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
+                        self.facility_manager.add_failed_facility(pig.id, facility.id)
+                else:
+                    pig.log_behavior(f"All points at {facility.name} occupied, trying alternatives")
 
-        # No reachable facilities found
-        pig.log_behavior(f"No reachable {need} facility, wandering")
+        # No reachable facilities found — set backoff to avoid retrying every 2s
+        is_critical = getattr(pig.needs, need) < NEEDS.CRITICAL_THRESHOLD
+        cycles = (BEHAVIOR.UNREACHABLE_CRITICAL_CYCLES if is_critical
+                  else BEHAVIOR.UNREACHABLE_BACKOFF_CYCLES)
+        if pig.id not in self._unreachable_needs:
+            self._unreachable_needs[pig.id] = {}
+        self._unreachable_needs[pig.id][need] = cycles
+
+        pig.log_behavior(f"No reachable {need} facility, backing off {cycles} cycles")
         pig.target_description = None
         self._start_wandering(pig)
 
     def _seek_sleep(self, pig: GuineaPig) -> None:
         """Find a place to sleep."""
-        self.facility_manager.begin_decision()
-        try:
-            hideouts = self.facility_manager.get_reachable_facilities(pig, FacilityType.HIDEOUT)
+        hideouts = self.facility_manager.get_reachable_facilities(pig, FacilityType.HIDEOUT)
 
-            if not hideouts:
-                # No reachable hideout - sleep where standing
-                pig.path = []
-                pig.target_position = None
-                pig.target_facility_id = None
-                pig.target_description = "sleeping"
-                pig.behavior_state = BehaviorState.SLEEPING
-                pig.log_behavior("No reachable hideout, sleeping where standing")
-                return
+        if not hideouts:
+            # No reachable hideout - sleep where standing
+            pig.path = []
+            pig.target_position = None
+            pig.target_facility_id = None
+            pig.target_description = "sleeping"
+            pig.behavior_state = BehaviorState.SLEEPING
+            pig.log_behavior("No reachable hideout, sleeping where standing")
+            return
 
-            ranked = self.facility_manager.rank_facilities_by_spread(pig, hideouts)
-            for hideout in ranked:
-                target = self.facility_manager.find_open_interaction_point(pig, hideout)
-                if target:
-                    self._set_path_to(pig, target)
-                    # Verify path was actually set
-                    if pig.path:
-                        pig.log_behavior(f"Going to {hideout.name} to sleep")
-                        pig.behavior_state = BehaviorState.WANDERING
-                        pig.target_facility_id = hideout.id
-                        pig.target_description = f"going to {hideout.name}"
-                        return
-                    else:
-                        # Path failed - mark as failed and try next hideout
-                        pig.log_behavior(f"Path to {hideout.name} failed, trying alternatives")
-                        self.facility_manager.add_failed_facility(pig.id, hideout.id)
-        finally:
-            self.facility_manager.end_decision()
+        ranked = self.facility_manager.rank_facilities_by_spread(pig, hideouts)
+        for hideout in ranked:
+            target = self.facility_manager.find_open_interaction_point(pig, hideout)
+            if target:
+                self._set_path_to(pig, target)
+                # Verify path was actually set
+                if pig.path:
+                    pig.log_behavior(f"Going to {hideout.name} to sleep")
+                    pig.behavior_state = BehaviorState.WANDERING
+                    pig.target_facility_id = hideout.id
+                    pig.target_description = f"going to {hideout.name}"
+                    return
+                else:
+                    # Path failed - mark as failed and try next hideout
+                    pig.log_behavior(f"Path to {hideout.name} failed, trying alternatives")
+                    self.facility_manager.add_failed_facility(pig.id, hideout.id)
 
         # No reachable hideout - sleep where standing
         pig.path = []
@@ -374,30 +411,26 @@ class BehaviorController:
             FacilityType.TUNNEL,
         ]
 
-        self.facility_manager.begin_decision()
-        try:
-            # Collect all reachable play facilities across types and rank together
-            all_play: list[Facility] = []
-            for facility_type in play_types:
-                all_play.extend(self.facility_manager.get_reachable_facilities(pig, facility_type))
+        # Collect all reachable play facilities across types and rank together
+        all_play: list[Facility] = []
+        for facility_type in play_types:
+            all_play.extend(self.facility_manager.get_reachable_facilities(pig, facility_type))
 
-            if all_play:
-                ranked = self.facility_manager.rank_facilities_by_spread(pig, all_play)
-                for facility in ranked:
-                    target = self.facility_manager.find_open_interaction_point(pig, facility)
-                    if target:
-                        self._set_path_to(pig, target)
-                        if pig.path:
-                            pig.log_behavior(f"Going to {facility.name} to play")
-                            pig.behavior_state = BehaviorState.WANDERING
-                            pig.target_facility_id = facility.id
-                            pig.target_description = f"going to {facility.name}"
-                            return
-                        else:
-                            pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
-                            self.facility_manager.add_failed_facility(pig.id, facility.id)
-        finally:
-            self.facility_manager.end_decision()
+        if all_play:
+            ranked = self.facility_manager.rank_facilities_by_spread(pig, all_play)
+            for facility in ranked:
+                target = self.facility_manager.find_open_interaction_point(pig, facility)
+                if target:
+                    self._set_path_to(pig, target)
+                    if pig.path:
+                        pig.log_behavior(f"Going to {facility.name} to play")
+                        pig.behavior_state = BehaviorState.WANDERING
+                        pig.target_facility_id = facility.id
+                        pig.target_description = f"going to {facility.name}"
+                        return
+                    else:
+                        pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
+                        self.facility_manager.add_failed_facility(pig.id, facility.id)
 
         # No reachable play facilities - just wander playfully
         pig.log_behavior("No reachable play facility, wandering playfully")
@@ -481,73 +514,53 @@ class BehaviorController:
         return target  # Fallback to original target
 
     def _start_wandering(self, pig: GuineaPig) -> None:
-        """Start random wandering within the pig's current area."""
+        """Start random wandering using simple straight-line movement.
+
+        Instead of running A* to a random distant cell, pick a random
+        walkable direction and build a short straight-line path.  This
+        eliminates A* for the ~60% of pigs that are wandering at any
+        given time — the single biggest source of unnecessary pathfinding.
+        """
         farm = self.game_state.farm
-        grid = self.collision.spatial_grid
         pig_gx, pig_gy = pig.position.grid_pos()
-        max_wander = BEHAVIOR.WANDER_MAX_DISTANCE
-        density_r_sq = BEHAVIOR.WANDER_DENSITY_RADIUS ** 2
 
-        best_target = None
-        best_score = float('-inf')
+        # Cardinal directions to try
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        random.shuffle(directions)
 
-        for _ in range(BEHAVIOR.WANDER_ATTEMPTS):
-            # Prefer same-area targets to avoid long cross-map paths
-            target = None
-            if pig.current_area_id:
-                target = farm.find_random_walkable_in_area(pig.current_area_id)
-            if target is None:
-                target = farm.find_random_walkable()
+        best_path: list[tuple[int, int]] = []
 
-            if not target:
-                continue
-            # Skip candidates that are too far away
-            if abs(target[0] - pig_gx) + abs(target[1] - pig_gy) > max_wander:
-                continue
-            if self.collision.is_cell_occupied_by_pig(target[0], target[1], exclude_pig=pig):
-                continue
+        for dx, dy in directions:
+            steps = random.randint(
+                BEHAVIOR.SIMPLE_WANDER_MIN_STEPS,
+                BEHAVIOR.SIMPLE_WANDER_MAX_STEPS,
+            )
+            path: list[tuple[int, int]] = []
+            cx, cy = pig_gx, pig_gy
+            for _ in range(steps):
+                nx, ny = cx + dx, cy + dy
+                if farm.is_walkable(nx, ny):
+                    path.append((nx, ny))
+                    cx, cy = nx, ny
+                else:
+                    break
+            if len(path) > len(best_path):
+                best_path = path
 
-            # Local density scoring using spatial grid
-            nearby_count = 0
-            min_dist_sq = float('inf')
-            for other_pig in grid.get_nearby(float(target[0]), float(target[1])):
-                if other_pig.id == pig.id:
-                    continue
-                dsq = ((target[0] - other_pig.position.x) ** 2 +
-                       (target[1] - other_pig.position.y) ** 2)
-                if dsq < density_r_sq:
-                    nearby_count += 1
-                if dsq < min_dist_sq:
-                    min_dist_sq = dsq
-
-            min_pig_dist = min_dist_sq ** 0.5 if min_dist_sq != float('inf') else 0.0
-            score = min_pig_dist - (nearby_count * BEHAVIOR.WANDER_DENSITY_PENALTY)
-
-            # Prefer cells in the pig's preferred biome
-            if pig.preferred_biome:
-                cell_biome = farm.get_biome_at(target[0], target[1])
-                if cell_biome and cell_biome.value == pig.preferred_biome:
-                    score += 3.0
-
-            if score > best_score:
-                best_score = score
-                best_target = target
-
-        if best_target:
-            self._set_path_to(pig, best_target)
+        if best_path:
+            pig.path = best_path
+            end = best_path[-1]
+            pig.target_position = Position(x=float(end[0]), y=float(end[1]))
         pig.behavior_state = BehaviorState.WANDERING
 
     def _set_path_to(self, pig: GuineaPig, target: tuple[int, int]) -> None:
         """Calculate and set path to target.
 
-        Reuses a cached path from FacilityManager when available (the
-        same start→goal was already computed during get_reachable_facilities
-        or find_open_interaction_point in the same decision block).
+        Uses the persistent LRU path cache (cross-pig / cross-tick).
+        Falls back to A* and stores the result for future reuse.
         """
         start = pig.position.grid_pos()
-        path = self.facility_manager.get_cached_path(start, target)
-        if path is None:
-            path = self.game_state.farm.find_path(start, target)
+        path = self.facility_manager._cached_find_path(start, target)
 
         if path:
             pig.path = path[1:]  # Skip current position
@@ -763,11 +776,7 @@ class BehaviorController:
         if blocked_time > BEHAVIOR.BLOCKED_TIME_ALTERNATIVE:
             current_target = pig.target_position
             if current_target:
-                self.facility_manager.begin_decision()
-                try:
-                    found = self.facility_manager.try_alternative_facility(pig, current_target)
-                finally:
-                    self.facility_manager.end_decision()
+                found = self.facility_manager.try_alternative_facility(pig, current_target)
                 if found:
                     self._blocked_timers[pig.id] = 0
                 elif blocked_time > BEHAVIOR.BLOCKED_TIME_GIVE_UP:

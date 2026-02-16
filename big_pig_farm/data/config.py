@@ -341,6 +341,8 @@ class BehaviorConfig:
     WANDER_MAX_DISTANCE: int = 30          # Max Manhattan distance for wander targets
     WANDER_DENSITY_RADIUS: float = 10.0    # Radius to count nearby pigs for density scoring
     WANDER_DENSITY_PENALTY: float = 2.0    # Score penalty per nearby pig within radius
+    SIMPLE_WANDER_MIN_STEPS: int = 6       # Min steps in a straight-line wander
+    SIMPLE_WANDER_MAX_STEPS: int = 14      # Max steps in a straight-line wander
 
     # Facility pathfinding limits
     MAX_FACILITY_PATHFIND_DISTANCE: int = 100  # Skip A* when Manhattan distance exceeds this
@@ -350,6 +352,11 @@ class BehaviorConfig:
 
     # Critical-need retry throttle
     CRITICAL_FAILED_COOLDOWN_CYCLES: int = 1   # Reduced cooldown for critical pigs (vs 3 normal)
+
+    # Unreachable facility backoff — when no facility of a type is reachable,
+    # skip re-searching for that need type for N decision cycles (~10s)
+    UNREACHABLE_BACKOFF_CYCLES: int = 5        # Normal backoff (~10s at 2s interval)
+    UNREACHABLE_CRITICAL_CYCLES: int = 2       # Reduced backoff when need is critical
 
     # Idle drift
     IDLE_DRIFT_RADIUS: float = 5.0         # If another pig is within this radius, idle → wander
