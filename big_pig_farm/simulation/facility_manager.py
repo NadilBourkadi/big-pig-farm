@@ -1,5 +1,6 @@
 """Facility selection, interaction, and tracking for guinea pig AI."""
 
+from collections import OrderedDict
 from typing import Optional
 from uuid import UUID
 import random
@@ -11,6 +12,9 @@ from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.needs import get_most_urgent_need
 
+# Maximum number of entries in the cross-tick path cache.
+_PATH_CACHE_MAX_SIZE = 512
+
 
 class FacilityManager:
     """Manages facility selection, occupancy tracking, and resource consumption."""
@@ -20,30 +24,16 @@ class FacilityManager:
         self.collision = collision
         self._failed_facilities: dict[UUID, set[UUID]] = {}
         self._failed_cooldowns: dict[UUID, int] = {}
-        # Per-decision pathfinding cache: avoids redundant A* calls when
-        # get_reachable_facilities, find_open_interaction_point, and
-        # try_alternative_facility all pathfind to the same points.
-        self._path_cache: dict[tuple[tuple[int, int], tuple[int, int]], list[tuple[int, int]]] = {}
+        # Persistent cross-tick LRU path cache.  Keyed on
+        # (start, goal, grid_generation) so entries auto-invalidate when
+        # the walkable grid changes.  OrderedDict gives O(1) LRU eviction.
+        self._path_cache: OrderedDict[
+            tuple[tuple[int, int], tuple[int, int], int],
+            list[tuple[int, int]],
+        ] = OrderedDict()
         # Performance counters (reset each debug snapshot window)
         self.cache_hits: int = 0
         self.cache_misses: int = 0
-
-    def begin_decision(self) -> None:
-        """Start a facility decision — enable path caching."""
-        self._path_cache.clear()
-
-    def end_decision(self) -> None:
-        """End a facility decision — discard cached paths."""
-        self._path_cache.clear()
-
-    def get_cached_path(
-        self, start: tuple[int, int], goal: tuple[int, int],
-    ) -> list[tuple[int, int]] | None:
-        """Look up a previously cached path. Returns None on cache miss."""
-        result = self._path_cache.get((start, goal))
-        if result is not None:
-            self.cache_hits += 1
-        return result
 
     def reset_perf_counters(self) -> None:
         """Reset cache performance counters for the next snapshot window."""
@@ -53,15 +43,20 @@ class FacilityManager:
     def _cached_find_path(
         self, start: tuple[int, int], goal: tuple[int, int],
     ) -> list[tuple[int, int]]:
-        """find_path with per-decision caching."""
-        key = (start, goal)
+        """find_path with persistent cross-tick LRU caching."""
+        gen = self.game_state.farm._grid_generation
+        key = (start, goal, gen)
         result = self._path_cache.get(key)
         if result is not None:
             self.cache_hits += 1
+            self._path_cache.move_to_end(key)
             return result
         self.cache_misses += 1
         path = self.game_state.farm.find_path(start, goal)
         self._path_cache[key] = path
+        # Evict oldest entry if over capacity
+        if len(self._path_cache) > _PATH_CACHE_MAX_SIZE:
+            self._path_cache.popitem(last=False)
         return path
 
     def get_failed_facilities(self, pig_id: UUID) -> set[UUID]:
@@ -522,3 +517,4 @@ class FacilityManager:
         """Clear all tracking state."""
         self._failed_facilities.clear()
         self._failed_cooldowns.clear()
+        self._path_cache.clear()

@@ -56,6 +56,18 @@ class DebugLogger:
         self._write_snapshot(state, controller)
 
     def _write_snapshot(self, state: GameState, controller: BehaviorController) -> None:
+        # Skip snapshots when no pigs exist (e.g. during save/load, speed
+        # change, or before initial pigs are created).  Reset perf counters
+        # so the next valid snapshot starts fresh rather than accumulating
+        # data from empty windows.
+        if not state.get_pigs_list():
+            state.farm.reset_perf_counters()
+            controller.facility_manager.reset_perf_counters()
+            self._tick_times.clear()
+            self._window_start = time.monotonic()
+            self._phase_totals.clear()
+            return
+
         now = datetime.now().strftime("%H:%M:%S")
         lines = [f"--- TICK {self._total_ticks} | {now} | speed={SPEED_DISPLAY[state.speed]} ---"]
 
