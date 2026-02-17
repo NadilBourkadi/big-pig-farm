@@ -239,6 +239,13 @@ class Facility(BaseModel):
         object.__setattr__(self, "_interaction_points_cache", points)
         return points
 
+    def clear_interaction_points_cache(self) -> None:
+        """Clear cached interaction points (call after repositioning)."""
+        try:
+            object.__delattr__(self, "_interaction_points_cache")
+        except AttributeError:
+            pass
+
     @property
     def is_empty(self) -> bool:
         """Check if facility has no resources left."""

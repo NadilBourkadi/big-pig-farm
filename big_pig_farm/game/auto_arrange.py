@@ -1,16 +1,14 @@
 """Auto-arrange facilities into logical zones after farm expansion."""
 
 from dataclasses import dataclass
-from typing import Optional
 
-from big_pig_farm.data.config import AUTO_ARRANGE, FARM_TIERS
-from big_pig_farm.data.sprites import get_facility_halfblock_sprite, get_facility_sprite, ZoomLevel
+from big_pig_farm.data.config import AUTO_ARRANGE
+from big_pig_farm.data.sprites import ZoomLevel, get_facility_halfblock_sprite, get_facility_sprite
 from big_pig_farm.entities.areas import FarmArea
-from big_pig_farm.entities.facilities import Facility, FacilityType, FACILITY_INFO
+from big_pig_farm.entities.facilities import FACILITY_INFO, Facility, FacilityType
 from big_pig_farm.entities.guinea_pig import BehaviorState
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.world import FarmGrid
-
 
 # Zone names for organizing facilities
 ZONE_FEEDING = "feeding"
@@ -39,7 +37,7 @@ FACILITY_ZONE_MAP: dict[FacilityType, str] = {
 ESSENTIAL_NEEDS = ("food", "water", "rest", "play")
 
 # Map facility types to essential need categories (None = utility)
-FACILITY_NEED_MAP: dict[FacilityType, Optional[str]] = {
+FACILITY_NEED_MAP: dict[FacilityType, str | None] = {
     FacilityType.FOOD_BOWL: "food",
     FacilityType.HAY_RACK: "food",
     FacilityType.VEGGIE_GARDEN: "food",
@@ -451,7 +449,6 @@ def _compute_neighborhood_arrangement(
     num_neighborhoods = _determine_neighborhood_count(facilities)
     zones = calculate_neighborhood_zones(farm, num_neighborhoods)
     nh_zones = zones[:-1]  # All but utility
-    utility_zone = zones[-1]
 
     # Distribute essential facilities round-robin across neighborhoods
     zone_facilities: dict[str, list[Facility]] = {z.name: [] for z in zones}
@@ -491,16 +488,16 @@ def _compute_neighborhood_arrangement(
     return all_placed, all_overflow
 
 
-def _compute_area_arrangement(
-    facilities: list[Facility],
-    area: FarmArea,
-    farm: FarmGrid,
-) -> tuple[list[Placement], list[Facility]]:
-    """Compute arrangement for facilities within a single area.
+def _calculate_area_zones(area: FarmArea) -> list[Zone]:
+    """Calculate zone boundaries within a single farm area.
 
-    Creates a virtual FarmGrid-like zone from the area's interior bounds.
+    Uses the same 3-zone layout as small farms:
+        +----------------------------+
+        | FEEDING+HYDRATION | REST+PLAY |
+        |                   |           |
+        | UTILITY (full width)          |
+        +----------------------------+
     """
-    # Use area interior as the layout zone
     ix1 = area.interior_x1
     iy1 = area.interior_y1
     ix2 = area.interior_x2
@@ -509,74 +506,44 @@ def _compute_area_arrangement(
     ih = iy2 - iy1 + 1
     margin = AUTO_ARRANGE.ZONE_MARGIN
 
-    is_small = (iw < AUTO_ARRANGE.SMALL_FARM_THRESHOLD_W
-                or ih < AUTO_ARRANGE.SMALL_FARM_THRESHOLD_H)
+    mid_x = ix1 + iw // 2
+    split_y = iy1 + int(ih * 0.7)
 
-    if is_small:
-        h_gap = AUTO_ARRANGE.SMALL_HORIZONTAL_GAP
-        v_gap = AUTO_ARRANGE.SMALL_VERTICAL_GAP
-    else:
-        h_gap = AUTO_ARRANGE.HORIZONTAL_GAP
-        v_gap = AUTO_ARRANGE.VERTICAL_GAP
+    return [
+        Zone(ZONE_FEEDING, ix1 + margin, iy1 + margin,
+             mid_x - 1 - margin, split_y - 1 - margin),
+        Zone(ZONE_REST, mid_x + margin, iy1 + margin,
+             ix2 - margin, split_y - 1 - margin),
+        Zone(ZONE_UTILITY, ix1 + margin, split_y + margin,
+             ix2 - margin, iy2 - margin),
+    ]
 
-    # Build zones within the area
-    if is_small:
-        mid_x = ix1 + iw // 2
-        split_y = iy1 + int(ih * 0.7)
-        zones = [
-            Zone(ZONE_FEEDING, ix1 + margin, iy1 + margin,
-                 mid_x - 1 - margin, split_y - 1 - margin),
-            Zone(ZONE_REST, mid_x + margin, iy1 + margin,
-                 ix2 - margin, split_y - 1 - margin),
-            Zone(ZONE_UTILITY, ix1 + margin, split_y + margin,
-                 ix2 - margin, iy2 - margin),
-        ]
-        zone_facilities: dict[str, list[Facility]] = {z.name: [] for z in zones}
-        for f in facilities:
-            zone_name = _get_zone_for_facility(f.facility_type, is_small=True)
-            if zone_name in zone_facilities:
-                zone_facilities[zone_name].append(f)
-            else:
-                zone_facilities[zones[-1].name].append(f)
-    else:
-        num_nh = _determine_neighborhood_count(facilities)
-        utility_h = max(3, int(ih * AUTO_ARRANGE.NEIGHBORHOOD_UTILITY_FRACTION))
-        utility_y = iy2 - utility_h + 1
-        nh_y2 = utility_y - 1
-        nh_h = nh_y2 - iy1 + 1
-        rows, cols = _neighborhood_grid(num_nh, iw, nh_h)
-        zones = []
-        col_w = iw // cols
-        row_h = nh_h // rows
-        idx = 0
-        for r in range(rows):
-            for c in range(cols):
-                if idx >= num_nh:
-                    break
-                x1 = ix1 + c * col_w
-                y1 = iy1 + r * row_h
-                x2 = (x1 + col_w - 1) if c < cols - 1 else ix2
-                y2 = (y1 + row_h - 1) if r < rows - 1 else nh_y2
-                zones.append(Zone(f"neighborhood_{idx}", x1 + margin, y1 + margin,
-                                  x2 - margin, y2 - margin))
-                idx += 1
-        zones.append(Zone(ZONE_UTILITY, ix1 + margin, utility_y + margin,
-                          ix2 - margin, iy2 - margin))
-        essential: dict[str, list[Facility]] = {need: [] for need in ESSENTIAL_NEEDS}
-        utility_facs: list[Facility] = []
-        for f in facilities:
-            need = FACILITY_NEED_MAP.get(f.facility_type)
-            if need is not None:
-                essential[need].append(f)
-            else:
-                utility_facs.append(f)
-        nh_zones = zones[:-1]
-        zone_facilities = {z.name: [] for z in zones}
-        for need in ESSENTIAL_NEEDS:
-            for i, f in enumerate(essential[need]):
-                zone_idx = i % num_nh
-                zone_facilities[nh_zones[zone_idx].name].append(f)
-        zone_facilities[ZONE_UTILITY] = utility_facs
+
+def _compute_area_arrangement(
+    facilities: list[Facility],
+    area: FarmArea,
+    farm: FarmGrid,
+) -> tuple[list[Placement], list[Facility]]:
+    """Compute arrangement for facilities within a single area.
+
+    Each area uses a 3-zone layout: feeding+hydration on the left,
+    rest+play on the right, utility along the bottom.
+    """
+    zones = _calculate_area_zones(area)
+    iw = area.interior_x2 - area.interior_x1 + 1
+    is_small = (iw < AUTO_ARRANGE.SMALL_FARM_THRESHOLD_W)
+    h_gap = AUTO_ARRANGE.SMALL_HORIZONTAL_GAP if is_small else AUTO_ARRANGE.HORIZONTAL_GAP
+    v_gap = AUTO_ARRANGE.SMALL_VERTICAL_GAP if is_small else AUTO_ARRANGE.VERTICAL_GAP
+
+    # Group facilities by zone. Always merge hydration→feeding and play→rest
+    # because the 3-zone area layout only has FEEDING, REST, UTILITY slots.
+    zone_facilities: dict[str, list[Facility]] = {z.name: [] for z in zones}
+    for facility in facilities:
+        zone_name = _get_zone_for_facility(facility.facility_type, is_small=True)
+        if zone_name in zone_facilities:
+            zone_facilities[zone_name].append(facility)
+        else:
+            zone_facilities[zones[-1].name].append(facility)
 
     occupied: set[tuple[int, int]] = set()
     all_placed: list[Placement] = []
@@ -592,6 +559,7 @@ def _compute_area_arrangement(
         all_placed.extend(placed)
         all_overflow.extend(overflow)
 
+    # Try to place overflow in any zone with remaining space
     if all_overflow:
         for zone in zones:
             if not all_overflow:
@@ -622,10 +590,8 @@ def compute_arrangement(
 
     farm = state.farm
 
-    # Multi-area: distribute facilities evenly across areas
+    # Multi-area: distribute facilities proportionally to area size
     if len(farm.areas) > 1:
-        num_areas = len(farm.areas)
-
         # Classify into essential needs vs utility
         essential: dict[str, list[Facility]] = {need: [] for need in ESSENTIAL_NEEDS}
         utility_facilities: list[Facility] = []
@@ -636,17 +602,37 @@ def compute_arrangement(
             else:
                 utility_facilities.append(f)
 
-        # Distribute essential facilities round-robin across areas
-        area_facilities: dict[str, list[Facility]] = {str(a.id): [] for a in farm.areas}
-        for need in ESSENTIAL_NEEDS:
-            for i, f in enumerate(essential[need]):
-                area_id = str(farm.areas[i % num_areas].id)
-                area_facilities[area_id].append(f)
+        # Compute area size weights
+        total_size = sum(a.interior_width * a.interior_height for a in farm.areas)
+        if total_size == 0:
+            return [], list(facilities)
+        weights = {str(a.id): (a.interior_width * a.interior_height) / total_size for a in farm.areas}
 
-        # Distribute utility round-robin across areas too
-        for i, f in enumerate(utility_facilities):
-            area_id = str(farm.areas[i % num_areas].id)
-            area_facilities[area_id].append(f)
+        # Distribute each category independently, proportional to area size.
+        # For essential needs, set a minimum target of 1 per area so every
+        # room has basic facilities (food, water, rest, play) when supply allows.
+        area_facilities: dict[str, list[Facility]] = {str(a.id): [] for a in farm.areas}
+        categories: list[tuple[str | None, list[Facility]]] = [
+            (need, essential[need]) for need in ESSENTIAL_NEEDS
+        ]
+        categories.append((None, utility_facilities))
+
+        for cat_name, cat_facs in categories:
+            if not cat_facs:
+                continue
+            is_essential = cat_name is not None
+            cat_targets = {}
+            for aid, w in weights.items():
+                target = w * len(cat_facs)
+                if is_essential:
+                    target = max(target, 1.0)
+                cat_targets[aid] = target
+
+            cat_counts: dict[str, int] = {aid: 0 for aid in weights}
+            for f in cat_facs:
+                best_id = max(cat_counts, key=lambda aid: cat_targets[aid] - cat_counts[aid])
+                area_facilities[best_id].append(f)
+                cat_counts[best_id] += 1
 
         all_placed: list[Placement] = []
         all_overflow: list[Facility] = []
@@ -738,20 +724,15 @@ def apply_arrangement(
     available grid position, respecting sprite-level spacing.
     """
     farm = state.farm
-    is_small = _is_small_farm(farm)
-
-    if is_small:
-        h_gap = AUTO_ARRANGE.SMALL_HORIZONTAL_GAP
-        v_gap = AUTO_ARRANGE.SMALL_VERTICAL_GAP
-    else:
-        h_gap = AUTO_ARRANGE.HORIZONTAL_GAP
-        v_gap = AUTO_ARRANGE.VERTICAL_GAP
 
     # Remove all facilities from the grid (but keep in state.facilities dict)
     for facility in state.get_facilities_list():
         farm.remove_facility(facility)
+        facility.clear_interaction_points_cache()
 
-    # Build sprite-aware occupied set from computed placements
+    # Build sprite-aware occupied set from computed placements.
+    # Only mark the sprite footprint (no extra gap) — spacing between
+    # facilities was already built into positions by the zone packing.
     occupied: set[tuple[int, int]] = set()
 
     # Apply new positions and re-place on grid
@@ -769,9 +750,8 @@ def apply_arrangement(
         )
 
         if sprite_clear and farm.place_facility(facility):
-            # Mark sprite footprint + gap as occupied
-            for dx in range(-1, sw + h_gap):
-                for dy in range(-1, sh + v_gap):
+            for dx in range(sw):
+                for dy in range(sh):
                     occupied.add((placement.new_x + dx, placement.new_y + dy))
         else:
             # Computed position collided — find any valid position
