@@ -1,24 +1,24 @@
 """Tests for auto-arrange facility layout."""
 
-import pytest
 
 from big_pig_farm.data.config import FARM_TIERS
-from big_pig_farm.entities.facilities import Facility, FacilityType, FACILITY_INFO
+from big_pig_farm.entities.areas import FarmArea
+from big_pig_farm.entities.biomes import BiomeType
+from big_pig_farm.entities.facilities import FACILITY_INFO, Facility, FacilityType
 from big_pig_farm.entities.genetics import Genotype, calculate_phenotype
-from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Position, Gender
+from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig, Position
 from big_pig_farm.game.auto_arrange import (
-    calculate_zones,
-    calculate_neighborhood_zones,
-    compute_arrangement,
-    apply_arrangement,
-    clear_pig_navigation,
+    FACILITY_NEED_MAP,
+    ZONE_FEEDING,
+    ZONE_REST,
+    ZONE_UTILITY,
     _determine_neighborhood_count,
     _is_small_farm,
-    ZONE_FEEDING,
-    ZONE_HYDRATION,
-    ZONE_REST,
-    ZONE_PLAY,
-    ZONE_UTILITY,
+    apply_arrangement,
+    calculate_neighborhood_zones,
+    calculate_zones,
+    clear_pig_navigation,
+    compute_arrangement,
 )
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.world import FarmGrid
@@ -268,10 +268,10 @@ class TestFacilityPlacement:
     def test_neighborhood_facilities_co_located(self):
         """On large farms, different essential types end up in the same neighborhood."""
         state = _make_state(tier=4)  # Tier 4 has enough space for all sprite sizes
-        food = _add_facility(state, FacilityType.FOOD_BOWL, 3, 3)
-        water = _add_facility(state, FacilityType.WATER_BOTTLE, 8, 3)
-        hideout = _add_facility(state, FacilityType.HIDEOUT, 12, 3)
-        wheel = _add_facility(state, FacilityType.EXERCISE_WHEEL, 18, 3)
+        _add_facility(state, FacilityType.FOOD_BOWL, 3, 3)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 8, 3)
+        _add_facility(state, FacilityType.HIDEOUT, 12, 3)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 18, 3)
 
         placements, overflow = compute_arrangement(state)
         assert len(placements) == 4
@@ -294,22 +294,14 @@ class TestFacilityPlacement:
     def test_facilities_distributed_across_neighborhoods(self):
         """With 2 of each essential type, facilities split into 2 neighborhoods."""
         state = _make_state(tier=4)
-        foods = [
-            _add_facility(state, FacilityType.FOOD_BOWL, 2, 2),
-            _add_facility(state, FacilityType.FOOD_BOWL, 5, 2),
-        ]
-        waters = [
-            _add_facility(state, FacilityType.WATER_BOTTLE, 8, 2),
-            _add_facility(state, FacilityType.WATER_BOTTLE, 11, 2),
-        ]
-        hideouts = [
-            _add_facility(state, FacilityType.HIDEOUT, 2, 5),
-            _add_facility(state, FacilityType.HIDEOUT, 5, 5),
-        ]
-        wheels = [
-            _add_facility(state, FacilityType.EXERCISE_WHEEL, 8, 5),
-            _add_facility(state, FacilityType.EXERCISE_WHEEL, 11, 5),
-        ]
+        _add_facility(state, FacilityType.FOOD_BOWL, 2, 2)
+        _add_facility(state, FacilityType.FOOD_BOWL, 5, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 8, 2)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 11, 2)
+        _add_facility(state, FacilityType.HIDEOUT, 2, 5)
+        _add_facility(state, FacilityType.HIDEOUT, 5, 5)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 8, 5)
+        _add_facility(state, FacilityType.EXERCISE_WHEEL, 11, 5)
 
         placements, overflow = compute_arrangement(state)
         assert len(overflow) == 0
@@ -423,7 +415,7 @@ class TestPigNavigation:
     def test_pig_relocated_from_unwalkable(self):
         """Pigs standing on facility cells should be moved to walkable cells."""
         state = _make_state(tier=3)
-        facility = _add_facility(state, FacilityType.HIDEOUT, 10, 5)
+        _add_facility(state, FacilityType.HIDEOUT, 10, 5)
 
         # Place pig on a facility cell
         pig = _make_pig(10.0, 5.0)
@@ -529,7 +521,7 @@ def _assert_no_sprite_overlap(state: GameState) -> None:
     Uses half-block sprite dimensions (the actual rendered size) with
     fallback to ASCII sprites when no half-block art exists.
     """
-    from big_pig_farm.data.sprites import get_facility_halfblock_sprite, get_facility_sprite, ZoomLevel
+    from big_pig_farm.data.sprites import ZoomLevel, get_facility_halfblock_sprite, get_facility_sprite
 
     occupied: set[tuple[int, int]] = set()
     for f in state.get_facilities_list():
@@ -708,7 +700,7 @@ class TestEmptyFarm:
     def test_small_farm_zone_collapse(self):
         """On small farms, hydration merges into feeding zone."""
         state = _make_state(tier=2)
-        water = _add_facility(state, FacilityType.WATER_BOTTLE, 5, 3)
+        _add_facility(state, FacilityType.WATER_BOTTLE, 5, 3)
 
         placements, _ = compute_arrangement(state)
         assert len(placements) == 1
@@ -719,3 +711,153 @@ class TestEmptyFarm:
         p = placements[0]
         assert feeding_zone.x1 <= p.new_x <= feeding_zone.x2
         assert feeding_zone.y1 <= p.new_y <= feeding_zone.y2
+
+
+def _make_multi_area_state() -> GameState:
+    """Create a state with 3 areas of different sizes for distribution tests.
+
+    Area 0: 30x20 interior (small)
+    Area 1: 50x30 interior (medium)
+    Area 2: 70x40 interior (large)
+    """
+    # Total grid needs to fit all areas side by side with gap
+    farm = FarmGrid(width=170, height=50, tier=3)
+    farm.areas.clear()
+    farm._area_lookup.clear()
+
+    areas = [
+        FarmArea(name="Small Room", biome=BiomeType.MEADOW,
+                 x1=0, y1=0, x2=31, y2=21, is_starter=True),
+        FarmArea(name="Medium Room", biome=BiomeType.GARDEN,
+                 x1=40, y1=0, x2=91, y2=31),
+        FarmArea(name="Large Room", biome=BiomeType.TROPICAL,
+                 x1=100, y1=0, x2=171, y2=41),
+    ]
+    for a in areas:
+        # Clamp to grid bounds
+        a.x2 = min(a.x2, farm.width - 1)
+        a.y2 = min(a.y2, farm.height - 1)
+        farm.add_area(a)
+    return GameState(farm=farm)
+
+
+class TestMultiAreaDistribution:
+    """Tests for proportional facility distribution across areas."""
+
+    def test_proportional_to_area_size(self):
+        """Larger areas should get more facilities."""
+        state = _make_multi_area_state()
+        # Add many facilities of various types
+        for i in range(6):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 4, 2)
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 4, 5)
+        for i in range(4):
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 2 + i * 4, 8)
+            _add_facility(state, FacilityType.HIDEOUT, 2 + i * 4, 11)
+
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
+
+        farm = state.farm
+        counts = [0, 0, 0]
+        for f in state.get_facilities_list():
+            area = farm.get_area_at(f.position_x, f.position_y)
+            if area:
+                idx = farm.areas.index(area)
+                counts[idx] += 1
+
+        # Largest area should get the most facilities
+        assert counts[2] > counts[0], (
+            f"Large area got {counts[2]} but small area got {counts[0]}"
+        )
+
+    def test_essential_minimum_one_per_area(self):
+        """Each area should get at least one of each essential need when supply allows."""
+        state = _make_multi_area_state()
+        # Add enough of each essential type for all 3 areas
+        for i in range(3):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 4, 2)
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 4, 5)
+            _add_facility(state, FacilityType.HIDEOUT, 2 + i * 4, 8)
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 2 + i * 4, 11)
+
+        placements, overflow = compute_arrangement(state)
+        apply_arrangement(state, placements, overflow)
+
+        farm = state.farm
+        area_needs: dict[int, set[str]] = {i: set() for i in range(3)}
+        for f in state.get_facilities_list():
+            area = farm.get_area_at(f.position_x, f.position_y)
+            if area:
+                idx = farm.areas.index(area)
+                need = FACILITY_NEED_MAP.get(f.facility_type, "utility")
+                area_needs[idx].add(need or "utility")
+
+        for idx in range(3):
+            for need in ("food", "water", "rest", "play"):
+                assert need in area_needs[idx], (
+                    f"Area {idx} missing '{need}': has {area_needs[idx]}"
+                )
+
+    def test_apply_preserves_planned_positions(self):
+        """apply_arrangement should not displace facilities planned by compute."""
+        state = _make_multi_area_state()
+        for i in range(3):
+            _add_facility(state, FacilityType.FOOD_BOWL, 2 + i * 4, 2)
+            _add_facility(state, FacilityType.WATER_BOTTLE, 2 + i * 4, 5)
+            _add_facility(state, FacilityType.HIDEOUT, 2 + i * 4, 8)
+            _add_facility(state, FacilityType.EXERCISE_WHEEL, 2 + i * 4, 11)
+
+        placements, overflow = compute_arrangement(state)
+
+        # Record planned area assignments
+        farm = state.farm
+        planned_areas = {}
+        for p in placements:
+            area = farm.get_area_at(p.new_x, p.new_y)
+            planned_areas[p.facility.id] = area.id if area else None
+
+        apply_arrangement(state, placements, overflow)
+
+        # Verify facilities ended up in their planned areas
+        for f in state.get_facilities_list():
+            area = farm.get_area_at(f.position_x, f.position_y)
+            actual_area_id = area.id if area else None
+            assert actual_area_id == planned_areas[f.id], (
+                f"{f.facility_type.value} planned for area "
+                f"{planned_areas[f.id]} but ended up in {actual_area_id}"
+            )
+
+
+class TestInteractionPointsCache:
+    """Tests for facility interaction points cache invalidation."""
+
+    def test_clear_cache_after_reposition(self):
+        """Interaction points should reflect new position after cache clear."""
+        facility = Facility.create(FacilityType.FOOD_BOWL, 10, 5)
+
+        # Populate cache
+        old_points = facility.interaction_points
+        assert len(old_points) > 0
+        # Front points are at y = position_y + height = 5 + 1 = 6
+        assert any(y == 6 for x, y in old_points)
+
+        # Move facility
+        facility.position_x = 50
+        facility.position_y = 20
+
+        # Without clearing, cache is stale
+        assert facility.interaction_points == old_points
+
+        # After clearing, points should match new position
+        facility.clear_interaction_points_cache()
+        new_points = facility.interaction_points
+        assert new_points != old_points
+        # Front points now at y = 20 + 1 = 21
+        assert any(y == 21 for x, y in new_points)
+        assert not any(y == 6 for x, y in new_points)
+
+    def test_clear_cache_when_no_cache(self):
+        """Clearing cache on a fresh facility should not raise."""
+        facility = Facility.create(FacilityType.WATER_BOTTLE, 5, 3)
+        facility.clear_interaction_points_cache()  # no-op, should not raise

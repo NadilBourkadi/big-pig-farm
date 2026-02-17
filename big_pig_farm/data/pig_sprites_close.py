@@ -116,8 +116,8 @@ _CLOSE_HAPPY_R_1: PixelGrid = decode_sprite([
     "dfffffffffffffffffpsssspfnnd",
     "dffffffffffffffffffffffffnnd",
     "dfffffffffffffffffffffffffdd",
-    ".dfffffffffffffffffffff???d",
-    "..ddsffffffffffffffffff??dd",
+    ".dfffffffffffffffffffff...d",
+    "..ddsffffffffffffffffff..dd",
     "...dsfffffffffffffffffffdd",
     "...dddsffssssssssssfffdd",
     ".....dsfddddddddddddsfd",
@@ -145,6 +145,8 @@ _CLOSE_SAD_R: PixelGrid = decode_sprite([
 ], _PIG_CHAR, width=28)
 
 _CLOSE_WALKING_R_2: PixelGrid = decode_sprite([
+    "",
+    "",
     "................ddddaadd",
     "....ddddddddddddddfaafddd",
     "...ddssssssssffdffffffffdd",
@@ -155,12 +157,10 @@ _CLOSE_WALKING_R_2: PixelGrid = decode_sprite([
     "dfffffffffffffffffsepppsfnnd",
     "dffffffffffffffffffssssfffdd",
     ".dffffffffffffffffffffffffd",
-    "..ddsffffffffffffffffffffdd",
-    "...dsfffffsssssssffffffddd",
-    "...dssfffsdddddddssfffdd",
-    "....ddsfdddddddddddsfdd",
-    ".....dsfd.........dsfd",
-    "......dd...........dd",
+    "..ddsffffffssssssffffffffdd",
+    "...dsssssssssssssssssssddd",
+    "...ddsssssddddddddssssdd",
+    "....ddddddd......dddddd",
 ], _PIG_CHAR, width=28)
 
 _CLOSE_WALKING_R_3: PixelGrid = decode_sprite([
@@ -221,6 +221,7 @@ _CLOSE_SLEEPING_R_2: PixelGrid = decode_sprite([
 ], _PIG_CHAR, width=28)
 
 _CLOSE_HAPPY_R_2: PixelGrid = decode_sprite([
+    "",
     "................ddddaadd",
     "....ddddddddddddddfaafddd",
     "...ddssssssssssdffffffffdd",
@@ -230,13 +231,12 @@ _CLOSE_HAPPY_R_2: PixelGrid = decode_sprite([
     "dfffffffffffffffffpsssspfnnd",
     "dffffffffffffffffffffffffnnd",
     "dfffffffffffffffffffffffffdd",
-    ".dfffffffffffffffffffff???d",
-    "..ddsffffffffffffffffff??dd",
+    ".dfffffffffffffffffffff...d",
+    "..ddsffffffffffffffffff..dd",
     "...dsfffffffffffffffffffdd",
     "...dddsffsdddddddssfffdd",
     ".....dsfdd.......dddsfd",
     ".....dddd..........dddd",
-    "",
 ], _PIG_CHAR, width=28)
 
 
