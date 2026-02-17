@@ -77,6 +77,9 @@ class SimulationRunner:
         if profiling:
             phase_start = time.perf_counter()
         controller.separate_overlapping_pigs()
+
+        # 4b. Rescue pigs pushed onto non-walkable cells by collision
+        controller.rescue_non_walkable_pigs(pigs)
         if profiling:
             collision_ms = (time.perf_counter() - phase_start) * 1000.0
 

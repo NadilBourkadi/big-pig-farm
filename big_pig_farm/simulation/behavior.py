@@ -1,15 +1,14 @@
 """AI state machine and decision making for guinea pigs."""
 
 import random
-from typing import Optional
 from uuid import UUID
 
-from big_pig_farm.data.config import NEEDS, SIMULATION, BEHAVIOR
-from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Personality, Position
+from big_pig_farm.data.config import BEHAVIOR, NEEDS, SIMULATION
 from big_pig_farm.entities.facilities import Facility, FacilityType
-from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
+from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality, Position
 from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.facility_manager import FacilityManager
+from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
 
 
 class BehaviorController:
@@ -111,6 +110,12 @@ class BehaviorController:
 
         # Clamp position inside walkable bounds (walls + buffer)
         self._clamp_to_bounds(pig)
+
+        # Rescue pigs stuck on non-walkable cells (e.g. pushed there by collision)
+        farm = self.game_state.farm
+        gx, gy = int(pig.position.x), int(pig.position.y)
+        if not farm.is_walkable(gx, gy):
+            self._rescue_to_walkable(pig, farm)
 
         # Track current area — clear unreachable backoff on area change
         area = self.game_state.farm.get_area_at(int(pig.position.x), int(pig.position.y))
@@ -489,7 +494,7 @@ class BehaviorController:
         pig.target_description = None
         self._start_wandering(pig)
 
-    def _find_adjacent_cell(self, target: tuple[int, int], pig: GuineaPig) -> Optional[tuple[int, int]]:
+    def _find_adjacent_cell(self, target: tuple[int, int], pig: GuineaPig) -> tuple[int, int] | None:
         """Find a walkable cell near the target but with enough spacing."""
         tx, ty = target
         farm = self.game_state.farm
@@ -551,6 +556,19 @@ class BehaviorController:
             pig.path = best_path
             end = best_path[-1]
             pig.target_position = Position(x=float(end[0]), y=float(end[1]))
+        else:
+            # All directions blocked — jump to a random open cell in the area
+            target = None
+            if pig.current_area_id:
+                target = farm.find_random_walkable_in_area(pig.current_area_id)
+            if not target:
+                target = farm._find_nearest_walkable((pig_gx, pig_gy), max_distance=10)
+            if target and target != (pig_gx, pig_gy):
+                pig.position.x = float(target[0])
+                pig.position.y = float(target[1])
+                pig.log_behavior("Teleported out of blocked position")
+            else:
+                pig.log_behavior("Stuck: no walkable target for wandering teleport")
         pig.behavior_state = BehaviorState.WANDERING
 
     def _set_path_to(self, pig: GuineaPig, target: tuple[int, int]) -> None:
@@ -578,6 +596,38 @@ class BehaviorController:
         farm = self.game_state.farm
         pig.position.x = max(1.0, min(pig.position.x, float(farm.width - 2)))
         pig.position.y = max(1.0, min(pig.position.y, float(farm.height - 2)))
+
+    def _rescue_to_walkable(self, pig: GuineaPig, farm) -> None:
+        """Teleport a pig on a non-walkable cell to a safe position.
+
+        Prefers a random walkable cell in the pig's current area (spreads
+        pigs out instead of clustering them at the nearest walkable cell).
+        Falls back to the nearest walkable cell if area lookup fails.
+        """
+        target = None
+        if pig.current_area_id:
+            target = farm.find_random_walkable_in_area(pig.current_area_id)
+        if not target:
+            gx, gy = int(pig.position.x), int(pig.position.y)
+            target = farm._find_nearest_walkable((gx, gy), max_distance=20)
+        if target:
+            pig.position.x = float(target[0])
+            pig.position.y = float(target[1])
+            pig.path = []
+            pig.target_position = None
+            pig.target_facility_id = None
+            pig.behavior_state = BehaviorState.IDLE
+            pig.log_behavior("Rescued from non-walkable cell")
+        else:
+            pig.log_behavior("Stuck on non-walkable cell; no rescue target found")
+
+    def rescue_non_walkable_pigs(self, pigs: list[GuineaPig]) -> None:
+        """Post-collision sweep: rescue any pigs that ended up on non-walkable cells."""
+        farm = self.game_state.farm
+        for pig in pigs:
+            gx, gy = int(pig.position.x), int(pig.position.y)
+            if not farm.is_walkable(gx, gy):
+                self._rescue_to_walkable(pig, farm)
 
     def _try_dodge(self, pig: GuineaPig, path_dx: float, path_dy: float, delta_seconds: float, speed: float) -> bool:
         """Try to sidestep perpendicular to the path direction to get around a blocking pig.
