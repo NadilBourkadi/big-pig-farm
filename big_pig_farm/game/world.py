@@ -765,7 +765,7 @@ class FarmGrid(BaseModel):
 
         Returns {area_index: (x1, y1)} for each area.
         """
-        gap = 1  # Gap between room walls for tunnel corridor
+        gap = 7  # Gap between room walls for tunnel corridor
 
         # Collect room dimensions per slot
         slots: list[tuple[int, int, int, int]] = []  # (col, row, width, height)
