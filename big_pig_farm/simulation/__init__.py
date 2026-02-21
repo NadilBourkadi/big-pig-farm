@@ -1,1 +1,1 @@
-"""Simulation systems: behavior, needs, breeding, offline progression."""
+"""Simulation systems: behavior, needs, breeding."""

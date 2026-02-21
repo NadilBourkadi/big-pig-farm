@@ -29,6 +29,10 @@ INDICATOR_PALETTES: dict[str, dict[str, dict[str, str]]] = {
         "bright": {"a": "#bb66ff", "b": "#ddaaff"},
         "dim":    {"a": "#7733aa", "b": "#9966bb"},
     },
+    "courting": {
+        "bright": {"a": "#ff4488", "b": "#ff88bb"},
+        "dim":    {"a": "#cc2266", "b": "#cc6688"},
+    },
     "pregnant": {
         "bright": {"a": "#ff66aa", "b": "#ffaacc"},
         "dim":    {"a": "#aa3366", "b": "#aa7788"},
@@ -73,6 +77,14 @@ INDICATOR_PIXELS_NORMAL: dict[str, PixelGrid] = {
         [ T  ,  T  , 'a', 'a',  T  ,  T  ,  T  ],
         [ T  , 'a', 'a',  T  ,  T  ,  T  ,  T  ],
         ['a', 'a', 'a', 'a', 'a', 'a', 'a'],
+    ],
+    "courting": [
+        [ T  , 'a', 'a',  T  , 'a', 'a',  T  ],
+        ['a', 'b', 'b', 'a', 'b', 'b', 'a'],
+        ['a', 'b', 'b', 'b', 'b', 'b', 'a'],
+        ['a', 'b', 'b', 'b', 'b', 'b', 'a'],
+        [ T  , 'a', 'b', 'b', 'b', 'a',  T  ],
+        [ T  ,  T  , 'a', 'a', 'a',  T  ,  T  ],
     ],
     "pregnant": [
         [ T  , 'a', 'a',  T  , 'a', 'a',  T  ],
@@ -145,6 +157,20 @@ INDICATOR_PIXELS_CLOSE: dict[str, PixelGrid] = {
         [ T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  ,  T  ,  T  ,  T  ,  T  ,  T  ,  T  ],
         ['a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a'],
         ['a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a', 'a'],
+    ],
+    "courting": [
+        [ T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  ],
+        [ T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  ],
+        ['a', 'a', 'b', 'b', 'b', 'b', 'a', 'a', 'b', 'b', 'b', 'b', 'a', 'a'],
+        ['a', 'a', 'b', 'b', 'b', 'b', 'a', 'a', 'b', 'b', 'b', 'b', 'a', 'a'],
+        ['a', 'a', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'a', 'a'],
+        ['a', 'a', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'a', 'a'],
+        ['a', 'a', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'a', 'a'],
+        ['a', 'a', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'b', 'a', 'a'],
+        [ T  ,  T  , 'a', 'a', 'b', 'b', 'b', 'b', 'b', 'b', 'a', 'a',  T  ,  T  ],
+        [ T  ,  T  , 'a', 'a', 'b', 'b', 'b', 'b', 'b', 'b', 'a', 'a',  T  ,  T  ],
+        [ T  ,  T  ,  T  ,  T  , 'a', 'a', 'a', 'a', 'a', 'a',  T  ,  T  ,  T  ,  T  ],
+        [ T  ,  T  ,  T  ,  T  , 'a', 'a', 'a', 'a', 'a', 'a',  T  ,  T  ,  T  ,  T  ],
     ],
     "pregnant": [
         [ T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  , 'a', 'a', 'a', 'a',  T  ,  T  ],

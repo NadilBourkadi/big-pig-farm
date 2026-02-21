@@ -17,10 +17,9 @@ from big_pig_farm.simulation.breeding_program import (
     BreedingProgram, BreedingStrategy, should_keep_pig, breeding_value, diversity_value,
     money_value, _heterozygosity_count,
 )
-from big_pig_farm.simulation.breeding import (
-    _auto_pair_from_program, _apply_breeding_filter, cull_surplus_breeders,
-    _would_break_gender_balance,
-)
+from big_pig_farm.simulation.breeding import _auto_pair_from_program
+from big_pig_farm.simulation.birth import _apply_breeding_filter
+from big_pig_farm.simulation.culling import cull_surplus_breeders, _would_break_gender_balance
 from big_pig_farm.game.state import GameState
 
 

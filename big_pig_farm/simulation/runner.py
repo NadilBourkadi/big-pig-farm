@@ -9,14 +9,9 @@ from big_pig_farm.game.state import GameState
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import update_all_needs, precompute_nearby_counts
-from big_pig_farm.simulation.breeding import (
-    advance_pregnancies,
-    age_all_pigs,
-    check_breeding_opportunities,
-    register_pig_in_pigdex,
-    sell_marked_adults,
-    cull_surplus_breeders,
-)
+from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs, register_pig_in_pigdex
+from big_pig_farm.simulation.breeding import check_breeding_opportunities, start_pregnancy_from_courtship
+from big_pig_farm.simulation.culling import sell_marked_adults, cull_surplus_breeders
 from big_pig_farm.economy.contracts import generate_contracts
 
 
@@ -36,12 +31,16 @@ class SimulationRunner:
         save_manager: SaveProtocol,
         debug_logger: Optional[DebugLogger] = None,
         on_pig_sold: Optional[Callable[[str, int, UUID], None]] = None,
+        on_pregnancy: Optional[Callable[[str, str], None]] = None,
+        on_birth: Optional[Callable[[str], None]] = None,
     ):
         self.state = state
         self.behavior_controller = behavior_controller
         self.save_manager = save_manager
         self.debug_logger = debug_logger
         self.on_pig_sold = on_pig_sold
+        self.on_pregnancy = on_pregnancy
+        self.on_birth = on_birth
         self._save_counter = 0
 
     def tick(self, delta_seconds: float) -> None:
@@ -72,6 +71,16 @@ class SimulationRunner:
             controller.update(pig, delta_seconds)
         if profiling:
             behavior_ms = (time.perf_counter() - phase_start) * 1000.0
+
+        # 3b. Process completed courtships → start pregnancies
+        for male_id, female_id in controller.completed_courtships:
+            male = state.get_guinea_pig(male_id)
+            female = state.get_guinea_pig(female_id)
+            if male and female:
+                start_pregnancy_from_courtship(male, female, state)
+                if self.on_pregnancy:
+                    self.on_pregnancy(male.name, female.name)
+        controller.completed_courtships.clear()
 
         # 4. Separate any overlapping pigs
         if profiling:
@@ -105,7 +114,14 @@ class SimulationRunner:
                 self.on_pig_sold(pig_name, total, pig_id)
 
         # 9. Check for breeding
+        events_before = len(state.events)
         check_breeding_opportunities(state)
+
+        # Notify on births
+        if self.on_birth:
+            for event in state.events[events_before:]:
+                if event.event_type == "birth" and "gave birth" in event.message:
+                    self.on_birth(event.message)
 
         # 10. Check contract refresh/expiry
         game_day = state.game_time.day

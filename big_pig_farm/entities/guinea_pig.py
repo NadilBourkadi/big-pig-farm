@@ -132,6 +132,11 @@ class GuineaPig(BaseModel):
     partner_name: Optional[str] = None  # Stored at conception in case father is sold
     last_birth_age: Optional[float] = None
 
+    # Courtship (defaults restore cleanly on load — initiator will repath)
+    courting_partner_id: Optional[UUID] = None  # Pig we're courting with
+    courting_initiator: bool = False             # True = this pig moves to partner
+    courting_timer: float = 0.0                  # Seconds in together-phase
+
     # Family
     mother_id: Optional[UUID] = None
     father_id: Optional[UUID] = None

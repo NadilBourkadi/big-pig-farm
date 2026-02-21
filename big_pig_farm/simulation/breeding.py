@@ -1,44 +1,29 @@
-"""Reproduction, pregnancy, and birth mechanics."""
+"""Breeding pair selection, courtship initiation, and auto-pairing mechanics."""
 
 import random
-from typing import Optional
-from uuid import UUID
 
-from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION, NEEDS
-from big_pig_farm.data.names import generate_unique_name
-from big_pig_farm.economy.market import sell_pig
-from big_pig_farm.entities.biomes import BiomeType, BIOMES
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Position
-from big_pig_farm.entities.genetics import (
-    breed as breed_genetics,
-    calculate_phenotype,
-    BaseColor,
-    Pattern,
-    ColorIntensity,
-    RoanType,
-)
+from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.facilities import FacilityType
-from big_pig_farm.entities.pigdex import phenotype_key, get_discovery_reward, key_to_rarity, get_milestone_reward
-from big_pig_farm.simulation.breeding_program import (
-    BreedingStrategy,
-    should_keep_pig,
-    breeding_value,
-    diversity_value,
-    money_value,
+from big_pig_farm.entities.genetics import (
+    BaseColor,
+    ColorIntensity,
+    Pattern,
+    RoanType,
+    calculate_target_probability,
 )
-from big_pig_farm.entities.genetics import calculate_target_probability
+from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig
+from big_pig_farm.simulation.birth import check_births
+from big_pig_farm.simulation.breeding_program import BreedingStrategy
+
+
+def _is_permanently_unbreedable(pig: GuineaPig) -> bool:
+    """True if a pig can never breed again (senior or manually locked)."""
+    return pig.breeding_locked or pig.is_senior
 
 
 def check_breeding_opportunities(game_state) -> int:
     """Check for and process breeding opportunities. Returns number of births."""
-    births = 0
-    pigs = game_state.get_pigs_list()
-
-    # Process existing pregnancies
-    for pig in pigs:
-        if pig.is_pregnant:
-            if _check_birth(pig, game_state):
-                births += 1
+    births = check_births(game_state)
 
     # Process manual breeding pair before auto-breeding
     _check_manual_breeding(game_state)
@@ -77,198 +62,46 @@ def _check_manual_breeding(game_state) -> None:
         game_state.clear_breeding_pair()
         return
 
-    # Wait if either can't breed yet (happiness, recovery, age)
+    # Clear pair if either pig permanently can't breed (senior, locked)
+    if _is_permanently_unbreedable(male) or _is_permanently_unbreedable(female):
+        gone = male.name if _is_permanently_unbreedable(male) else female.name
+        game_state.log_event(
+            f"Breeding pair cancelled — {gone} can no longer breed.",
+            event_type="breeding",
+        )
+        game_state.clear_breeding_pair()
+        return
+
+    # Wait if either can't breed yet (happiness dip, recovery cooldown)
     if not male.can_breed or not female.can_breed:
         return
 
-    # 100% success, no distance check — start pregnancy immediately
-    female.is_pregnant = True
-    female.pregnancy_days = 0.0
-    female.partner_id = male.id
-    female.partner_genotype = male.genotype
-    female.partner_name = male.name
+    # Don't initiate if either pig is already courting
+    if male.behavior_state == BehaviorState.COURTING:
+        return
+    if female.behavior_state == BehaviorState.COURTING:
+        return
 
-    male.behavior_state = BehaviorState.COURTING
-    female.behavior_state = BehaviorState.COURTING
-
-    game_state.log_event(
-        f"Breeding pair matched! {male.name} and {female.name} are expecting!",
-        event_type="breeding",
-    )
+    # Start physical courtship — male walks to female
+    _initiate_courtship(male, female, game_state)
     game_state.clear_breeding_pair()
-
-
-def _check_birth(mother: GuineaPig, game_state) -> bool:
-    """Check if a pregnant pig should give birth. Returns True if birth occurred."""
-    if not mother.is_pregnant:
-        return False
-
-    if mother.pregnancy_days >= BREEDING.GESTATION_DAYS:
-        return _process_birth(mother, game_state)
-
-    return False
-
-
-def _process_birth(mother: GuineaPig, game_state) -> bool:
-    """Process a birth event. Returns True if successful."""
-    if game_state.is_at_capacity:
-        mother.is_pregnant = False
-        mother.pregnancy_days = 0.0
-        mother.partner_id = None
-        mother.partner_genotype = None
-        mother.partner_name = None
-        game_state.log_event(
-            f"{mother.name}'s pregnancy ended - farm is at capacity.",
-            event_type="birth",
-        )
-        return False
-
-    # Find father — use stored genotype/name from conception so the birth
-    # proceeds even if the father was sold after conception
-    father = game_state.get_guinea_pig(mother.partner_id) if mother.partner_id else None
-    father_genotype = mother.partner_genotype or (father.genotype if father else None)
-    father_name = mother.partner_name or (father.name if father else "Unknown")
-    father_id = mother.partner_id
-
-    if father_genotype is None:
-        # Legacy save without stored genotype and father gone — can't breed
-        mother.is_pregnant = False
-        mother.pregnancy_days = 0.0
-        mother.partner_id = None
-        mother.partner_genotype = None
-        mother.partner_name = None
-        game_state.log_event(
-            f"{mother.name}'s pregnancy ended - father's genetics unavailable.",
-            event_type="birth",
-        )
-        return False
-
-    # Determine litter size
-    litter_size = random.randint(BREEDING.MIN_LITTER_SIZE, BREEDING.MAX_LITTER_SIZE)
-
-    # Don't exceed capacity
-    available_space = game_state.capacity - game_state.pig_count
-    litter_size = min(litter_size, available_space)
-
-    if litter_size <= 0:
-        mother.is_pregnant = False
-        mother.pregnancy_days = 0.0
-        mother.partner_id = None
-        mother.partner_genotype = None
-        mother.partner_name = None
-        game_state.log_event(
-            f"{mother.name}'s pregnancy ended - farm is at capacity.",
-            event_type="birth",
-        )
-        return False
-
-    # Get existing names for uniqueness
-    existing_names = {p.name for p in game_state.get_pigs_list()}
-
-    # Determine mutation rate based on Genetics Lab
-    mutation_rate = GENETICS.MUTATION_RATE
-    genetics_labs = game_state.get_facilities_by_type(FacilityType.GENETICS_LAB)
-    if genetics_labs:
-        mutation_rate = GENETICS.MUTATION_RATE_WITH_LAB
-
-    # Build per-locus rates with biome boosts
-    mother_biome = game_state.farm.get_biome_at(int(mother.position.x), int(mother.position.y))
-    locus_rates: dict[str, float] | None = None
-    if mother_biome:
-        biome_info = BIOMES[mother_biome]
-        if biome_info.mutation_boost_loci:
-            locus_rates = {}
-            for locus in ("e_locus", "b_locus", "s_locus", "c_locus", "r_locus"):
-                locus_rates[locus] = mutation_rate + biome_info.mutation_boost_loci.get(locus, 0.0)
-
-    # Determine birth area for babies
-    birth_area = game_state.farm.get_area_at(int(mother.position.x), int(mother.position.y))
-    birth_area_id = birth_area.id if birth_area else None
-
-    babies_born = []
-    for _ in range(litter_size):
-        # Generate genetics with mutations
-        breed_result = breed_genetics(
-            mother.genotype, father_genotype,
-            mutation_rate=mutation_rate, locus_rates=locus_rates,
-        )
-        baby_genotype = breed_result.genotype
-        baby_phenotype = calculate_phenotype(baby_genotype)
-
-        # Random gender
-        gender = random.choice([Gender.MALE, Gender.FEMALE])
-
-        # Generate unique name
-        name = generate_unique_name(existing_names, gender=gender.value)
-        existing_names.add(name)
-
-        # Position near mother
-        baby_pos = Position(
-            x=mother.position.x + random.uniform(-1, 1),
-            y=mother.position.y + random.uniform(-1, 1),
-        )
-
-        # Create baby
-        baby = GuineaPig.create(
-            name=name,
-            gender=gender,
-            genotype=baby_genotype,
-            position=baby_pos,
-            age_days=0,
-            mother_id=mother.id,
-            father_id=father_id,
-            mother_name=mother.name,
-            father_name=father_name,
-        )
-
-        # Set area/biome fields
-        baby.birth_area_id = birth_area_id
-        baby.current_area_id = birth_area_id
-        if birth_area:
-            baby.preferred_biome = birth_area.biome.value
-
-        game_state.add_guinea_pig(baby)
-        game_state.total_pigs_born += 1
-        babies_born.append(baby)
-
-        # Log mutations
-        if breed_result.mutations:
-            mutation_desc = ", ".join(breed_result.mutations)
-            game_state.log_event(
-                f"{baby.name} was born with a mutation! ({mutation_desc})",
-                event_type="mutation",
-            )
-
-        # Register in pigdex
-        _register_pigdex(game_state, baby)
-
-    # Apply breeding filter to newborns
-    _apply_breeding_filter(game_state, babies_born)
-
-    # Reset mother's pregnancy state
-    mother.is_pregnant = False
-    mother.pregnancy_days = 0.0
-    mother.last_birth_age = mother.age_days
-    mother.partner_id = None
-    mother.partner_genotype = None
-    mother.partner_name = None
-
-    # Log event
-    baby_names = ", ".join(b.name for b in babies_born)
-    game_state.log_event(
-        f"{mother.name} gave birth to {litter_size} baby(s): {baby_names}",
-        event_type="birth",
-    )
-
-    return True
 
 
 def _check_for_new_breeding(game_state) -> None:
     """Check if any pigs should start breeding."""
     pigs = game_state.get_pigs_list()
-    # Get eligible males and females from a single list scan
-    males = [p for p in pigs if p.gender == Gender.MALE and p.can_breed]
-    females = [p for p in pigs if p.gender == Gender.FEMALE and p.can_breed and not p.is_pregnant]
+    # Get eligible males and females; exclude pigs already courting
+    males = [
+        p for p in pigs
+        if p.gender == Gender.MALE and p.can_breed
+        and p.behavior_state != BehaviorState.COURTING
+    ]
+    females = [
+        p for p in pigs
+        if p.gender == Gender.FEMALE and p.can_breed
+        and not p.is_pregnant
+        and p.behavior_state != BehaviorState.COURTING
+    ]
 
     if not males or not females:
         return
@@ -294,7 +127,6 @@ def _can_breed_together(male: GuineaPig, female: GuineaPig, game_state) -> bool:
 
     # Check for inbreeding (warn but allow)
     if _are_closely_related(male, female, game_state):
-        # Could add warning here
         pass
 
     return True
@@ -332,133 +164,74 @@ def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state) -> bool:
     if avg_happiness > BREEDING.HIGH_HAPPINESS_THRESHOLD:
         base_chance += BREEDING.HIGH_HAPPINESS_BONUS
 
+    # Affinity bonus from socialization history
+    affinity = game_state.get_affinity(male.id, female.id)
+    base_chance += min(affinity * BREEDING.AFFINITY_CHANCE_BONUS, BREEDING.MAX_AFFINITY_CHANCE_BONUS)
+
     if random.random() > base_chance:
         return False
 
-    # Start pregnancy — store father's genotype and name at conception
-    # so the birth can proceed even if the father is later sold
+    # Defense-in-depth: caller already filters courting pigs, but guard here too
+    if male.behavior_state == BehaviorState.COURTING:
+        return False
+    if female.behavior_state == BehaviorState.COURTING:
+        return False
+
+    # Start physical courtship instead of instant pregnancy
+    _initiate_courtship(male, female, game_state)
+    return True
+
+
+def _initiate_courtship(male: GuineaPig, female: GuineaPig, game_state) -> None:
+    """Start physical courtship — male will pathfind to female."""
+    male.behavior_state = BehaviorState.COURTING
+    female.behavior_state = BehaviorState.COURTING
+    male.courting_partner_id = female.id
+    female.courting_partner_id = male.id
+    male.courting_initiator = True
+    female.courting_initiator = False
+    male.courting_timer = 0.0
+    female.courting_timer = 0.0
+    # Clear existing movement
+    male.path = []
+    female.path = []
+    male.target_position = None
+    female.target_position = None
+    male.target_facility_id = None
+    female.target_facility_id = None
+    male.target_description = f"courting {female.name}"
+    female.target_description = f"courting {male.name}"
+    game_state.log_event(
+        f"{male.name} is courting {female.name}!",
+        event_type="breeding",
+    )
+
+
+def start_pregnancy_from_courtship(male: GuineaPig, female: GuineaPig, game_state) -> None:
+    """Called when courtship completes — starts the actual pregnancy."""
     female.is_pregnant = True
     female.pregnancy_days = 0.0
     female.partner_id = male.id
     female.partner_genotype = male.genotype
     female.partner_name = male.name
 
-    # Set courting behavior
-    male.behavior_state = BehaviorState.COURTING
-    female.behavior_state = BehaviorState.COURTING
+    clear_courtship(male)
+    clear_courtship(female)
 
     game_state.log_event(
         f"{male.name} and {female.name} are expecting!",
         event_type="breeding",
     )
 
-    return True
 
-
-def advance_pregnancies(game_state, game_hours: float) -> None:
-    """Advance pregnancy progress for all pregnant pigs."""
-    game_days = game_hours / 24.0
-
-    for pig in game_state.get_pigs_list():
-        if pig.is_pregnant:
-            pig.pregnancy_days += game_days
-
-
-def _register_pigdex(game_state, pig: GuineaPig) -> None:
-    """Register a pig's phenotype in the pigdex with rewards."""
-    key = phenotype_key(pig.phenotype)
-    game_day = game_state.game_time.day
-    is_new = game_state.pigdex.register_phenotype(key, game_day)
-
-    if is_new:
-        rarity = key_to_rarity(key)
-        reward = get_discovery_reward(rarity)
-        game_state.add_money(reward)
-        game_state.log_event(
-            f"Pigdex: New discovery! {pig.phenotype.display_name} ({rarity.value.title()}) +{reward} Squeaks",
-            event_type="pigdex",
-        )
-
-        # Check milestones
-        milestones = game_state.pigdex.check_milestones()
-        for threshold in milestones:
-            milestone_reward = get_milestone_reward(threshold)
-            game_state.pigdex.claim_milestone(threshold)
-            game_state.add_money(milestone_reward)
-            game_state.log_event(
-                f"Pigdex Milestone: {threshold}% complete! +{milestone_reward} Squeaks",
-                event_type="pigdex",
-            )
-
-
-def _apply_breeding_filter(game_state, babies: list[GuineaPig]) -> None:
-    """Mark newborns that don't match the breeding program target for auto-sell."""
-    program = game_state.breeding_program
-    if not program.enabled:
-        return
-
-    # Skip filter when still growing toward the stock limit
-    adults = [p for p in game_state.get_pigs_list() if not p.is_baby]
-    effective_limit = max(program.stock_limit, BREEDING.MIN_BREEDING_POPULATION)
-    if len(adults) <= effective_limit:
-        return
-
-    has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))
-    marked = []
-    for baby in babies:
-        if not should_keep_pig(program, baby, has_genetics_lab=has_lab):
-            baby.marked_for_sale = True
-            marked.append(baby.name)
-
-    if marked:
-        game_state.log_event(
-            f"Breeding program: {len(marked)} of {len(babies)} marked for sale ({', '.join(marked)})",
-            event_type="filter",
-        )
-
-
-def register_pig_in_pigdex(game_state, pig: GuineaPig) -> None:
-    """Public function to register a pig in the pigdex (for adoption, loading, etc.)."""
-    _register_pigdex(game_state, pig)
-
-
-def age_all_pigs(game_state, game_hours: float) -> list[GuineaPig]:
-    """Age all guinea pigs. Returns list of pigs that died of old age."""
-    game_days = game_hours / 24.0
-    deaths = []
-
-    for pig in game_state.get_pigs_list():
-        pig.age_days += game_days
-
-        # Check for death from old age
-        if pig.age_days >= SIMULATION.MAX_AGE_DAYS:
-            if random.random() < BREEDING.OLD_AGE_DEATH_RATE * game_days:  # Increasing chance
-                deaths.append(pig)
-
-    # Process deaths
-    for pig in deaths:
-        game_state.remove_guinea_pig(pig.id)
-        game_state.log_event(
-            f"{pig.name} passed away peacefully at age {int(pig.age_days)} days.",
-            event_type="death",
-        )
-
-    return deaths
-
-
-def sell_marked_adults(game_state) -> list[tuple[str, int, UUID]]:
-    """Auto-sell pigs that were marked for sale and have reached adulthood.
-
-    Returns list of (name, sale_total, pig_id) for each pig sold.
-    """
-    sold = []
-    for pig in game_state.get_pigs_list():
-        if pig.marked_for_sale and not pig.is_baby:
-            name = pig.name
-            pig_id = pig.id
-            result = sell_pig(game_state, pig)
-            sold.append((name, result.total, pig_id))
-    return sold
+def clear_courtship(pig: GuineaPig) -> None:
+    """Reset all courtship fields on a pig."""
+    pig.courting_partner_id = None
+    pig.courting_initiator = False
+    pig.courting_timer = 0.0
+    if pig.behavior_state == BehaviorState.COURTING:
+        pig.behavior_state = BehaviorState.IDLE
+    pig.target_description = None
 
 
 _last_breeding_warning_day: int = -1
@@ -493,11 +266,17 @@ def _auto_pair_from_program(game_state) -> None:
             return
 
     pigs = game_state.get_pigs_list()
-    males = [p for p in pigs if p.gender == Gender.MALE and p.can_breed and not p.breeding_locked]
+    males = [
+        p for p in pigs
+        if p.gender == Gender.MALE and p.can_breed
+        and not p.breeding_locked
+        and p.behavior_state != BehaviorState.COURTING
+    ]
     females = [
         p for p in pigs
         if p.gender == Gender.FEMALE and p.can_breed
         and not p.is_pregnant and not p.breeding_locked
+        and p.behavior_state != BehaviorState.COURTING
     ]
 
     if not males or not females:
@@ -516,7 +295,7 @@ def _auto_pair_from_program(game_state) -> None:
         return
 
     best_pair = None
-    best_prob = -1.0
+    best_score = -1.0
     for male in males:
         for female in females:
             prob = calculate_target_probability(
@@ -524,15 +303,24 @@ def _auto_pair_from_program(game_state) -> None:
                 target_colors, target_patterns,
                 target_intensities, target_roan,
             )
-            if prob > best_prob:
-                best_prob = prob
+            # Affinity as tiebreaker only — never override zero probability
+            affinity = game_state.get_affinity(male.id, female.id)
+            affinity_bonus = min(affinity * BREEDING.AFFINITY_WEIGHT, BREEDING.MAX_AFFINITY_SELECTION_BONUS)
+            score = prob + (affinity_bonus if prob > 0 else 0)
+            if score > best_score:
+                best_score = score
                 best_pair = (male, female)
 
-    if best_pair and best_prob > 0:
+    if best_pair and best_score > 0:
         male, female = best_pair
         game_state.set_breeding_pair(male.id, female.id)
+        prob = calculate_target_probability(
+            male.genotype, female.genotype,
+            target_colors, target_patterns,
+            target_intensities, target_roan,
+        )
         game_state.log_event(
-            f"Breeding program paired {male.name} x {female.name} ({best_prob * 100:.1f}% target chance)",
+            f"Breeding program paired {male.name} x {female.name} ({prob * 100:.1f}% target chance)",
             event_type="breeding",
         )
 
@@ -560,153 +348,3 @@ def _derive_contract_targets(game_state) -> tuple[set, set, set, set]:
             roans.add(contract.required_roan)
 
     return colors, patterns, intensities, roans
-
-
-def _score_adults(
-    adults: list[GuineaPig],
-    program,
-    has_lab: bool,
-    game_state=None,
-) -> list[tuple[GuineaPig, tuple]]:
-    """Score adult pigs by strategy-appropriate value.
-
-    Returns a list of (pig, score_tuple) sorted best-first.
-    """
-    if program.strategy == BreedingStrategy.DIVERSITY:
-        scored = [
-            (p, (diversity_value(p, adults), breeding_value(p, program, has_lab)))
-            for p in adults
-        ]
-    elif program.strategy == BreedingStrategy.MONEY:
-        scored = [
-            (p, (money_value(p, program, has_lab, game_state),))
-            for p in adults
-        ]
-    else:
-        scored = [(p, (breeding_value(p, program, has_lab),)) for p in adults]
-    scored.sort(key=lambda x: x[1], reverse=True)
-    return scored
-
-
-def _would_break_gender_balance(pig: GuineaPig, adults: list[GuineaPig]) -> bool:
-    """Return True if selling this pig would leave zero of its gender."""
-    same_gender = [
-        p for p in adults
-        if p.gender == pig.gender and not p.marked_for_sale and p.id != pig.id
-    ]
-    return len(same_gender) == 0
-
-
-def cull_surplus_breeders(game_state) -> None:
-    """Mark surplus pigs for sale when over the program's stock limit.
-
-    Also performs active replacement: when at or below the stock limit,
-    marks the single worst non-matching adult for sale so the farm
-    turns over toward the target phenotype.
-    """
-    program = game_state.breeding_program
-    if not program.enabled:
-        return
-
-    has_lab = bool(game_state.get_facilities_by_type(FacilityType.GENETICS_LAB))
-
-    # Get all adult pigs not already marked for sale
-    adults = [
-        p for p in game_state.get_pigs_list()
-        if not p.marked_for_sale and not p.is_baby
-    ]
-
-    effective_limit = max(program.stock_limit, BREEDING.MIN_BREEDING_POPULATION)
-    if len(adults) < effective_limit:
-        return  # Below limit — need more pigs, not fewer
-    if len(adults) == effective_limit:
-        _active_replacement(game_state, adults, program, has_lab)
-        return
-
-    scored = _score_adults(adults, program, has_lab, game_state)
-
-    # Ensure gender balance: keep at least 1 male + 1 female in top N
-    kept = []
-    has_male = False
-    has_female = False
-    surplus = []
-
-    for pig, score in scored:
-        if len(kept) < effective_limit:
-            kept.append(pig)
-            if pig.gender == Gender.MALE:
-                has_male = True
-            else:
-                has_female = True
-        else:
-            surplus.append(pig)
-
-    # If missing a gender in kept, swap the worst kept with best surplus of needed gender
-    if not has_male or not has_female:
-        needed_gender = Gender.MALE if not has_male else Gender.FEMALE
-        for pig in surplus:
-            if pig.gender == needed_gender:
-                # Swap: remove worst from kept, add this pig
-                worst_kept = kept[-1]
-                kept[-1] = pig
-                surplus.remove(pig)
-                surplus.append(worst_kept)
-                break
-
-    # Mark surplus for sale (skip pregnant pigs)
-    marked_count = 0
-    for pig in surplus:
-        if pig.is_pregnant:
-            continue
-        pig.marked_for_sale = True
-        marked_count += 1
-
-    if marked_count:
-        game_state.log_event(
-            f"Breeding program: {marked_count} surplus pig(s) marked for sale",
-            event_type="filter",
-        )
-
-
-def _active_replacement(game_state, adults: list[GuineaPig], program, has_lab: bool) -> None:
-    """Phase out the worst adult when at or below stock limit.
-
-    Two modes:
-    - With targets: sell the worst non-matching adult
-    - Diversity/Money (no targets): sell the lowest-scoring adult
-
-    Marks at most 1 pig per call. Skips pregnant pigs and preserves
-    gender balance (never sells the last male or last female).
-    """
-    if program.has_target:
-        # Target mode: only consider non-matching adults
-        candidates = [
-            p for p in adults
-            if not should_keep_pig(program, p, has_genetics_lab=has_lab)
-        ]
-        reason = "non-matching"
-    else:
-        # Without targets, active replacement would sell the "worst" pig every
-        # time population hits the limit, causing it to oscillate below the
-        # stock limit permanently.  Only surplus culling (len > limit) should
-        # fire for diversity/money mode without explicit targets.
-        return
-
-    if not candidates:
-        return
-
-    # Score them worst-first
-    scored = _score_adults(candidates, program, has_lab, game_state)
-    scored.reverse()  # Worst first
-
-    for pig, _score in scored:
-        if pig.is_pregnant:
-            continue
-        if _would_break_gender_balance(pig, adults):
-            continue
-        pig.marked_for_sale = True
-        game_state.log_event(
-            f"Breeding program: replacing {pig.name} ({reason})",
-            event_type="filter",
-        )
-        return

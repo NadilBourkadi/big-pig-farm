@@ -82,13 +82,6 @@ class NeedsConfig:
     THIRST_HAPPINESS_DRAIN: float = 2.5            # drain when thirst critical
     ENERGY_HAPPINESS_DRAIN: float = 1.5            # drain when energy critical
 
-    # Offline recovery
-    OFFLINE_PLAY_BOREDOM_RECOVERY: float = 10.0
-    OFFLINE_PLAY_HAPPINESS_RECOVERY: float = 5.0
-    OFFLINE_SOCIAL_RECOVERY: float = 5.0
-    OFFLINE_SOCIAL_HAPPINESS_RECOVERY: float = 3.0
-    OFFLINE_ENERGY_RECOVERY: float = 30.0
-
     # Personality modifiers
     GREEDY_HUNGER_MULT: float = 1.5
     LAZY_ENERGY_MULT: float = 0.7
@@ -121,6 +114,10 @@ class BreedingConfig:
     HIGH_HAPPINESS_BONUS: float = 0.05  # +5% with high happiness
     OLD_AGE_DEATH_RATE: float = 0.1     # Base death rate multiplier per game day past max age
     MIN_BREEDING_POPULATION: int = 2    # Hard floor — never cull below this many adults
+    AFFINITY_WEIGHT: float = 0.01      # Bonus per affinity point in partner selection scoring
+    MAX_AFFINITY_SELECTION_BONUS: float = 0.05  # Cap on partner selection bonus from affinity
+    AFFINITY_CHANCE_BONUS: float = 0.01  # Per-affinity-point bonus to breeding chance
+    MAX_AFFINITY_CHANCE_BONUS: float = 0.05  # Cap on breeding chance bonus from affinity
 
 
 @dataclass(frozen=True)
@@ -130,9 +127,6 @@ class TimeConfig:
     REAL_SECONDS_PER_GAME_MINUTE: float = 1.0
     GAME_MINUTES_PER_HOUR: int = 60
     GAME_HOURS_PER_DAY: int = 24
-
-    # Offline limits
-    MAX_OFFLINE_HOURS: int = 24
 
     # Day/night
     DAY_START_HOUR: int = 6
@@ -363,6 +357,10 @@ class BehaviorConfig:
 
     # Idle drift
     IDLE_DRIFT_RADIUS: float = 5.0         # If another pig is within this radius, idle → wander
+
+    # Courtship
+    COURTSHIP_TOGETHER_SECONDS: float = 4.0   # Adjacent time before pregnancy
+    COURTSHIP_HAPPINESS_BOOST: float = 5.0    # Happiness recovery during courtship
 
     # Movement modifiers
     TIRED_SPEED_MULT: float = 0.5          # Speed when energy < sleep threshold

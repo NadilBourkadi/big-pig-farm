@@ -143,6 +143,10 @@ class CollisionHandler:
         for other_pig in self.spatial_grid.get_nearby(target_x, target_y):
             if other_pig.id == exclude_pig.id:
                 continue
+            # Don't block a pig from approaching its courting partner
+            if (exclude_pig.courting_partner_id == other_pig.id
+                    and exclude_pig.behavior_state == BehaviorState.COURTING):
+                continue
             # If both pigs are actively moving, use a tighter radius so they
             # can squeeze past each other without visually overlapping
             if exclude_pig.path and other_pig.path:
@@ -181,6 +185,12 @@ class CollisionHandler:
             # Both using facility:  1.0 (allow co-sleeping/co-eating)
             # One moving:           2.0 (blocking = 2.5)
             # Both idle:            3.0 (MIN_PIG_DISTANCE)
+            # Courting pair: skip separation entirely so they can be adjacent
+            if (pig_a.behavior_state == BehaviorState.COURTING
+                    and pig_b.behavior_state == BehaviorState.COURTING
+                    and pig_a.courting_partner_id == pig_b.id):
+                continue
+
             both_moving = pig_a.path and pig_b.path
             facility_use_states = (
                 BehaviorState.EATING, BehaviorState.DRINKING,

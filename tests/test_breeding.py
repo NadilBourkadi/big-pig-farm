@@ -1,19 +1,14 @@
 """Tests for the breeding/reproduction system."""
 
 import pytest
-from datetime import datetime, timedelta
 
 from big_pig_farm.data.config import BREEDING
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position, BehaviorState
-from big_pig_farm.entities.genetics import Genotype, BaseColor
-from big_pig_farm.simulation.breeding_program import BreedingProgram
-from big_pig_farm.simulation.breeding import (
-    check_breeding_opportunities,
-    advance_pregnancies,
-    age_all_pigs,
-    register_pig_in_pigdex,
-)
+from big_pig_farm.entities.genetics import BaseColor
+from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig, Position
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs, register_pig_in_pigdex
+from big_pig_farm.simulation.breeding import check_breeding_opportunities
+from big_pig_farm.simulation.breeding_program import BreedingProgram
 
 
 def _make_pig(name, gender, age_days=5.0, x=5.0, y=5.0, **kwargs) -> GuineaPig:
@@ -122,7 +117,6 @@ class TestBirth:
         female.pregnancy_days = BREEDING.GESTATION_DAYS
         female.partner_id = male.id
 
-        initial_events = len(state.events)
         check_breeding_opportunities(state)
 
         birth_events = [e for e in state.events if e.event_type == "birth"]
@@ -176,7 +170,6 @@ class TestPigdexRegistration:
         state = GameState()
         pig = _make_pig("Discoverer", Gender.MALE)
 
-        initial_money = state.money
         register_pig_in_pigdex(state, pig)
 
         # Should have registered and potentially got a reward
@@ -201,16 +194,22 @@ class TestPigdexRegistration:
 class TestManualBreeding:
     """Tests for the manual breeding pair system."""
 
-    def test_manual_pair_triggers_pregnancy(self):
+    def test_manual_pair_triggers_courtship(self):
         state = GameState()
         male, female = _make_breeding_pair(state)
 
         state.set_breeding_pair(male.id, female.id)
         check_breeding_opportunities(state)
 
-        assert female.is_pregnant
-        assert female.partner_id == male.id
-        assert state.breeding_pair is None  # Cleared after success
+        # Courtship starts — not instant pregnancy
+        assert not female.is_pregnant
+        assert male.behavior_state == BehaviorState.COURTING
+        assert female.behavior_state == BehaviorState.COURTING
+        assert male.courting_partner_id == female.id
+        assert female.courting_partner_id == male.id
+        assert male.courting_initiator is True
+        assert female.courting_initiator is False
+        assert state.breeding_pair is None  # Cleared after courtship started
 
     def test_manual_pair_clears_on_missing_pig(self):
         state = GameState()
@@ -265,7 +264,9 @@ class TestManualBreeding:
         state.set_breeding_pair(male.id, female.id)
         check_breeding_opportunities(state)
 
-        assert female.is_pregnant
+        # Courtship starts regardless of distance
+        assert male.behavior_state == BehaviorState.COURTING
+        assert female.behavior_state == BehaviorState.COURTING
         assert state.breeding_pair is None
 
     def test_set_new_pair_replaces_old(self):
@@ -347,6 +348,72 @@ class TestBreedingProgram:
         male, female = _make_breeding_pair(state)
         f = BreedingProgram(enabled=True, target_colors={BaseColor.GOLDEN})
 
-        babies = self._birth_with_filter(state, male, female, f)
+        self._birth_with_filter(state, male, female, f)
         # All babies should be registered in pigdex regardless of filter
         assert state.pigdex.discovered_count >= 1
+
+
+class TestStalePairClearing:
+    """Tests for clearing stale breeding pairs that can never complete."""
+
+    def test_manual_pair_clears_when_pig_becomes_senior(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        state.set_breeding_pair(male.id, female.id)
+
+        # Male ages into senior territory
+        male.age_days = 31.0  # Past SENIOR_AGE_DAYS (30)
+        check_breeding_opportunities(state)
+
+        assert state.breeding_pair is None
+        cancel_events = [
+            e for e in state.events
+            if e.event_type == "breeding" and "can no longer breed" in e.message
+        ]
+        assert len(cancel_events) == 1
+        assert male.name in cancel_events[0].message
+
+    def test_manual_pair_clears_when_pig_breeding_locked(self):
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        state.set_breeding_pair(male.id, female.id)
+
+        female.breeding_locked = True
+        check_breeding_opportunities(state)
+
+        assert state.breeding_pair is None
+        cancel_events = [
+            e for e in state.events
+            if e.event_type == "breeding" and "can no longer breed" in e.message
+        ]
+        assert len(cancel_events) == 1
+        assert female.name in cancel_events[0].message
+
+    def test_auto_pair_resumes_after_stale_pair_cleared(self):
+        state = GameState()
+        male1, female = _make_breeding_pair(state)
+        male2 = _make_pig("Boar2", Gender.MALE, age_days=5.0, x=6.0, y=5.0)
+        male2.needs.happiness = 90
+        male2.needs.health = 100
+        state.add_guinea_pig(male2)
+
+        # Set up breeding program so auto-pair can engage
+        program = BreedingProgram(enabled=True, target_colors={BaseColor.BLACK})
+        state.breeding_program = program
+
+        # Stale pair: male1 is senior
+        state.set_breeding_pair(male1.id, female.id)
+        male1.age_days = 31.0
+
+        # Single tick: clears the stale pair AND auto-pair fires immediately
+        check_breeding_opportunities(state)
+
+        # Verify the stale pair was logged as cancelled
+        cancel_events = [
+            e for e in state.events
+            if e.event_type == "breeding" and "can no longer breed" in e.message
+        ]
+        assert len(cancel_events) == 1
+
+        # Auto-pair resumed in the same tick with the eligible male
+        assert state.breeding_pair is not None or female.behavior_state == BehaviorState.COURTING
