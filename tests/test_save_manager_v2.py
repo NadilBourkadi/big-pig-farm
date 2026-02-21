@@ -3,14 +3,13 @@
 import sqlite3
 
 import pytest
-from pathlib import Path
 
-from big_pig_farm.game.save_manager import SaveManager
-from big_pig_farm.game.save_manager_v2 import SaveManagerV2, CombinedSaveManager, SCHEMA_VERSION
-from big_pig_farm.game.state import GameState
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
-from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.data.config import GameSpeed
+from big_pig_farm.entities.facilities import Facility, FacilityType
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
+from big_pig_farm.game.save_manager import SaveManager
+from big_pig_farm.game.save_manager_v2 import SCHEMA_VERSION, CombinedSaveManager, SaveManagerV2
+from big_pig_farm.game.state import GameState
 
 
 @pytest.fixture
@@ -108,7 +107,7 @@ class TestSaveManagerV2:
 
         assert loaded.farm.width == state.farm.width
         assert loaded.farm.height == state.farm.height
-        assert loaded.farm.tier == state.farm.tier
+        assert loaded.farm_tier == state.farm_tier
         # Verify pathfinding still works after reload
         walkable = loaded.farm.find_random_walkable()
         assert walkable is not None
