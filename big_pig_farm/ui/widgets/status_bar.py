@@ -1,9 +1,9 @@
 """Status bar widget showing resources and time."""
 
-from textual.widgets import Static
 from textual.reactive import reactive
+from textual.widgets import Static
 
-from big_pig_farm.data.config import SPEED_DISPLAY, GameSpeed, BREEDING
+from big_pig_farm.data.config import BREEDING, SPEED_DISPLAY, GameSpeed
 from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.entities.facilities import FacilityType
 
@@ -17,6 +17,7 @@ class StatusBar(Static):
     money: reactive[int] = reactive(100)
     pig_count: reactive[int] = reactive(0)
     capacity: reactive[int] = reactive(4)
+    farm_tier: reactive[int] = reactive(1)
     food_level: reactive[int] = reactive(100)
     water_level: reactive[int] = reactive(100)
     is_paused: reactive[bool] = reactive(False)
@@ -46,6 +47,7 @@ class StatusBar(Static):
 
         parts = [
             f"Day {self.day}",
+            f"T{self.farm_tier}",
             format_currency(self.money),
             f"\U0001f439 {self.pig_count}/{self.capacity}",
             f"\U0001f957 {self.food_level}%",
@@ -69,6 +71,7 @@ class StatusBar(Static):
         self.money = state.money
         self.pig_count = state.pig_count
         self.capacity = state.capacity
+        self.farm_tier = state.farm_tier
         self.is_paused = state.is_paused
         self.speed = state.speed.value
         self._speed_enum = state.speed

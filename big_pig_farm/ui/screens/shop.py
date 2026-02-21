@@ -1,29 +1,32 @@
 """Shop screen for purchasing facilities, items, and adopting pigs."""
 
 import random
-from typing import Optional
 
 from textual.app import ComposeResult
-from textual.css.query import NoMatches
-from textual.screen import Screen
 from textual.containers import Container, Horizontal
-from textual.widgets import Static, Button, Label, ListView, ListItem, Footer
+from textual.css.query import NoMatches
 from textual.reactive import reactive
+from textual.screen import Screen
+from textual.widgets import Button, Footer, Label, ListItem, ListView, Static
 
+from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.shop import (
-    get_shop_items,
-    purchase_item,
-    get_farm_upgrade_info,
-    get_room_total_cost,
-    purchase_new_room,
     ShopCategory,
     ShopItem,
+    check_tier_requirements,
+    get_current_tier_upgrade,
+    get_farm_upgrade_info,
+    get_next_tier_upgrade,
+    get_room_total_cost,
+    get_shop_items,
+    purchase_item,
+    purchase_new_room,
+    purchase_tier_upgrade,
 )
 from big_pig_farm.entities.biomes import BiomeType
-from big_pig_farm.economy.currency import format_currency
-from big_pig_farm.entities.facilities import FACILITY_INFO
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.bloodlines import BLOODLINES
+from big_pig_farm.entities.facilities import FACILITY_INFO
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.birth import register_pig_in_pigdex
 from big_pig_farm.ui.screens.adoption import calculate_adoption_cost, generate_adoption_pig
@@ -134,14 +137,15 @@ class ShopScreen(Screen):
     """
 
     current_category: reactive[ShopCategory] = reactive(ShopCategory.FACILITIES)
-    selected_item: reactive[Optional[ShopItem]] = reactive(None)
+    selected_item: reactive[ShopItem | None] = reactive(None)
 
     def __init__(self, state: GameState, **kwargs):
         super().__init__(**kwargs)
         self.state = state
         self._is_upgrade_selected = False
+        self._is_tier_upgrade_selected = False
         self._available_pigs: list[GuineaPig] = []
-        self._selected_pig: Optional[GuineaPig] = None
+        self._selected_pig: GuineaPig | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the shop screen."""
@@ -181,6 +185,7 @@ class ShopScreen(Screen):
 
         list_view.clear()
         self._is_upgrade_selected = False
+        self._is_tier_upgrade_selected = False
         self._selected_pig = None
 
         if self.current_category == ShopCategory.ADOPTION:
@@ -191,15 +196,29 @@ class ShopScreen(Screen):
                 can_afford = self.state.money >= cost
                 list_view.append(AdoptionPigWidget(pig, cost, can_afford))
         elif self.current_category == ShopCategory.UPGRADES:
+            # Tier upgrade
+            next_tier = get_next_tier_upgrade(self.state)
+            if next_tier:
+                label = f"Tier {next_tier.tier}: {next_tier.name}  {format_currency(next_tier.cost)}"
+                list_view.append(ListItem(Label(label), id="tier-upgrade"))
+            else:
+                current = get_current_tier_upgrade(self.state.farm_tier)
+                name = current.name if current else "???"
+                label = f"Tier {self.state.farm_tier}: {name}  (max)"
+                list_view.append(ListItem(Label(label), id="tier-upgrade"))
+            # Room addition
             upgrade_info = get_farm_upgrade_info(self.state)
             if upgrade_info:
                 label = f"Add New Room ({upgrade_info['name']})  Base: {format_currency(upgrade_info['cost'])}"
                 list_view.append(ListItem(Label(label), id="farm-upgrade"))
-                self._is_upgrade_selected = True
             else:
-                list_view.append(ListItem(Label("All rooms built!")))
+                current = get_current_tier_upgrade(self.state.farm_tier)
+                rooms = len(self.state.farm.areas)
+                max_rooms = current.max_rooms if current else rooms
+                label = f"Rooms: {rooms}/{max_rooms}  (max for tier)"
+                list_view.append(ListItem(Label(label), id="farm-upgrade"))
         else:
-            items = get_shop_items(self.current_category, self.state.farm.tier)
+            items = get_shop_items(self.current_category, self.state.farm_tier)
             for item in items:
                 can_afford = self.state.money >= item.cost
                 widget = ShopItemWidget(item, can_afford)
@@ -213,7 +232,7 @@ class ShopScreen(Screen):
 
         self._available_pigs = []
         num_pigs = random.randint(3, 5)
-        farm_tier = self.state.farm.tier
+        farm_tier = self.state.farm_tier
 
         for _ in range(num_pigs):
             pig = generate_adoption_pig(existing_names, farm_tier=farm_tier)
@@ -226,16 +245,20 @@ class ShopScreen(Screen):
             self._selected_pig = event.item.pig
             self.selected_item = None
             self._is_upgrade_selected = False
+            self._is_tier_upgrade_selected = False
             self._update_detail()
         elif isinstance(event.item, ShopItemWidget):
             self.selected_item = event.item.item
             self._selected_pig = None
             self._is_upgrade_selected = False
+            self._is_tier_upgrade_selected = False
             self._update_detail()
-        elif self.current_category == ShopCategory.UPGRADES:
+        elif self.current_category == ShopCategory.UPGRADES and event.item is not None:
+            item_id = event.item.id
             self.selected_item = None
             self._selected_pig = None
-            self._is_upgrade_selected = True
+            self._is_tier_upgrade_selected = item_id == "tier-upgrade"
+            self._is_upgrade_selected = item_id == "farm-upgrade"
             self._update_detail()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
@@ -251,6 +274,33 @@ class ShopScreen(Screen):
     def _update_detail(self) -> None:
         """Update the detail panel."""
         detail = self.query_one("#item-detail", Static)
+
+        if self._is_tier_upgrade_selected:
+            next_tier = get_next_tier_upgrade(self.state)
+            if next_tier:
+                reqs = check_tier_requirements(self.state, next_tier)
+                lines = [
+                    f"Tier {next_tier.tier}: {next_tier.name}",
+                    f"Unlocks: tier {next_tier.tier} items, up to {next_tier.max_rooms} rooms",
+                ]
+                req_parts: list[str] = []
+                if next_tier.required_pigs_born > 0:
+                    mark = "+" if reqs["pigs_born"] else "-"
+                    req_parts.append(f"[{mark}] Pigs born: {self.state.total_pigs_born}/{next_tier.required_pigs_born}")
+                if next_tier.required_pigdex > 0:
+                    mark = "+" if reqs["pigdex"] else "-"
+                    req_parts.append(f"[{mark}] Pigdex: {self.state.pigdex.discovered_count}/{next_tier.required_pigdex}")
+                if next_tier.required_contracts > 0:
+                    mark = "+" if reqs["contracts"] else "-"
+                    req_parts.append(f"[{mark}] Contracts: {self.state.contract_board.completed_contracts}/{next_tier.required_contracts}")
+                if req_parts:
+                    lines.append("  ".join(req_parts))
+                mark = "+" if reqs["money"] else "-"
+                lines.append(f"[{mark}] Cost: {format_currency(next_tier.cost)}")
+                detail.update("\n".join(lines))
+            else:
+                detail.update("Max tier reached!")
+            return
 
         if self._selected_pig:
             pig = self._selected_pig
@@ -284,7 +334,17 @@ class ShopScreen(Screen):
                     f"Rooms: {rooms} | Press Enter to choose a biome"
                 )
             else:
-                detail.update("All rooms have been built!")
+                rooms = len(self.state.farm.areas)
+                current = get_current_tier_upgrade(self.state.farm_tier)
+                max_rooms = current.max_rooms if current else rooms
+                next_tier = get_next_tier_upgrade(self.state)
+                if next_tier and rooms >= max_rooms:
+                    detail.update(
+                        f"Room cap reached for current tier ({rooms}/{max_rooms})\n"
+                        f"Upgrade to Tier {next_tier.tier}: {next_tier.name} to unlock more rooms"
+                    )
+                else:
+                    detail.update(f"All rooms built! ({rooms}/{max_rooms})")
         elif self.selected_item:
             item = self.selected_item
             can_afford = "Yes" if self.state.money >= item.cost else "No"
@@ -378,6 +438,24 @@ class ShopScreen(Screen):
             self._adopt_pig()
             return
 
+        # Handle tier upgrade
+        if self._is_tier_upgrade_selected:
+            next_tier = get_next_tier_upgrade(self.state)
+            if not next_tier:
+                self.notify("Already at max tier!", severity="warning")
+                return
+            reqs = check_tier_requirements(self.state, next_tier)
+            if not all(reqs.values()):
+                unmet = [k for k, v in reqs.items() if not v]
+                self.notify(f"Requirements not met: {', '.join(unmet)}", severity="error")
+                return
+            if purchase_tier_upgrade(self.state):
+                self.notify(f"Upgraded to Tier {next_tier.tier}: {next_tier.name}!")
+                self._refresh_items()
+                self._update_header()
+                self._update_detail()
+            return
+
         # Handle room addition — open biome selection
         if self._is_upgrade_selected:
             upgrade_info = get_farm_upgrade_info(self.state)
@@ -386,7 +464,7 @@ class ShopScreen(Screen):
                 return
             from big_pig_farm.ui.screens.biome_select import BiomeSelectScreen
             self.app.push_screen(
-                BiomeSelectScreen(farm_tier=self.state.farm.tier),
+                BiomeSelectScreen(farm_tier=self.state.farm_tier),
                 callback=self._on_biome_selected,
             )
             return
@@ -461,7 +539,7 @@ class ShopScreen(Screen):
         self._refresh_items()
         self._update_header()
 
-    def _on_biome_selected(self, biome: Optional[BiomeType]) -> None:
+    def _on_biome_selected(self, biome: BiomeType | None) -> None:
         """Callback when biome is selected from BiomeSelectScreen."""
         if biome is None:
             return  # Cancelled
@@ -481,7 +559,7 @@ class ShopScreen(Screen):
         else:
             self.notify("Could not add room!", severity="error")
 
-    def _find_spawn_position(self) -> Optional[tuple[int, int]]:
+    def _find_spawn_position(self) -> tuple[int, int] | None:
         """Find a valid spawn position for an adopted pig."""
         farm = self.state.farm
 
@@ -496,7 +574,7 @@ class ShopScreen(Screen):
 
         return None
 
-    def _find_placement_position(self, item: ShopItem) -> Optional[tuple[int, int]]:
+    def _find_placement_position(self, item: ShopItem) -> tuple[int, int] | None:
         """Find a valid position to place a facility."""
         if not item.facility_type:
             return None

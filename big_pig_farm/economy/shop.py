@@ -2,12 +2,11 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
-from big_pig_farm.data.config import ECONOMY, FARM_TIERS
+from big_pig_farm.data.config import ECONOMY, TIER_UPGRADES, TierUpgrade
 from big_pig_farm.economy.currency import add_money, spend_money
-from big_pig_farm.entities.biomes import BiomeType, BIOMES
-from big_pig_farm.entities.facilities import FacilityType, FACILITY_INFO, Facility
+from big_pig_farm.entities.biomes import BIOMES, BiomeType
+from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.game.state import GameState
 
 
@@ -28,7 +27,7 @@ class ShopItem:
     description: str
     cost: int
     category: ShopCategory
-    facility_type: Optional[FacilityType] = None
+    facility_type: FacilityType | None = None
     unlocked: bool = True
     required_tier: int = 1
 
@@ -175,7 +174,7 @@ SHOP_ITEMS: list[ShopItem] = [
 ]
 
 
-def get_shop_items(category: Optional[ShopCategory] = None, farm_tier: int = 1) -> list[ShopItem]:
+def get_shop_items(category: ShopCategory | None = None, farm_tier: int = 1) -> list[ShopItem]:
     """Get shop items, optionally filtered by category."""
     items = SHOP_ITEMS
 
@@ -200,7 +199,7 @@ def get_shop_items(category: Optional[ShopCategory] = None, farm_tier: int = 1) 
     return result
 
 
-def purchase_item(state: GameState, item: ShopItem, position: Optional[tuple[int, int]] = None) -> bool:
+def purchase_item(state: GameState, item: ShopItem, position: tuple[int, int] | None = None) -> bool:
     """Attempt to purchase a shop item. Returns True if successful."""
     if not item.unlocked:
         return False
@@ -259,8 +258,60 @@ def sell_facility(state: GameState, facility) -> int:
     return cost
 
 
-def get_farm_upgrade_info(state: GameState) -> Optional[dict]:
-    """Get info about the next room addition, or None if at max."""
+def get_current_tier_upgrade(tier: int) -> TierUpgrade | None:
+    """Get the TierUpgrade definition for the given tier, or None."""
+    for upgrade in TIER_UPGRADES:
+        if upgrade.tier == tier:
+            return upgrade
+    return None
+
+
+def get_next_tier_upgrade(state: GameState) -> TierUpgrade | None:
+    """Get the next tier upgrade, or None if at max tier."""
+    for upgrade in TIER_UPGRADES:
+        if upgrade.tier == state.farm_tier + 1:
+            return upgrade
+    return None
+
+
+def check_tier_requirements(state: GameState, upgrade: TierUpgrade) -> dict[str, bool]:
+    """Check which requirements are met for a tier upgrade."""
+    completed = state.contract_board.completed_contracts
+    return {
+        "pigs_born": state.total_pigs_born >= upgrade.required_pigs_born,
+        "pigdex": state.pigdex.discovered_count >= upgrade.required_pigdex,
+        "contracts": completed >= upgrade.required_contracts,
+        "money": state.money >= upgrade.cost,
+    }
+
+
+def purchase_tier_upgrade(state: GameState) -> bool:
+    """Purchase the next tier upgrade. Returns True if successful."""
+    upgrade = get_next_tier_upgrade(state)
+    if upgrade is None:
+        return False
+
+    reqs = check_tier_requirements(state, upgrade)
+    if not all(reqs.values()):
+        return False
+
+    if not spend_money(state, upgrade.cost):
+        return False
+
+    state.farm_tier = upgrade.tier
+    state.log_event(f"Farm upgraded to Tier {upgrade.tier}: {upgrade.name}!", "purchase")
+    return True
+
+
+def get_farm_upgrade_info(state: GameState) -> dict | None:
+    """Get info about the next room addition, or None if at max or capped."""
+    # Check room cap for current tier
+    current = get_current_tier_upgrade(state.farm_tier)
+    if current is None:
+        return None
+    if len(state.farm.areas) >= current.max_rooms:
+        return None
+
     next_tier = state.farm.next_room_tier
     if next_tier is None:
         return None

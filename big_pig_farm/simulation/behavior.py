@@ -473,7 +473,16 @@ class BehaviorController:
                         pig.log_behavior(f"Path to {facility.name} failed, trying alternatives")
                         self.facility_manager.add_failed_facility(pig.id, facility.id)
 
-        # No reachable play facilities - just wander playfully
+        # No reachable play facilities — try socializing instead since it
+        # also recovers happiness; prevents priority starvation where happiness
+        # (priority 4) permanently blocks social (priority 5).
+        # SHY pigs skip this fallback (they can be approached but won't initiate).
+        if pig.needs.social < NEEDS.HIGH_THRESHOLD and not pig.has_trait(Personality.SHY):
+            pig.log_behavior("No play facility, seeking social interaction instead")
+            self._seek_social_interaction(pig)
+            return
+
+        # Fallback: wander playfully
         pig.log_behavior("No reachable play facility, wandering playfully")
         pig.target_description = None
         self._start_wandering(pig)
@@ -482,13 +491,16 @@ class BehaviorController:
             pig.target_description = "playing around"
 
     def _seek_social_interaction(self, pig: GuineaPig) -> None:
-        """Find another guinea pig to socialize with."""
-        # Try spatial grid first for nearest non-shy pig
+        """Find another guinea pig to socialize with.
+
+        SHY pigs don't initiate socializing (blocked in _make_decision),
+        but they can still be approached by non-shy pigs.
+        """
         nearest = None
         best_dist_sq = float('inf')
         px, py = pig.position.x, pig.position.y
         for p in self.collision.spatial_grid.get_nearby(px, py):
-            if p.id == pig.id or p.has_trait(Personality.SHY):
+            if p.id == pig.id:
                 continue
             dsq = (px - p.position.x) ** 2 + (py - p.position.y) ** 2
             if dsq < best_dist_sq:
@@ -498,7 +510,7 @@ class BehaviorController:
         # Fall back to full list if no one nearby
         if nearest is None:
             for p in self.game_state.get_pigs_list():
-                if p.id == pig.id or p.has_trait(Personality.SHY):
+                if p.id == pig.id:
                     continue
                 dsq = (px - p.position.x) ** 2 + (py - p.position.y) ** 2
                 if dsq < best_dist_sq:

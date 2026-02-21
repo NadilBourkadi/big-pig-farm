@@ -1,18 +1,19 @@
 """Simulation tick orchestration — runs all game systems each tick."""
 
 import time
-from typing import Callable, Optional, Protocol
+from collections.abc import Callable
+from typing import Protocol
 from uuid import UUID
 
 from big_pig_farm.data.config import NEEDS
-from big_pig_farm.game.state import GameState
-from big_pig_farm.game.debug_logger import DebugLogger
-from big_pig_farm.simulation.behavior import BehaviorController
-from big_pig_farm.simulation.needs import update_all_needs, precompute_nearby_counts
-from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs, register_pig_in_pigdex
-from big_pig_farm.simulation.breeding import check_breeding_opportunities, start_pregnancy_from_courtship
-from big_pig_farm.simulation.culling import sell_marked_adults, cull_surplus_breeders
 from big_pig_farm.economy.contracts import generate_contracts
+from big_pig_farm.game.debug_logger import DebugLogger
+from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs
+from big_pig_farm.simulation.breeding import check_breeding_opportunities, start_pregnancy_from_courtship
+from big_pig_farm.simulation.culling import cull_surplus_breeders, sell_marked_adults
+from big_pig_farm.simulation.needs import precompute_nearby_counts, update_all_needs
 
 
 class SaveProtocol(Protocol):
@@ -29,10 +30,10 @@ class SimulationRunner:
         state: GameState,
         behavior_controller: BehaviorController,
         save_manager: SaveProtocol,
-        debug_logger: Optional[DebugLogger] = None,
-        on_pig_sold: Optional[Callable[[str, int, UUID], None]] = None,
-        on_pregnancy: Optional[Callable[[str, str], None]] = None,
-        on_birth: Optional[Callable[[str], None]] = None,
+        debug_logger: DebugLogger | None = None,
+        on_pig_sold: Callable[[str, int, UUID], None] | None = None,
+        on_pregnancy: Callable[[str, str], None] | None = None,
+        on_birth: Callable[[str], None] | None = None,
     ):
         self.state = state
         self.behavior_controller = behavior_controller
@@ -129,7 +130,7 @@ class SimulationRunner:
         board.check_expiry(game_day)
         if board.needs_refresh(game_day) or (not board.active_contracts and board.last_refresh_day == 0):
             player_biomes = [a.biome for a in state.farm.areas]
-            new_contracts = generate_contracts(state.farm.tier, game_day, player_biomes)
+            new_contracts = generate_contracts(state.farm_tier, game_day, player_biomes)
             board.active_contracts.extend(new_contracts)
             board.last_refresh_day = game_day
         if profiling:

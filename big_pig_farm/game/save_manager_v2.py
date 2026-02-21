@@ -8,8 +8,8 @@ import logging
 import shutil
 import sqlite3
 from pathlib import Path
-from typing import Optional
 
+from big_pig_farm.data.config import TIER_UPGRADES
 from big_pig_farm.game.save_manager import SaveManager, get_save_path
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.world import relayout_areas
@@ -62,7 +62,7 @@ class SaveManagerV2:
         finally:
             conn.close()
 
-    def load(self) -> Optional[GameState]:
+    def load(self) -> GameState | None:
         """Load game state from JSON blob. Returns None if no save exists."""
         if not self.save_path.exists():
             return None
@@ -85,6 +85,13 @@ class SaveManagerV2:
 
             json_blob = row[0]
             state = GameState.model_validate_json(json_blob)
+
+            # Migrate farm_tier from legacy farm.tier for existing saves.
+            # Only fire when farm.tier > 1 (indicating legacy auto-increment was used).
+            # Grandfathers tier-gated facilities already purchased under the old system.
+            if state.farm_tier == 1 and state.farm.tier > 1:
+                max_tier = TIER_UPGRADES[-1].tier
+                state.farm_tier = min(state.farm.tier, max_tier)
 
             # Migrate saves from before multi-area support
             if not state.farm.areas:
@@ -133,7 +140,7 @@ class CombinedSaveManager:
     After one save cycle, all future loads will use v2.
     """
 
-    def __init__(self, save_path: Optional[Path] = None):
+    def __init__(self, save_path: Path | None = None):
         path = save_path or get_save_path()
         self.v2 = SaveManagerV2(path)
         self.v1 = SaveManager(path)
@@ -143,7 +150,7 @@ class CombinedSaveManager:
         """Save using v2 format."""
         self.v2.save(state)
 
-    def load(self) -> Optional[GameState]:
+    def load(self) -> GameState | None:
         """Load from v2 first, fall back to v1."""
         # Try v2 first
         state = self.v2.load()

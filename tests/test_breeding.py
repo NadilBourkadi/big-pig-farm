@@ -312,8 +312,9 @@ class TestBreedingProgram:
 
     def test_enabled_filter_marks_non_matching(self):
         state = GameState()
-        # Expand farm to hold more pigs
-        state.farm.tier = 3  # Family Pen, capacity 20
+        # Expand farm capacity by adding a second room
+        from big_pig_farm.entities.biomes import BiomeType
+        state.farm.add_room(BiomeType.MEADOW)
         male, female = _make_breeding_pair(state)
         # Add extra adults so population exceeds the stock limit
         for i in range(3):

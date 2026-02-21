@@ -1,13 +1,16 @@
 """Tests for the shop/purchase system."""
 
-import pytest
 
 from big_pig_farm.data.config import ECONOMY
 from big_pig_farm.economy.shop import (
     SHOP_ITEMS,
-    get_shop_items,
+    check_tier_requirements,
     get_facility_cost,
+    get_farm_upgrade_info,
+    get_next_tier_upgrade,
+    get_shop_items,
     purchase_item,
+    purchase_tier_upgrade,
     sell_facility,
 )
 from big_pig_farm.entities.facilities import Facility, FacilityType
@@ -137,3 +140,82 @@ class TestGetFacilityCost:
         # Use a type that's not in SHOP_ITEMS (unlikely but defensive)
         cost = get_facility_cost("nonexistent_type")
         assert cost == 0
+
+
+class TestTierUpgrade:
+    """Tests for the tier upgrade system."""
+
+    def test_next_tier_from_tier1(self):
+        state = GameState()
+        upgrade = get_next_tier_upgrade(state)
+        assert upgrade is not None
+        assert upgrade.tier == 2
+        assert upgrade.name == "Apprentice"
+
+    def test_no_next_tier_at_max(self):
+        state = GameState()
+        state.farm_tier = 5
+        assert get_next_tier_upgrade(state) is None
+
+    def test_requirements_not_met(self):
+        state = GameState()
+        upgrade = get_next_tier_upgrade(state)
+        reqs = check_tier_requirements(state, upgrade)
+        assert not reqs["pigs_born"]
+        assert not reqs["pigdex"]
+
+    def test_requirements_met(self):
+        state = GameState()
+        state.money = 10000
+        state.total_pigs_born = 3
+        state.pigdex.discovered = {"key1": 1, "key2": 1}
+        upgrade = get_next_tier_upgrade(state)
+        reqs = check_tier_requirements(state, upgrade)
+        assert all(reqs.values())
+
+    def test_purchase_tier_upgrade_success(self):
+        state = GameState()
+        state.money = 10000
+        state.total_pigs_born = 3
+        state.pigdex.discovered = {"key1": 1, "key2": 1}
+        assert purchase_tier_upgrade(state)
+        assert state.farm_tier == 2
+        assert state.money == 10000 - 300
+
+    def test_purchase_tier_upgrade_fails_without_requirements(self):
+        state = GameState()
+        state.money = 10000
+        assert not purchase_tier_upgrade(state)
+        assert state.farm_tier == 1
+
+    def test_purchase_tier_upgrade_fails_without_money(self):
+        state = GameState()
+        state.money = 0
+        state.total_pigs_born = 3
+        state.pigdex.discovered = {"key1": 1, "key2": 1}
+        assert not purchase_tier_upgrade(state)
+        assert state.farm_tier == 1
+
+
+class TestRoomCap:
+    """Tests for room cap enforcement per tier."""
+
+    def test_tier1_allows_one_room(self):
+        state = GameState()
+        # Starter has 1 room, tier 1 cap is 1
+        assert get_farm_upgrade_info(state) is None
+
+    def test_tier2_allows_second_room(self):
+        state = GameState()
+        state.farm_tier = 2
+        # Starter has 1 room, tier 2 cap is 2
+        info = get_farm_upgrade_info(state)
+        assert info is not None
+
+    def test_tier2_blocks_third_room(self):
+        state = GameState()
+        state.farm_tier = 2
+        from big_pig_farm.entities.biomes import BiomeType
+        state.farm.add_room(BiomeType.MEADOW)
+        # Now has 2 rooms, tier 2 cap is 2
+        assert get_farm_upgrade_info(state) is None
