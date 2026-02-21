@@ -3,7 +3,7 @@
 import heapq
 import random
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 from pydantic import BaseModel, Field
 
-from big_pig_farm.data.config import FARM_TIERS, ROOM_TIERS, SIMULATION
+from big_pig_farm.data.config import FARM_TIERS, ROOM_TIERS, SIMULATION, FarmTier, RoomTier
 from big_pig_farm.entities.areas import FarmArea, TunnelConnection
 from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.entities.facilities import Facility
@@ -31,9 +31,9 @@ class CellType(str, Enum):
 class Cell(BaseModel):
     """A single cell in the farm grid."""
     cell_type: CellType = CellType.FLOOR
-    facility_id: Optional[UUID] = None
+    facility_id: UUID | None = None
     is_walkable: bool = True
-    area_id: Optional[UUID] = None  # Which FarmArea this cell belongs to
+    area_id: UUID | None = None  # Which FarmArea this cell belongs to
     is_tunnel: bool = False  # True for tunnel corridor cells
     # Pre-computed wall flags (set by FarmGrid._compute_wall_flags)
     is_corner: bool = False
@@ -52,7 +52,7 @@ class FarmGrid(BaseModel):
     tunnels: list[TunnelConnection] = Field(default_factory=list)
 
     # Cached list of walkable interior positions (invalidated on grid changes)
-    _walkable_cache: Optional[list[tuple[int, int]]] = None
+    _walkable_cache: list[tuple[int, int]] | None = None
     # Per-area walkable position cache (invalidated alongside _walkable_cache)
     _area_walkable_cache: dict[UUID, list[tuple[int, int]]] = {}
     # O(1) area lookup by UUID
@@ -234,29 +234,15 @@ class FarmGrid(BaseModel):
 
     @property
     def capacity(self) -> int:
-        """Get the pig capacity — sum of all room capacities.
-
-        Also considers the tier field for backward compatibility: when the
-        tier was set directly (e.g. in tests or legacy saves), use the
-        higher of area-based and tier-based capacity.
-        """
-        # Area-based capacity
-        area_cap = 0
+        """Get the pig capacity — sum of all room capacities."""
+        total = 0
         for i, _area in enumerate(self.areas):
             tier_idx = min(i, len(ROOM_TIERS) - 1)
-            area_cap += ROOM_TIERS[tier_idx].capacity_add
-
-        # Tier-based capacity (legacy)
-        tier_cap = 0
-        if self.tier <= len(FARM_TIERS):
-            tier_cap = FARM_TIERS[self.tier - 1].capacity
-        else:
-            tier_cap = FARM_TIERS[-1].capacity
-
-        return max(area_cap, tier_cap)
+            total += ROOM_TIERS[tier_idx].capacity_add
+        return total
 
     @property
-    def next_room_tier(self) -> Optional["RoomTier"]:
+    def next_room_tier(self) -> RoomTier | None:
         """Get the tier info for the next room addition, or None if at max."""
         next_idx = len(self.areas)
         if next_idx < len(ROOM_TIERS):
@@ -264,7 +250,7 @@ class FarmGrid(BaseModel):
         return None
 
     @property
-    def next_tier(self) -> Optional["FarmTier"]:
+    def next_tier(self) -> FarmTier | None:
         """Get the next tier info, or None if at max (legacy compat)."""
         if self.tier < len(FARM_TIERS):
             return FARM_TIERS[self.tier]
@@ -280,7 +266,7 @@ class FarmGrid(BaseModel):
             return False
         return self.cells[y][x].is_walkable
 
-    def get_cell(self, x: int, y: int) -> Optional[Cell]:
+    def get_cell(self, x: int, y: int) -> Cell | None:
         """Get cell at position, or None if out of bounds."""
         if not self.is_valid_position(x, y):
             return None
@@ -393,7 +379,7 @@ class FarmGrid(BaseModel):
         self,
         pos: tuple[int, int],
         max_distance: int = 5,
-    ) -> Optional[tuple[int, int]]:
+    ) -> tuple[int, int] | None:
         """Find the nearest walkable cell to a position."""
         x, y = pos
         for distance in range(1, max_distance + 1):
@@ -405,7 +391,7 @@ class FarmGrid(BaseModel):
                             return (nx, ny)
         return None
 
-    def find_random_walkable(self) -> Optional[tuple[int, int]]:
+    def find_random_walkable(self) -> tuple[int, int] | None:
         """Find a random walkable position on the grid."""
         if self._walkable_cache is None:
             self._walkable_cache = [
@@ -419,7 +405,7 @@ class FarmGrid(BaseModel):
             return random.choice(self._walkable_cache)
         return None
 
-    def find_random_walkable_in_area(self, area_id: UUID) -> Optional[tuple[int, int]]:
+    def find_random_walkable_in_area(self, area_id: UUID) -> tuple[int, int] | None:
         """Find a random walkable position within a specific area."""
         cached = self._area_walkable_cache.get(area_id)
         if cached is None:
@@ -437,7 +423,7 @@ class FarmGrid(BaseModel):
             return random.choice(cached)
         return None
 
-    def get_area_at(self, x: int, y: int) -> Optional[FarmArea]:
+    def get_area_at(self, x: int, y: int) -> FarmArea | None:
         """Get the area that a position belongs to."""
         if not self.is_valid_position(x, y):
             return None
@@ -446,11 +432,11 @@ class FarmGrid(BaseModel):
             return None
         return self._area_lookup.get(aid)
 
-    def get_area_by_id(self, area_id: UUID) -> Optional[FarmArea]:
+    def get_area_by_id(self, area_id: UUID) -> FarmArea | None:
         """Get an area by its UUID."""
         return self._area_lookup.get(area_id)
 
-    def get_biome_at(self, x: int, y: int) -> Optional[BiomeType]:
+    def get_biome_at(self, x: int, y: int) -> BiomeType | None:
         """Get the biome type at a position."""
         area = self.get_area_at(x, y)
         if area:
@@ -806,8 +792,8 @@ class FarmGrid(BaseModel):
     def add_room(
         self,
         biome: BiomeType,
-        room_name: Optional[str] = None,
-    ) -> Optional[tuple[FarmArea, list[TunnelConnection], int, int]]:
+        room_name: str | None = None,
+    ) -> tuple[FarmArea, list[TunnelConnection], int, int] | None:
         """Add a new room with the given biome using 2-column grid layout.
 
         Returns (new_area, tunnels, offset_x, offset_y) or None if at max rooms.
@@ -926,9 +912,6 @@ class FarmGrid(BaseModel):
         new_area.x2 = new_origin[0] + rw - 1
         new_area.y2 = new_origin[1] + rh - 1
         self.add_area(new_area)
-
-        # Update tier
-        self.tier = max(self.tier, room_tier.tier)
 
         # Rebuild all tunnel connections based on adjacency
         self._rebuild_tunnels()

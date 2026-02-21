@@ -1,18 +1,17 @@
 """Game state container - holds all game data."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field, PrivateAttr
 
 from big_pig_farm.data.config import ECONOMY, GameSpeed
-from big_pig_farm.entities.guinea_pig import GuineaPig
-from big_pig_farm.entities.facilities import Facility, FacilityType
-from big_pig_farm.entities.pigdex import Pigdex
 from big_pig_farm.economy.contracts import ContractBoard
-from big_pig_farm.simulation.breeding_program import BreedingProgram
+from big_pig_farm.entities.facilities import Facility, FacilityType
+from big_pig_farm.entities.guinea_pig import GuineaPig
+from big_pig_farm.entities.pigdex import Pigdex
 from big_pig_farm.game.world import FarmGrid
+from big_pig_farm.simulation.breeding_program import BreedingProgram
 
 
 class GameTime(BaseModel):
@@ -101,7 +100,7 @@ class GameState(BaseModel):
 
     # Session tracking
     session_start: datetime = Field(default_factory=datetime.now)
-    last_save: Optional[datetime] = None
+    last_save: datetime | None = None
 
     # Event log (recent events for display)
     events: list[EventLog] = Field(default_factory=list)
@@ -115,11 +114,14 @@ class GameState(BaseModel):
     breeding_program: BreedingProgram = Field(default_factory=BreedingProgram)
 
     # Manual breeding
-    breeding_pair: Optional[BreedingPair] = None
+    breeding_pair: BreedingPair | None = None
 
     # Social affinity — tracks socialization history between pig pairs
     # Key: "smaller_uuid:larger_uuid", Value: completed socialization count
     social_affinity: dict[str, int] = Field(default_factory=dict)
+
+    # Progression
+    farm_tier: int = 1
 
     # Statistics
     total_pigs_born: int = 0
@@ -131,7 +133,7 @@ class GameState(BaseModel):
         self.guinea_pigs[pig.id] = pig
         self._pigs_list_cache = None
 
-    def remove_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
+    def remove_guinea_pig(self, pig_id: UUID) -> GuineaPig | None:
         """Remove and return a guinea pig from the game."""
         pig = self.guinea_pigs.pop(pig_id, None)
         if pig is not None:
@@ -143,7 +145,7 @@ class GameState(BaseModel):
                 del self.social_affinity[k]
         return pig
 
-    def get_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
+    def get_guinea_pig(self, pig_id: UUID) -> GuineaPig | None:
         """Get a guinea pig by ID."""
         return self.guinea_pigs.get(pig_id)
 
@@ -156,7 +158,7 @@ class GameState(BaseModel):
             return True
         return False
 
-    def remove_facility(self, facility_id: UUID) -> Optional[Facility]:
+    def remove_facility(self, facility_id: UUID) -> Facility | None:
         """Remove a facility from the game."""
         facility = self.facilities.pop(facility_id, None)
         if facility:
@@ -165,7 +167,7 @@ class GameState(BaseModel):
             self._facilities_by_type_cache = None
         return facility
 
-    def get_facility(self, facility_id: UUID) -> Optional[Facility]:
+    def get_facility(self, facility_id: UUID) -> Facility | None:
         """Get a facility by ID."""
         return self.facilities.get(facility_id)
 

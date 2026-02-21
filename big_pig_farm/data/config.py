@@ -181,6 +181,28 @@ ROOM_TIERS: list[RoomTier] = [
 
 
 @dataclass(frozen=True)
+class TierUpgrade:
+    """Farm tier upgrade definition."""
+    name: str
+    tier: int
+    cost: int
+    required_pigs_born: int
+    required_pigdex: int
+    required_contracts: int
+    max_rooms: int
+
+
+# Tier upgrade progression — hybrid milestones + cost
+TIER_UPGRADES: list[TierUpgrade] = [
+    TierUpgrade("Starter",       1,     0,  0,  0, 0, 1),
+    TierUpgrade("Apprentice",    2,   300,  3,  2, 0, 2),
+    TierUpgrade("Expert",        3,  1500, 10,  8, 2, 3),
+    TierUpgrade("Master",        4,  5000, 25, 18, 5, 5),
+    TierUpgrade("Grand Master",  5, 15000, 50, 30, 10, 6),
+]
+
+
+@dataclass(frozen=True)
 class BiomeConfig:
     """Configuration for biome effects."""
     PREFERRED_BIOME_HAPPINESS_BONUS: float = 1.5  # per game hour
