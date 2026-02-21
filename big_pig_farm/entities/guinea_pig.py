@@ -229,18 +229,28 @@ class GuineaPig(BaseModel):
     @property
     def can_breed(self) -> bool:
         """Check if this pig can currently breed."""
+        return self.breeding_block_reason is None
+
+    @property
+    def breeding_block_reason(self) -> str | None:
+        """Return why this pig can't breed, or None if it can."""
         if self.breeding_locked:
-            return False
-        if not self.is_adult:
-            return False
+            return "Breeding locked"
+        if self.is_baby:
+            days_left = SIMULATION.ADULT_AGE_DAYS - self.age_days
+            return f"Too young ({days_left:.1f}d until adult)"
+        if self.is_senior:
+            return "Too old (senior)"
         if self.needs.happiness < NEEDS.HIGH_THRESHOLD:
-            return False
+            return f"Unhappy ({int(self.needs.happiness)}/{NEEDS.HIGH_THRESHOLD})"
         if self.is_pregnant:
-            return False
+            days_left = max(0, BREEDING.GESTATION_DAYS - self.pregnancy_days)
+            return f"Pregnant ({days_left:.1f}d left)"
         if self.gender == Gender.FEMALE and self.last_birth_age is not None:
-            if self.age_days - self.last_birth_age < BREEDING.RECOVERY_DAYS:
-                return False
-        return True
+            recovery_left = BREEDING.RECOVERY_DAYS - (self.age_days - self.last_birth_age)
+            if recovery_left > 0:
+                return f"Recovering from birth ({recovery_left:.1f}d left)"
+        return None
 
     @property
     def display_state(self) -> str:

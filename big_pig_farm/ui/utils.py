@@ -19,23 +19,33 @@ def format_needs_bar(value: float, width: int = 10) -> str:
 def format_breeding_status(pig: GuineaPig, verbose: bool = False) -> str:
     """Format breeding status consistently.
 
-    Short form (verbose=False): "Sell@Adult", "LOCKED", "Pregnant", "Baby", "Ready", "Not ready"
-    Verbose form (verbose=True): adds details like pregnancy countdown.
+    Short form (verbose=False): "Sell@Adult", "LOCKED", "Pregnant", "Baby", "Ready", etc.
+    Verbose form (verbose=True): uses breeding_block_reason for full detail.
     """
     if pig.is_baby and pig.marked_for_sale:
         return "Sell@Adult" if not verbose else "Marked for auto-sell at adulthood"
-    if pig.breeding_locked:
-        return "LOCKED" if not verbose else "Breeding locked"
-    if pig.is_pregnant:
-        days_left = max(0, 3 - pig.pregnancy_days)
-        if verbose:
-            return f"Pregnant ({days_left:.1f}d left)"
-        return "Pregnant"
-    if not pig.is_adult:
-        return "Baby" if not verbose else "Too young (must be 3+ days)"
     if pig.can_breed:
         return "Ready"
-    return "Not ready" if not verbose else "Not ready (needs higher happiness)"
+
+    reason = pig.breeding_block_reason
+    if verbose:
+        return reason or "Not ready"
+
+    # Derive short labels from the reason
+    if reason is not None:
+        if reason.startswith("Breeding locked"):
+            return "LOCKED"
+        if reason.startswith("Too young"):
+            return "Baby"
+        if reason.startswith("Too old"):
+            return "Senior"
+        if reason.startswith("Unhappy"):
+            return "Not ready"
+        if reason.startswith("Pregnant"):
+            return "Pregnant"
+        if reason.startswith("Recovering"):
+            return "Recovering"
+    return "Not ready"
 
 
 def format_facility_bonuses(facility_type: FacilityType) -> str:
