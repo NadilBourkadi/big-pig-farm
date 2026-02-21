@@ -10,7 +10,7 @@ from textual.containers import Container, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Static, ListView, ListItem, Label, Footer, TabbedContent, TabPane
 from textual.reactive import reactive
 
-from big_pig_farm.data.config import BREEDING, NEEDS
+from big_pig_farm.data.config import NEEDS
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.genetics import predict_offspring_phenotypes, Genotype, carrier_summary, calculate_target_probability
 from big_pig_farm.entities.pigdex import phenotype_key
@@ -299,11 +299,12 @@ class BreedingScreen(Screen):
         info = self.query_one("#male-info", Static)
         if self.selected_male:
             pig = self.selected_male
-            can_breed = "Yes" if pig.can_breed else "No"
+            reason = pig.breeding_block_reason
+            can_breed_str = "Yes" if reason is None else f"No ({reason})"
             lines = [
                 f"Male: {pig.name}",
                 f"Color: {pig.phenotype.display_name} | Rarity: {pig.phenotype.rarity.value}",
-                f"Can breed: {can_breed}",
+                f"Can breed: {can_breed_str}",
             ]
             if self._has_genetics_lab():
                 lines.append(f"Carriers: {carrier_summary(pig.genotype)}")
@@ -316,15 +317,12 @@ class BreedingScreen(Screen):
         info = self.query_one("#female-info", Static)
         if self.selected_female:
             pig = self.selected_female
-            status = ""
-            if pig.is_pregnant:
-                days_left = 3 - pig.pregnancy_days
-                status = f" | Pregnant ({days_left:.1f} days left)"
-            can_breed = "Yes" if pig.can_breed else "No"
+            reason = pig.breeding_block_reason
+            can_breed_str = "Yes" if reason is None else f"No ({reason})"
             lines = [
                 f"Female: {pig.name}",
                 f"Color: {pig.phenotype.display_name} | Rarity: {pig.phenotype.rarity.value}",
-                f"Can breed: {can_breed}{status}",
+                f"Can breed: {can_breed_str}",
             ]
             if self._has_genetics_lab():
                 lines.append(f"Carriers: {carrier_summary(pig.genotype)}")
@@ -439,18 +437,12 @@ class BreedingScreen(Screen):
 
         # Build status warnings
         warnings = []
-        if not self.selected_male.can_breed:
-            if self.selected_male.breeding_locked:
-                warnings.append(f"{self.selected_male.name} is locked")
-            else:
-                warnings.append(f"{self.selected_male.name} can't breed yet")
-        if not self.selected_female.can_breed:
-            if self.selected_female.breeding_locked:
-                warnings.append(f"{self.selected_female.name} is locked")
-            elif self.selected_female.is_pregnant:
-                warnings.append(f"{self.selected_female.name} is pregnant")
-            else:
-                warnings.append(f"{self.selected_female.name} can't breed yet")
+        male_reason = self.selected_male.breeding_block_reason
+        if male_reason:
+            warnings.append(f"{self.selected_male.name}: {male_reason}")
+        female_reason = self.selected_female.breeding_block_reason
+        if female_reason:
+            warnings.append(f"{self.selected_female.name}: {female_reason}")
 
         lines = [
             f"Offspring from {self.selected_male.name} x {self.selected_female.name}:"
