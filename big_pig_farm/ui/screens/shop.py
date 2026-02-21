@@ -25,7 +25,7 @@ from big_pig_farm.entities.facilities import FACILITY_INFO
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.entities.bloodlines import BLOODLINES
 from big_pig_farm.game.state import GameState
-from big_pig_farm.simulation.breeding import register_pig_in_pigdex
+from big_pig_farm.simulation.birth import register_pig_in_pigdex
 from big_pig_farm.ui.screens.adoption import calculate_adoption_cost, generate_adoption_pig
 from big_pig_farm.ui.utils import format_facility_bonuses
 

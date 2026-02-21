@@ -117,6 +117,10 @@ class GameState(BaseModel):
     # Manual breeding
     breeding_pair: Optional[BreedingPair] = None
 
+    # Social affinity — tracks socialization history between pig pairs
+    # Key: "smaller_uuid:larger_uuid", Value: completed socialization count
+    social_affinity: dict[str, int] = Field(default_factory=dict)
+
     # Statistics
     total_pigs_born: int = 0
     total_pigs_sold: int = 0
@@ -132,6 +136,11 @@ class GameState(BaseModel):
         pig = self.guinea_pigs.pop(pig_id, None)
         if pig is not None:
             self._pigs_list_cache = None
+            # Prune affinity entries for the removed pig
+            pig_str = str(pig_id)
+            stale = [k for k in self.social_affinity if pig_str in k.split(":")]
+            for k in stale:
+                del self.social_affinity[k]
         return pig
 
     def get_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
@@ -217,6 +226,21 @@ class GameState(BaseModel):
     def clear_breeding_pair(self) -> None:
         """Clear the manual breeding pair."""
         self.breeding_pair = None
+
+    @staticmethod
+    def _affinity_key(id1: UUID, id2: UUID) -> str:
+        """Canonical key for a pair of pig IDs (smaller UUID first)."""
+        a, b = (str(id1), str(id2)) if str(id1) < str(id2) else (str(id2), str(id1))
+        return f"{a}:{b}"
+
+    def get_affinity(self, id1: UUID, id2: UUID) -> int:
+        """Get the socialization affinity between two pigs."""
+        return self.social_affinity.get(self._affinity_key(id1, id2), 0)
+
+    def increment_affinity(self, id1: UUID, id2: UUID) -> None:
+        """Increment the socialization affinity between two pigs."""
+        key = self._affinity_key(id1, id2)
+        self.social_affinity[key] = min(self.social_affinity.get(key, 0) + 1, 10)
 
     def get_pigs_list(self) -> list[GuineaPig]:
         """Get all guinea pigs as a list (cached, invalidated on add/remove)."""

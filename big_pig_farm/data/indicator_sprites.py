@@ -23,6 +23,7 @@ class IndicatorType(Enum):
     HUNGER = "hunger"
     THIRST = "thirst"
     ENERGY = "energy"
+    COURTING = "courting"
     PREGNANT = "pregnant"
 
 
@@ -37,6 +38,7 @@ FAR_INDICATORS: dict[IndicatorType, dict[str, tuple[str, str]]] = {
     IndicatorType.HUNGER:   {"bright": ("!", "#dd2222"), "dim": ("!", "#882222")},
     IndicatorType.THIRST:   {"bright": ("~", "#4488ff"), "dim": ("~", "#2255aa")},
     IndicatorType.ENERGY:   {"bright": ("z", "#bb66ff"), "dim": ("z", "#7733aa")},
+    IndicatorType.COURTING: {"bright": ("♥", "#ff4488"), "dim": ("♥", "#cc2266")},
     IndicatorType.PREGNANT: {"bright": ("♥", "#ff66aa"), "dim": ("♥", "#aa3366")},
 }
 
@@ -55,6 +57,8 @@ def get_pig_indicator_type(pig: GuineaPig) -> Optional[IndicatorType]:
         return IndicatorType.THIRST
     if pig.needs.energy < _LOW or pig.behavior_state == BehaviorState.SLEEPING:
         return IndicatorType.ENERGY
+    if pig.behavior_state == BehaviorState.COURTING:
+        return IndicatorType.COURTING
     if pig.is_pregnant:
         return IndicatorType.PREGNANT
     return None

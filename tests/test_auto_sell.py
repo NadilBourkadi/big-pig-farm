@@ -2,7 +2,7 @@
 
 from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
 from big_pig_farm.game.state import GameState
-from big_pig_farm.simulation.breeding import sell_marked_adults
+from big_pig_farm.simulation.culling import sell_marked_adults
 
 
 class TestAutoSell:

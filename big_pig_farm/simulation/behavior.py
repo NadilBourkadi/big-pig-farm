@@ -7,6 +7,7 @@ from big_pig_farm.data.config import BEHAVIOR, NEEDS, SIMULATION
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality, Position
 from big_pig_farm.simulation.collision import CollisionHandler
+from big_pig_farm.simulation.breeding import clear_courtship
 from big_pig_farm.simulation.facility_manager import FacilityManager
 from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
 
@@ -29,6 +30,8 @@ class BehaviorController:
         # Track grid generation to clear unreachable backoff when the
         # walkable grid changes (facility built/removed/refilled).
         self._last_grid_gen: int = 0
+        # Courtship pairs that completed the together phase — consumed by runner
+        self.completed_courtships: list[tuple[UUID, UUID]] = []
 
     def cleanup_dead_pig(self, pig_id: UUID) -> None:
         """Remove tracking state for a pig that is no longer alive."""
@@ -38,6 +41,10 @@ class BehaviorController:
         self._stuck_timers.pop(pig_id, None)
         self._unreachable_needs.pop(pig_id, None)
         self.facility_manager.cleanup_pig(pig_id)
+        # Clear partner's courtship if this pig was courting
+        for pig in self.game_state.get_pigs_list():
+            if pig.courting_partner_id == pig_id:
+                clear_courtship(pig)
 
     def reset_all_tracking(self) -> None:
         """Clear all internal tracking state for every pig.
@@ -184,6 +191,28 @@ class BehaviorController:
                 pig.target_description = None
             return
 
+        # If courting, validate partner and allow critical-need interruption
+        if pig.behavior_state == BehaviorState.COURTING:
+            partner = (
+                self.game_state.get_guinea_pig(pig.courting_partner_id)
+                if pig.courting_partner_id else None
+            )
+            if partner is None or partner.behavior_state != BehaviorState.COURTING:
+                pig.log_behavior("Courtship cancelled (partner unavailable)")
+                clear_courtship(pig)
+                return
+            # Allow interruption by critical hunger/thirst
+            if (pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                    or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD):
+                pig.log_behavior("Courtship interrupted (critical need)")
+                clear_courtship(partner)
+                clear_courtship(pig)
+                return
+            # If initiator has no path, seek the partner
+            if pig.courting_initiator and not pig.path:
+                self._seek_courting_partner(pig, partner)
+            return  # Stay in COURTING state
+
         # If eating/drinking and still hungry/thirsty, keep doing it.
         # Never cross-interrupt between eating and drinking — the pig commits
         # to its current action until satisfied (need >= 90). Without this,
@@ -223,6 +252,13 @@ class BehaviorController:
 
         # Just finished playing/socializing - wander away
         if pig.behavior_state in (BehaviorState.PLAYING, BehaviorState.SOCIALIZING):
+            # Track affinity when socialization completes (only from smaller UUID
+            # to avoid double-increment when both pigs finish on the same tick)
+            if pig.behavior_state == BehaviorState.SOCIALIZING:
+                for p in self.collision.spatial_grid.get_nearby(pig.position.x, pig.position.y):
+                    if p.id != pig.id and p.behavior_state == BehaviorState.SOCIALIZING and pig.id < p.id:
+                        if pig.position.distance_to(p.position) <= BEHAVIOR.MIN_PIG_DISTANCE + 2.0:
+                            self.game_state.increment_affinity(pig.id, p.id)
             pig.log_behavior(f"Finished {pig.behavior_state.value}, wandering away")
             pig.target_description = None
             self._start_wandering(pig)
@@ -493,6 +529,24 @@ class BehaviorController:
         pig.target_facility_id = None
         pig.target_description = None
         self._start_wandering(pig)
+
+    def _seek_courting_partner(self, pig: GuineaPig, partner: GuineaPig) -> None:
+        """Pathfind the initiator pig to its courting partner."""
+        target_pos = self._find_adjacent_cell(
+            (int(partner.position.x), int(partner.position.y)),
+            pig,
+        )
+        if target_pos:
+            self._set_path_to(pig, target_pos)
+            if pig.path:
+                pig.log_behavior(f"Walking to court {partner.name}")
+                pig.target_description = f"courting {partner.name}"
+                return
+
+        # Can't reach partner — cancel courtship
+        pig.log_behavior("Can't reach courting partner, cancelling")
+        clear_courtship(partner)
+        clear_courtship(pig)
 
     def _find_adjacent_cell(self, target: tuple[int, int], pig: GuineaPig) -> tuple[int, int] | None:
         """Find a walkable cell near the target but with enough spacing."""
@@ -843,6 +897,28 @@ class BehaviorController:
             self._stuck_positions.pop(pig.id, None)
             self._stuck_timers.pop(pig.id, None)
             self.facility_manager.check_arrived_at_facility(pig)
+
+        # Courting: advance together-phase timer when adjacent to partner
+        if pig.behavior_state == BehaviorState.COURTING and not pig.path:
+            partner = (
+                self.game_state.get_guinea_pig(pig.courting_partner_id)
+                if pig.courting_partner_id else None
+            )
+            if partner and partner.behavior_state == BehaviorState.COURTING:
+                dist = pig.position.distance_to(partner.position)
+                if dist <= BEHAVIOR.MIN_PIG_DISTANCE + 2.0:
+                    # Both arrived — advance timer (only on initiator to avoid double-counting)
+                    if pig.courting_initiator:
+                        prev_timer = pig.courting_timer
+                        pig.courting_timer += delta_seconds
+                        partner.courting_timer = pig.courting_timer
+                        # Happiness boost while courting
+                        pig.needs.happiness = min(100.0, pig.needs.happiness + BEHAVIOR.COURTSHIP_HAPPINESS_BOOST * (delta_seconds / 60.0))
+                        partner.needs.happiness = min(100.0, partner.needs.happiness + BEHAVIOR.COURTSHIP_HAPPINESS_BOOST * (delta_seconds / 60.0))
+                        # Queue completion only on the tick that crosses the threshold
+                        if (pig.courting_timer >= BEHAVIOR.COURTSHIP_TOGETHER_SECONDS
+                                and prev_timer < BEHAVIOR.COURTSHIP_TOGETHER_SECONDS):
+                            self.completed_courtships.append((pig.id, partner.id))
 
         # Consuming resources from facilities when eating/drinking
         if pig.behavior_state in (BehaviorState.EATING, BehaviorState.DRINKING):
