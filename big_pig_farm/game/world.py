@@ -57,6 +57,8 @@ class FarmGrid(BaseModel):
     _area_walkable_cache: dict[UUID, list[tuple[int, int]]] = {}
     # O(1) area lookup by UUID
     _area_lookup: dict[UUID, FarmArea] = {}
+    # Biome → areas cache (invalidated on area add/remove)
+    _biome_area_cache: dict[str, list[FarmArea]] = {}
 
     # Grid generation counter — incremented whenever the walkable grid changes
     # (facility placed/removed, area added, tunnels carved).  Used by the
@@ -79,11 +81,13 @@ class FarmGrid(BaseModel):
         self._walkable_cache = None
         self._area_walkable_cache = {}
         self._area_lookup = {a.id: a for a in self.areas}
+        self._biome_area_cache = {}
 
     def _invalidate_walkable_cache(self) -> None:
         """Invalidate the cached list of walkable positions."""
         self._walkable_cache = None
         self._area_walkable_cache = {}
+        self._biome_area_cache = {}
         self._grid_generation += 1
 
     def _compute_wall_flags(self) -> None:
@@ -435,6 +439,13 @@ class FarmGrid(BaseModel):
     def get_area_by_id(self, area_id: UUID) -> FarmArea | None:
         """Get an area by its UUID."""
         return self._area_lookup.get(area_id)
+
+    def find_areas_by_biome(self, biome_value: str) -> list[FarmArea]:
+        """Return all areas with the given biome string value (cached)."""
+        if not self._biome_area_cache:
+            for area in self.areas:
+                self._biome_area_cache.setdefault(area.biome.value, []).append(area)
+        return self._biome_area_cache.get(biome_value, [])
 
     def get_area_capacity(self, area_id: UUID) -> int:
         """Get the pig capacity for an area based on its position in the room list."""
