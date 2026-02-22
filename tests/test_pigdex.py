@@ -54,9 +54,9 @@ class TestPhenotypeKeys:
         assert len(keys) == TOTAL_PHENOTYPES
         assert len(set(keys)) == TOTAL_PHENOTYPES
 
-    def test_total_phenotypes_is_72(self):
-        """4 colors x 3 patterns x 3 intensities x 2 roan = 72."""
-        assert TOTAL_PHENOTYPES == 72
+    def test_total_phenotypes_is_144(self):
+        """8 colors x 3 patterns x 3 intensities x 2 roan = 144."""
+        assert TOTAL_PHENOTYPES == 144
 
 
 class TestKeyConversion:
@@ -86,7 +86,7 @@ class TestPigdex:
         """New pigdex should be empty."""
         pigdex = Pigdex()
         assert pigdex.discovered_count == 0
-        assert pigdex.total_possible == 72
+        assert pigdex.total_possible == 144
         assert pigdex.completion_percent == 0.0
 
     def test_register_new_phenotype(self):
@@ -115,8 +115,8 @@ class TestPigdex:
     def test_completion_percent(self):
         """Completion percentage should be accurate."""
         pigdex = Pigdex()
-        # Register 18 of 72 = 25%
-        keys = get_all_phenotype_keys()[:18]
+        # Register 36 of 144 = 25%
+        keys = get_all_phenotype_keys()[:36]
         for key in keys:
             pigdex.register_phenotype(key, 1)
         assert pigdex.completion_percent == pytest.approx(25.0)
@@ -126,13 +126,13 @@ class TestPigdex:
         pigdex = Pigdex()
         keys = get_all_phenotype_keys()
 
-        # Register 17 (just under 25%) - no milestone
-        for key in keys[:17]:
+        # Register 35 (just under 25%) - no milestone
+        for key in keys[:35]:
             pigdex.register_phenotype(key, 1)
         assert pigdex.check_milestones() == []
 
-        # Register 18th (exactly 25%) - milestone!
-        pigdex.register_phenotype(keys[17], 1)
+        # Register 36th (exactly 25%) - milestone!
+        pigdex.register_phenotype(keys[35], 1)
         milestones = pigdex.check_milestones()
         assert 25 in milestones
 

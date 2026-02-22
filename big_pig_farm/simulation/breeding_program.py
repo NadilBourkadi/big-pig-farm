@@ -113,18 +113,19 @@ def breeding_value(pig: GuineaPig, program: BreedingProgram, has_lab: bool) -> f
     score = 0
     g = pig.genotype
 
-    # Color axis: E and B loci contribute to target colors
+    # Color axis: E, B, and D loci contribute to target colors
     for color in program.target_colors:
-        if color == BaseColor.GOLDEN or color == BaseColor.CREAM:
-            # Want recessive e alleles
+        if color in (BaseColor.GOLDEN, BaseColor.CREAM, BaseColor.SAFFRON, BaseColor.SMOKE):
             score += g.e_locus.count("e")
-        if color == BaseColor.CHOCOLATE or color == BaseColor.CREAM:
-            # Want recessive b alleles
+        if color in (BaseColor.CHOCOLATE, BaseColor.CREAM, BaseColor.LILAC, BaseColor.SMOKE):
             score += g.b_locus.count("b")
-        if color == BaseColor.BLACK:
-            # Want dominant E and B
+        if color in (BaseColor.BLACK, BaseColor.BLUE):
             score += g.e_locus.count("E")
             score += g.b_locus.count("B")
+        if color in (BaseColor.BLUE, BaseColor.LILAC, BaseColor.SAFFRON, BaseColor.SMOKE):
+            score += g.d_locus.count("d")
+        if color in (BaseColor.BLACK, BaseColor.CHOCOLATE, BaseColor.GOLDEN, BaseColor.CREAM):
+            score += g.d_locus.count("D")
 
     # Pattern axis: S locus
     for pattern in program.target_patterns:
@@ -182,6 +183,10 @@ def _matches_color(
             return True
         if color == BaseColor.CREAM and "e" in genotype.e_locus and "b" in genotype.b_locus:
             return True
+        # Diluted colors: carrier of 'd' allele
+        if color in (BaseColor.BLUE, BaseColor.LILAC, BaseColor.SAFFRON, BaseColor.SMOKE):
+            if "d" in genotype.d_locus:
+                return True
         # BLACK has no carrier state (dominant on both loci)
 
     return False
@@ -312,13 +317,15 @@ def _contract_allele_hits(genotype: Genotype, contract) -> int:
     hits = 0
     if contract.required_color:
         color = contract.required_color
-        if color == BaseColor.GOLDEN or color == BaseColor.CREAM:
+        if color in (BaseColor.GOLDEN, BaseColor.CREAM, BaseColor.SAFFRON, BaseColor.SMOKE):
             hits += genotype.e_locus.count("e")
-        if color == BaseColor.CHOCOLATE or color == BaseColor.CREAM:
+        if color in (BaseColor.CHOCOLATE, BaseColor.CREAM, BaseColor.LILAC, BaseColor.SMOKE):
             hits += genotype.b_locus.count("b")
-        if color == BaseColor.BLACK:
+        if color in (BaseColor.BLACK, BaseColor.BLUE):
             hits += genotype.e_locus.count("E")
             hits += genotype.b_locus.count("B")
+        if color in (BaseColor.BLUE, BaseColor.LILAC, BaseColor.SAFFRON, BaseColor.SMOKE):
+            hits += genotype.d_locus.count("d")
     if contract.required_pattern:
         pattern = contract.required_pattern
         if pattern == Pattern.DALMATIAN:

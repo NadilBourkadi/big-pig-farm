@@ -58,6 +58,68 @@ class TestGenotype:
         assert genotype.is_homozygous_recessive(genotype.b_locus, "b") is False
 
 
+class TestDLocus:
+    """Tests for dilution locus and backwards compatibility."""
+
+    def test_d_locus_default(self):
+        """Old saves without d_locus should default to DD (no dilution)."""
+        genotype = Genotype(
+            e_locus=("E", "E"),
+            b_locus=("B", "B"),
+            s_locus=("S", "S"),
+            c_locus=("C", "C"),
+            r_locus=("r", "r"),
+        )
+        assert genotype.d_locus == ("D", "D")
+        phenotype = calculate_phenotype(genotype)
+        assert phenotype.base_color == BaseColor.BLACK  # Not diluted
+
+    def test_blue_phenotype(self):
+        """Black + dd → Blue."""
+        genotype = Genotype(
+            e_locus=("E", "E"), b_locus=("B", "B"),
+            s_locus=("S", "S"), c_locus=("C", "C"),
+            r_locus=("r", "r"), d_locus=("d", "d"),
+        )
+        assert calculate_phenotype(genotype).base_color == BaseColor.BLUE
+
+    def test_lilac_phenotype(self):
+        """Chocolate + dd → Lilac."""
+        genotype = Genotype(
+            e_locus=("E", "E"), b_locus=("b", "b"),
+            s_locus=("S", "S"), c_locus=("C", "C"),
+            r_locus=("r", "r"), d_locus=("d", "d"),
+        )
+        assert calculate_phenotype(genotype).base_color == BaseColor.LILAC
+
+    def test_saffron_phenotype(self):
+        """Golden + dd → Saffron."""
+        genotype = Genotype(
+            e_locus=("e", "e"), b_locus=("B", "B"),
+            s_locus=("S", "S"), c_locus=("C", "C"),
+            r_locus=("r", "r"), d_locus=("d", "d"),
+        )
+        assert calculate_phenotype(genotype).base_color == BaseColor.SAFFRON
+
+    def test_smoke_phenotype(self):
+        """Cream + dd → Smoke."""
+        genotype = Genotype(
+            e_locus=("e", "e"), b_locus=("b", "b"),
+            s_locus=("S", "S"), c_locus=("C", "C"),
+            r_locus=("r", "r"), d_locus=("d", "d"),
+        )
+        assert calculate_phenotype(genotype).base_color == BaseColor.SMOKE
+
+    def test_heterozygous_d_not_diluted(self):
+        """Dd should NOT produce diluted colors (D is dominant)."""
+        genotype = Genotype(
+            e_locus=("E", "E"), b_locus=("B", "B"),
+            s_locus=("S", "S"), c_locus=("C", "C"),
+            r_locus=("r", "r"), d_locus=("D", "d"),
+        )
+        assert calculate_phenotype(genotype).base_color == BaseColor.BLACK
+
+
 class TestPhenotype:
     """Tests for phenotype calculation."""
 
