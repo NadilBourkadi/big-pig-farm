@@ -4,21 +4,21 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-from big_pig_farm.entities.genetics import (
-    BaseColor,
-    Pattern,
-    ColorIntensity,
-    RoanType,
-    Genotype,
-    Phenotype,
-    LOCUS_DEFINITIONS,
-)
-from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.config import BREEDING
+from big_pig_farm.entities.genetics import (
+    LOCUS_DEFINITIONS,
+    BaseColor,
+    ColorIntensity,
+    Genotype,
+    Pattern,
+    Phenotype,
+    RoanType,
+)
 from big_pig_farm.entities.guinea_pig import GuineaPig
+from big_pig_farm.entities.pigdex import phenotype_key
 
 # Penalty applied to seniors in scoring — large enough that any breeding-age
-# pig outranks a senior (max allele score is 10, max uniqueness+het is 15).
+# pig outranks a senior (max allele score is 10, max diversity is 28).
 _SENIOR_PENALTY = 20.0
 
 
@@ -256,19 +256,34 @@ def _heterozygosity_count(genotype: Genotype) -> int:
 def diversity_value(pig: GuineaPig, all_pigs: list[GuineaPig]) -> float:
     """Score a pig's contribution to phenotype diversity.
 
-    Components:
-    - Uniqueness (0-10): 10 / count_of_pigs_sharing_phenotype
+    Components (0-28 max for breeding-age pigs):
+    - Phenotype uniqueness (0-10): 10 / count_of_pigs_sharing_phenotype
+    - Color uniqueness (0-10): 10 / count_of_pigs_sharing_base_color
+      (independent of phenotype — penalizes common colors even when spread
+      across many sub-phenotypes, and boosts rare colors even when
+      multiple pigs share the same sub-phenotype)
     - Heterozygosity bonus (0-5): heterozygous loci count
     - Age tiebreaker (0-3): younger pigs break ties
     - Senior penalty (-20): seniors can't breed, cull them first
+
+    The color uniqueness component ensures that dominant colors (e.g. blue
+    at 50% of the population) are penalized even when spread across many
+    sub-phenotypes (pattern/intensity variants). Without it, 42 blue pigs
+    across ~12 sub-phenotypes each score ~2.9 uniqueness instead of the
+    ~0.24 they'd score at the color level.
     """
     key = phenotype_key(pig.phenotype)
-    same_count = sum(1 for p in all_pigs if phenotype_key(p.phenotype) == key)
-    uniqueness = 10.0 / same_count
+    same_phenotype = sum(1 for p in all_pigs if phenotype_key(p.phenotype) == key)
+    phenotype_uniqueness = 10.0 / same_phenotype
+
+    pig_color = pig.phenotype.base_color
+    same_color = sum(1 for p in all_pigs if p.phenotype.base_color == pig_color)
+    color_uniqueness = 10.0 / same_color
+
     het_bonus = float(_heterozygosity_count(pig.genotype))
     remaining = max(0, BREEDING.MAX_AGE_DAYS - pig.age_days)
     age_bonus = (remaining / BREEDING.MAX_AGE_DAYS) * 3.0
-    score = uniqueness + het_bonus + age_bonus
+    score = phenotype_uniqueness + color_uniqueness + het_bonus + age_bonus
     if pig.is_senior:
         score -= _SENIOR_PENALTY
     return score
