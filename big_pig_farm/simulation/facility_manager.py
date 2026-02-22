@@ -1,13 +1,12 @@
 """Facility selection, interaction, and tracking for guinea pig AI."""
 
-from collections import OrderedDict
-from typing import Optional
-from uuid import UUID
 import random
+from collections import OrderedDict
+from uuid import UUID
 
-from big_pig_farm.data.config import BEHAVIOR, NEEDS, FACILITY_INTERACTION
-from big_pig_farm.entities.guinea_pig import GuineaPig, BehaviorState, Position
+from big_pig_farm.data.config import BEHAVIOR, FACILITY_INTERACTION, NEEDS
 from big_pig_farm.entities.facilities import Facility, FacilityType
+from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Position
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.needs import get_most_urgent_need
@@ -34,11 +33,26 @@ class FacilityManager:
         # Performance counters (reset each debug snapshot window)
         self.cache_hits: int = 0
         self.cache_misses: int = 0
+        # Per-area population/capacity caches (rebuilt each tick)
+        self._area_populations: dict[UUID, int] = {}
+        self._area_capacities: dict[UUID, int] = {}
 
     def reset_perf_counters(self) -> None:
         """Reset cache performance counters for the next snapshot window."""
         self.cache_hits = 0
         self.cache_misses = 0
+
+    def update_area_populations(self) -> None:
+        """Rebuild per-area population and capacity caches. O(pigs + areas)."""
+        farm = self.game_state.farm
+        self._area_populations.clear()
+        self._area_capacities.clear()
+        for pig in self.game_state.get_pigs_list():
+            area_id = pig.current_area_id
+            if area_id is not None:
+                self._area_populations[area_id] = self._area_populations.get(area_id, 0) + 1
+        for area in farm.areas:
+            self._area_capacities[area.id] = farm.get_area_capacity(area.id)
 
     def _cached_find_path(
         self, start: tuple[int, int], goal: tuple[int, int],
@@ -120,14 +134,20 @@ class FacilityManager:
         if not facilities:
             return []
 
-        # Try same-area facilities first to avoid cross-map pathfinding
+        # Try same-area facilities first to avoid cross-map pathfinding,
+        # but skip this optimization when the pig's room is overcrowded
+        # so it considers facilities in emptier rooms.
         pig_area = pig.current_area_id
         if pig_area:
-            same_area = [f for f in facilities if f.area_id == pig_area]
-            if same_area:
-                reachable = self._filter_reachable(pig, same_area)
-                if reachable:
-                    return reachable
+            area_pop = self._area_populations.get(pig_area, 0)
+            area_cap = self._area_capacities.get(pig_area, 0)
+            overcrowded = area_pop > area_cap
+            if not overcrowded:
+                same_area = [fac for fac in facilities if fac.area_id == pig_area]
+                if same_area:
+                    reachable = self._filter_reachable(pig, same_area)
+                    if reachable:
+                        return reachable
 
         # Fall back to all facilities (cross-area)
         return self._filter_reachable(pig, facilities)
@@ -163,7 +183,7 @@ class FacilityManager:
 
         return reachable
 
-    def find_open_interaction_point(self, pig: GuineaPig, facility: Facility) -> Optional[tuple[int, int]]:
+    def find_open_interaction_point(self, pig: GuineaPig, facility: Facility) -> tuple[int, int] | None:
         """Find an unoccupied interaction point around a facility."""
         farm = self.game_state.farm
         start = pig.position.grid_pos()
@@ -260,25 +280,60 @@ class FacilityManager:
 
         return count
 
+    def _get_facility_biome(self, facility: Facility) -> str | None:
+        """Get the biome type string for a facility's area. O(1) via area dict."""
+        if not facility.area_id:
+            return None
+        area = self.game_state.farm.get_area_by_id(facility.area_id)
+        if not area:
+            return None
+        return area.biome.value
+
     def rank_facilities_by_spread(self, pig: GuineaPig, facilities: list[Facility]) -> list[Facility]:
         """Rank facilities by preference, putting less crowded and closer ones first."""
         if not facilities:
             return []
 
         # Pre-compute crowd counts once instead of per-facility-per-call
-        crowd_counts = {f.id: self.count_pigs_near_or_heading_to(pig, f) for f in facilities}
+        crowd_counts = {
+            facility.id: self.count_pigs_near_or_heading_to(pig, facility)
+            for facility in facilities
+        }
 
-        def score(f: Facility) -> float:
-            fx, fy = f.interaction_point
-            dist = pig.position.distance_to(Position(x=float(fx), y=float(fy)))
-            return (dist * BEHAVIOR.FACILITY_DISTANCE_WEIGHT
-                    + crowd_counts[f.id] * BEHAVIOR.CROWDING_PENALTY
-                    + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE))
+        # Pre-compute facility biomes for affinity scoring
+        pig_biome = pig.preferred_biome
+        facility_biomes = {
+            facility.id: self._get_facility_biome(facility)
+            for facility in facilities
+        } if pig_biome else {}
+
+        # Pre-compute overcrowding penalties per area
+        area_overcrowding: dict[UUID, float] = {}
+        for facility in facilities:
+            area_id = facility.area_id
+            if area_id and area_id not in area_overcrowding:
+                population = self._area_populations.get(area_id, 0)
+                capacity = self._area_capacities.get(area_id, 0)
+                overage = max(0, population - capacity)
+                area_overcrowding[area_id] = overage * BEHAVIOR.ROOM_OVERCROWDING_PENALTY
+
+        def score(facility: Facility) -> float:
+            point_x, point_y = facility.interaction_point
+            dist = pig.position.distance_to(Position(x=float(point_x), y=float(point_y)))
+            result = (dist * BEHAVIOR.FACILITY_DISTANCE_WEIGHT
+                      + crowd_counts[facility.id] * BEHAVIOR.CROWDING_PENALTY
+                      + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE))
+            facility_biome = facility_biomes.get(facility.id)
+            if pig_biome and facility_biome is not None and facility_biome != pig_biome:
+                result += BEHAVIOR.BIOME_AFFINITY_PENALTY
+            if facility.area_id:
+                result += area_overcrowding.get(facility.area_id, 0.0)
+            return result
 
         ranked = sorted(facilities, key=score)
 
         # Chance to shuffle an uncrowded facility to the front
-        uncrowded = [f for f in ranked if crowd_counts[f.id] == 0]
+        uncrowded = [facility for facility in ranked if crowd_counts[facility.id] == 0]
         if uncrowded and random.random() < BEHAVIOR.UNCROWDED_CHANCE:
             pick = random.choice(uncrowded)
             ranked.remove(pick)
@@ -286,7 +341,7 @@ class FacilityManager:
 
         return ranked
 
-    def count_pigs_using_facility(self, facility: Facility, exclude_pig: Optional[GuineaPig] = None) -> int:
+    def count_pigs_using_facility(self, facility: Facility, exclude_pig: GuineaPig | None = None) -> int:
         """Count how many pigs are currently using a facility (within interaction range)."""
         grid = self.collision.spatial_grid
         using_states = (BehaviorState.SLEEPING, BehaviorState.EATING,
