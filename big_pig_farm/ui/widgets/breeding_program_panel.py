@@ -83,10 +83,12 @@ class BreedingProgramPanel(Static, can_focus=True):
     }
     """
 
-    def __init__(self, breeding_program: BreedingProgram, has_genetics_lab: bool = False, **kwargs):
+    def __init__(self, breeding_program: BreedingProgram, has_genetics_lab: bool = False,
+                 farm_capacity: int = 20, **kwargs):
         super().__init__(**kwargs)
         self.breeding_program = breeding_program
         self.has_genetics_lab = has_genetics_lab
+        self.farm_capacity = farm_capacity
         self._cursor_axis = 0  # Which axis row
         self._cursor_item = 0  # Which item within the axis
 
@@ -137,7 +139,7 @@ class BreedingProgramPanel(Static, can_focus=True):
         elif key == "right":
             if self._cursor_axis == 7:
                 # Stock limit: increase
-                self.breeding_program.stock_limit = min(20, self.breeding_program.stock_limit + 1)
+                self.breeding_program.stock_limit = min(self.farm_capacity, self.breeding_program.stock_limit + 1)
                 event.stop()
             else:
                 self._cursor_item = min(self._items_in_row(self._cursor_axis) - 1, self._cursor_item + 1)

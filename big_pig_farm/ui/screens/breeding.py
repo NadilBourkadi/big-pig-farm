@@ -153,6 +153,7 @@ class BreedingScreen(Screen):
                     yield BreedingProgramPanel(
                         self.state.breeding_program,
                         has_genetics_lab=self._has_genetics_lab(),
+                        farm_capacity=self.state.capacity,
                         id="program-panel",
                     )
 
