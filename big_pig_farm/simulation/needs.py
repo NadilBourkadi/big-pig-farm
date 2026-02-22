@@ -4,9 +4,8 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from big_pig_farm.data.config import BIOME, NEEDS
-from big_pig_farm.entities.biomes import BIOMES, BiomeType
-from big_pig_farm.entities.guinea_pig import GuineaPig, Personality, BehaviorState
 from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality
 
 if TYPE_CHECKING:
     from big_pig_farm.simulation.collision import SpatialGrid
@@ -67,10 +66,13 @@ def update_all_needs(
     pig.needs.thirst -= NEEDS.THIRST_DECAY * hours
     pig.needs.energy -= NEEDS.ENERGY_DECAY * hours * energy_modifier
 
-    # Contentment: happiness passively recovers when basic needs are met
+    # Contentment: happiness passively recovers when basic needs are met.
+    # Energy uses the critical threshold (20) instead of low (40) so that
+    # pigs with moderate energy still get passive happiness recovery —
+    # prevents the eat→sleep death spiral where happiness stays at 0.
     needs_satisfied = (pig.needs.hunger >= NEEDS.LOW_THRESHOLD
                        and pig.needs.thirst >= NEEDS.LOW_THRESHOLD
-                       and pig.needs.energy >= NEEDS.LOW_THRESHOLD)
+                       and pig.needs.energy >= NEEDS.CRITICAL_THRESHOLD)
     if needs_satisfied:
         pig.needs.happiness += NEEDS.HAPPINESS_CONTENTMENT_RECOVERY * hours
 

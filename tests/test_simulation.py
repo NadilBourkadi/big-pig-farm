@@ -1,16 +1,16 @@
 """Tests for the simulation systems."""
 
-import pytest
 from unittest.mock import patch
-from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG, BEHAVIOR
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, BehaviorState, Needs, Position
+
+from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG
+from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig, Position
+from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.needs import (
-    update_all_needs,
-    get_most_urgent_need,
     calculate_overall_wellbeing,
+    get_most_urgent_need,
+    update_all_needs,
 )
-from big_pig_farm.game.state import GameState
 
 
 class TestNeeds:
@@ -411,13 +411,146 @@ class TestContentmentModel:
         assert 48.0 < pig.needs.happiness < 52.0
 
 
+class TestContentmentEnergyThreshold:
+    """Tests for the relaxed contentment energy threshold."""
+
+    def test_contentment_fires_with_moderate_energy(self):
+        """Contentment should fire when energy is between CRITICAL and LOW."""
+        state = GameState()
+        pig = GuineaPig.create(
+            name="ModerateEnergy",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.happiness = 50.0
+        pig.needs.hunger = 80.0   # Above LOW
+        pig.needs.thirst = 80.0   # Above LOW
+        pig.needs.energy = 30.0   # Between CRITICAL (20) and LOW (40)
+        pig.needs.boredom = 0.0
+        state.add_guinea_pig(pig)
+
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # Contentment (+2.0/hr) should fire since energy >= CRITICAL (20)
+        assert pig.needs.happiness > 50.0
+
+    def test_contentment_blocked_when_energy_critical(self):
+        """Contentment should NOT fire when energy is below CRITICAL."""
+        state = GameState()
+        pig = GuineaPig.create(
+            name="LowEnergy",
+            gender=Gender.MALE,
+            position=Position(x=5.0, y=5.0),
+            age_days=5.0,
+        )
+        pig.needs.happiness = 50.0
+        pig.needs.hunger = 80.0
+        pig.needs.thirst = 80.0
+        pig.needs.energy = 10.0   # Below CRITICAL (20)
+        pig.needs.boredom = 0.0
+        state.add_guinea_pig(pig)
+
+        update_all_needs(pig, 60.0, state)  # 1 game hour
+
+        # No contentment, and energy-critical drain (-1.5/hr) should lower happiness
+        assert pig.needs.happiness < 50.0
+
+
+class TestHappinessPriority:
+    """Tests for the happiness-over-sleep priority override."""
+
+    def test_unhappy_pig_plays_instead_of_sleeping(self):
+        """Critically unhappy pig with non-critical energy should seek play, not sleep."""
+        from big_pig_farm.game.world import FarmGrid
+
+        farm = FarmGrid(width=62, height=37, tier=1)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="Unhappy",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.needs.energy = 25.0     # Below LOW (40), above CRITICAL (20)
+        pig.needs.happiness = 5.0   # Below CRITICAL (20)
+        pig.needs.hunger = 80.0
+        pig.needs.thirst = 80.0
+        pig.needs.boredom = 20.0    # Low — not triggering play on its own
+        pig.behavior_state = BehaviorState.IDLE
+        state.guinea_pigs[pig.id] = pig
+
+        controller._make_decision(pig)
+
+        # Override sends to _seek_play which ends in WANDERING, PLAYING, or SOCIALIZING
+        assert pig.behavior_state in (
+            BehaviorState.WANDERING, BehaviorState.PLAYING, BehaviorState.SOCIALIZING,
+        )
+
+    def test_unhappy_pig_sleeps_when_energy_critical(self):
+        """Critically unhappy pig with critical energy should still sleep."""
+        from big_pig_farm.game.world import FarmGrid
+
+        farm = FarmGrid(width=62, height=37, tier=1)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="Exhausted",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.needs.energy = 10.0     # Below CRITICAL (20) — truly exhausted
+        pig.needs.happiness = 5.0   # Below CRITICAL (20)
+        pig.needs.hunger = 80.0
+        pig.needs.thirst = 80.0
+        pig.needs.boredom = 20.0    # Low — not triggering play on its own
+        pig.behavior_state = BehaviorState.IDLE
+        state.guinea_pigs[pig.id] = pig
+
+        controller._make_decision(pig)
+
+        # Energy is critical — must sleep regardless of happiness
+        assert pig.behavior_state == BehaviorState.SLEEPING
+
+    def test_happy_pig_sleeps_normally(self):
+        """Pig with non-critical happiness should sleep when energy is low."""
+        from big_pig_farm.game.world import FarmGrid
+
+        farm = FarmGrid(width=62, height=37, tier=1)
+        state = GameState(farm=farm)
+        controller = BehaviorController(state)
+
+        pig = GuineaPig.create(
+            name="HappyTired",
+            gender=Gender.MALE,
+            position=Position(x=10.0, y=10.0),
+            age_days=5.0,
+        )
+        pig.needs.energy = 25.0     # Below LOW (40)
+        pig.needs.happiness = 50.0  # Above CRITICAL (20) — not desperate
+        pig.needs.hunger = 80.0
+        pig.needs.thirst = 80.0
+        pig.needs.boredom = 20.0
+        pig.behavior_state = BehaviorState.IDLE
+        state.guinea_pigs[pig.id] = pig
+
+        controller._make_decision(pig)
+
+        # Happiness is fine — normal sleep behavior
+        assert pig.behavior_state == BehaviorState.SLEEPING
+
+
 class TestWanderDensityScoring:
     """Tests for density-aware wander target selection."""
 
     def test_wander_prefers_less_crowded_area(self):
         """Pig should prefer wandering to positions with fewer nearby pigs."""
-        from big_pig_farm.game.world import FarmGrid
         from big_pig_farm.data.config import FARM_TIERS
+        from big_pig_farm.game.world import FarmGrid
 
         tier_info = FARM_TIERS[2]  # Tier 3 — large enough for meaningful spread
         farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
@@ -468,8 +601,8 @@ class TestWanderDensityScoring:
 
     def test_wander_works_with_no_other_pigs(self):
         """Wandering should work fine when pig is alone."""
-        from big_pig_farm.game.world import FarmGrid
         from big_pig_farm.data.config import FARM_TIERS
+        from big_pig_farm.game.world import FarmGrid
 
         tier_info = FARM_TIERS[2]
         farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
@@ -493,8 +626,8 @@ class TestIdleDrift:
 
     def test_idle_becomes_wander_when_pig_nearby(self):
         """When another pig is within IDLE_DRIFT_RADIUS, idle converts to wander."""
-        from big_pig_farm.game.world import FarmGrid
         from big_pig_farm.data.config import FARM_TIERS
+        from big_pig_farm.game.world import FarmGrid
 
         tier_info = FARM_TIERS[2]
         farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)
@@ -541,8 +674,8 @@ class TestIdleDrift:
 
     def test_idle_stays_idle_when_no_pig_nearby(self):
         """When no pig is within IDLE_DRIFT_RADIUS, pig stays idle."""
-        from big_pig_farm.game.world import FarmGrid
         from big_pig_farm.data.config import FARM_TIERS
+        from big_pig_farm.game.world import FarmGrid
 
         tier_info = FARM_TIERS[2]
         farm = FarmGrid(width=tier_info.width, height=tier_info.height, tier=3)

@@ -5,26 +5,26 @@ from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import _Bindings
+from textual.containers import Container, Horizontal
 from textual.css.query import NoMatches
 from textual.screen import Screen
-from textual.containers import Container, Horizontal
 from textual.widgets import Footer
 
-from big_pig_farm.data.config import GameSpeed, SPEED_DISPLAY
-from big_pig_farm.entities.facilities import FacilityType
-from big_pig_farm.game.state import GameState
+from big_pig_farm.data.config import SPEED_DISPLAY, GameSpeed
+from big_pig_farm.data.sprites import ZoomLevel
 from big_pig_farm.economy.currency import add_money, format_currency
 from big_pig_farm.economy.shop import get_facility_cost
-from big_pig_farm.ui.widgets.status_bar import StatusBar
-from big_pig_farm.data.sprites import ZoomLevel
-from big_pig_farm.ui.widgets.farm_view import FarmView
-from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
-from big_pig_farm.ui.screens.shop import ShopScreen
-from big_pig_farm.ui.screens.pig_list import PigListScreen
+from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.game.auto_arrange import apply_arrangement, clear_pig_navigation, compute_arrangement
+from big_pig_farm.game.state import GameState
+from big_pig_farm.ui.screens.almanac import JournalScreen
 from big_pig_farm.ui.screens.breeding import BreedingScreen
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
-from big_pig_farm.ui.screens.almanac import JournalScreen
-from big_pig_farm.game.auto_arrange import compute_arrangement, apply_arrangement, clear_pig_navigation
+from big_pig_farm.ui.screens.pig_list import PigListScreen
+from big_pig_farm.ui.screens.shop import ShopScreen
+from big_pig_farm.ui.widgets.farm_view import FarmView
+from big_pig_farm.ui.widgets.pig_sidebar import PigSidebar
+from big_pig_farm.ui.widgets.status_bar import StatusBar
 
 
 class MainGameScreen(Screen):
@@ -485,7 +485,7 @@ class MainGameScreen(Screen):
                 fac = self.state.get_facility(fid)
                 failed_names.append(f"{fac.name}[{fid.hex[:8]}]" if fac else f"[{fid.hex[:8]}]")
 
-            lines.append(f"  {pig.name} [{pig.id.hex[:8]}]")
+            lines.append(f"  {pig.name} [{pig.id.hex[:8]}]  age={pig.age_days:.1f}d ({pig.age_group.value})")
             lines.append(f"    state={pig.behavior_state.value}  pos=({pig.position.x:.1f},{pig.position.y:.1f})  grid={pig.position.grid_pos()}")
             lines.append(f"    target_desc={pig.target_description}")
             lines.append(f"    target_pos={f'({pig.target_position.x:.1f},{pig.target_position.y:.1f})' if pig.target_position else 'None'}")
@@ -497,8 +497,10 @@ class MainGameScreen(Screen):
             lines.append(f"    personality: {[p.value for p in pig.personality]}")
             current_area = self.state.farm.get_area_at(int(pig.position.x), int(pig.position.y))
             current_biome = current_area.biome.value if current_area else "none"
+            breed_reason = pig.breeding_block_reason or "ready"
             lines.append(f"    color={pig.phenotype.base_color.value}  preferred_biome={pig.preferred_biome}  current_biome={current_biome}")
-            lines.append(f"    behavior_log (last 10):")
+            lines.append(f"    gender={pig.gender.value}  breeding={breed_reason}  pregnant={pig.is_pregnant}")
+            lines.append("    behavior_log (last 10):")
             for entry in pig.behavior_log[-10:]:
                 lines.append(f"      - {entry}")
             lines.append("")

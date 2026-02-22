@@ -281,6 +281,16 @@ class BehaviorController:
         urgent_need = get_most_urgent_need(pig)
 
         if urgent_need == "energy" and pig.needs.energy < BEHAVIOR.ENERGY_SLEEP_THRESHOLD:
+            # If happiness is critically low but energy isn't critical,
+            # prioritize play to break the eat→sleep death spiral where
+            # pigs never play and happiness stays at 0 forever.
+            if (pig.needs.happiness < NEEDS.CRITICAL_THRESHOLD
+                    and pig.needs.energy >= NEEDS.CRITICAL_THRESHOLD):
+                pig.log_behavior(
+                    f"Unhappy ({pig.needs.happiness:.0f}%), prioritizing play over sleep"
+                )
+                self._seek_play(pig)
+                return
             pig.log_behavior(f"Tired (energy={pig.needs.energy:.0f}), seeking sleep")
             self._seek_sleep(pig)
             return
@@ -1070,7 +1080,10 @@ class BehaviorController:
                                 and prev_timer < BEHAVIOR.COURTSHIP_TOGETHER_SECONDS):
                             self.completed_courtships.append((pig.id, partner.id))
 
-        # Consuming resources from facilities when eating/drinking
-        if pig.behavior_state in (BehaviorState.EATING, BehaviorState.DRINKING):
+        # Consuming resources and applying bonuses from facilities
+        if pig.behavior_state in (
+            BehaviorState.EATING, BehaviorState.DRINKING,
+            BehaviorState.SLEEPING, BehaviorState.PLAYING,
+        ):
             if not pig.path:  # At the facility
                 self.facility_manager.consume_from_nearby_facility(pig, delta_seconds)
