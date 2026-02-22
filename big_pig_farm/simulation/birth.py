@@ -66,18 +66,33 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
     # Determine mutation rate based on Genetics Lab
     mutation_rate = GENETICS.MUTATION_RATE
     genetics_labs = game_state.get_facilities_by_type(FacilityType.GENETICS_LAB)
-    if genetics_labs:
+    has_lab = bool(genetics_labs)
+    if has_lab:
         mutation_rate = GENETICS.MUTATION_RATE_WITH_LAB
 
-    # Build per-locus rates with biome boosts
+    # Build per-locus rates (non-color boosts only) and directional targets
     mother_biome = game_state.farm.get_biome_at(int(mother.position.x), int(mother.position.y))
     locus_rates: dict[str, float] | None = None
+    directional_targets: dict[str, str] | None = None
+    directional_rate = 0.0
     if mother_biome:
         biome_info = BIOMES[mother_biome]
+        # Non-color loci (s/c/r) use random mutation boosts
         if biome_info.mutation_boost_loci:
             locus_rates = {}
-            for locus in ("e_locus", "b_locus", "s_locus", "c_locus", "r_locus", "d_locus"):
-                locus_rates[locus] = mutation_rate + biome_info.mutation_boost_loci.get(locus, 0.0)
+            for locus in ("s_locus", "c_locus", "r_locus"):
+                boost = biome_info.mutation_boost_loci.get(locus, 0.0)
+                if boost > 0:
+                    locus_rates[locus] = mutation_rate + boost
+            if not locus_rates:
+                locus_rates = None
+        # Color loci (e/b/d) use directional mutations
+        if biome_info.directional_alleles:
+            directional_targets = biome_info.directional_alleles
+            directional_rate = (
+                GENETICS.DIRECTIONAL_MUTATION_RATE_WITH_LAB if has_lab
+                else GENETICS.DIRECTIONAL_MUTATION_RATE
+            )
 
     # Determine birth area for babies
     birth_area = game_state.farm.get_area_at(int(mother.position.x), int(mother.position.y))
@@ -89,6 +104,8 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         breed_result = breed_genetics(
             mother.genotype, father_genotype,
             mutation_rate=mutation_rate, locus_rates=locus_rates,
+            directional_targets=directional_targets,
+            directional_rate=directional_rate,
         )
         baby_genotype = breed_result.genotype
         calculate_phenotype(baby_genotype)
@@ -119,13 +136,16 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
             father_name=father_name,
         )
 
-        # Set area/biome fields — babies inherit the mother's preferred biome
-        # (which may differ from birth location if she acclimated), so
-        # acclimated mothers anchor their offspring in the new biome.
+        # Set area/biome fields — preferred biome comes from the birth
+        # location (or mother's preference), NOT the baby's color.  This
+        # keeps all rooms populated as a baseline.  Color-driven wandering
+        # creates visible clustering on top, while directional mutations
+        # in each biome gradually produce matching-color offspring.
         baby.birth_area_id = birth_area_id
         baby.current_area_id = birth_area_id
-        baby.preferred_biome = mother.preferred_biome or (
-            birth_area.biome.value if birth_area else None
+        baby.preferred_biome = (
+            birth_area.biome.value if birth_area
+            else mother.preferred_biome
         )
 
         game_state.add_guinea_pig(baby)
