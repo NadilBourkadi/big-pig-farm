@@ -1,9 +1,9 @@
 """Genetic system for guinea pigs - alleles, inheritance, and phenotype calculation."""
 
+import random
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Self
-import random
 
 from pydantic import BaseModel
 
@@ -348,11 +348,36 @@ def mutate_locus(
     return tuple(new_locus), True
 
 
+def mutate_locus_directional(
+    locus: tuple[str, str],
+    target_allele: str,
+    rate: float,
+) -> tuple[tuple[str, str], bool]:
+    """Attempt a directional mutation — push one allele toward the target.
+
+    Picks a random allele position (0 or 1). If that allele is NOT the
+    target, replace it with the target (mutation occurs). If already the
+    target, the roll is wasted (no mutation).
+    """
+    if random.random() >= rate:
+        return locus, False
+
+    idx = random.randint(0, 1)
+    if locus[idx] == target_allele:
+        return locus, False  # Already matches — wasted roll
+
+    new_locus = list(locus)
+    new_locus[idx] = target_allele
+    return tuple(new_locus), True
+
+
 def breed(
     parent1: Genotype,
     parent2: Genotype,
     mutation_rate: float = 0.0,
     locus_rates: dict[str, float] | None = None,
+    directional_targets: dict[str, str] | None = None,
+    directional_rate: float = 0.0,
 ) -> BreedResult:
     """Create offspring genotype from two parents with optional mutations.
 
@@ -362,6 +387,9 @@ def breed(
         mutation_rate: Per-locus mutation rate (0.0 = no mutations, 0.02 = 2%)
         locus_rates: Optional per-locus overrides (e.g. from biome boosts).
             Keys are locus names like "e_locus", "b_locus", etc.
+        directional_targets: Optional per-locus target alleles for directional
+            mutations (e.g. {"e_locus": "e", "b_locus": "b"}).
+        directional_rate: Rate for directional mutations at targeted loci.
 
     Returns:
         BreedResult with genotype and list of mutation descriptions
@@ -390,16 +418,23 @@ def breed(
         "d_locus": (child_d, "D", "d"),
     }
 
-    if mutation_rate > 0 or locus_rates:
+    has_mutations = mutation_rate > 0 or locus_rates or directional_targets
+    if has_mutations:
         for locus_name, (locus_val, dom, rec) in loci.items():
-            rate = locus_rates.get(locus_name, mutation_rate) if locus_rates else mutation_rate
-            if rate <= 0:
-                continue
-            new_val, did_mutate = mutate_locus(locus_val, dom, rec, rate)
+            # Directional mutation for targeted loci
+            if directional_targets and locus_name in directional_targets and directional_rate > 0:
+                target_allele = directional_targets[locus_name]
+                new_val, did_mutate = mutate_locus_directional(locus_val, target_allele, directional_rate)
+            else:
+                # Random mutation at per-locus or base rate
+                rate = locus_rates.get(locus_name, mutation_rate) if locus_rates else mutation_rate
+                if rate <= 0:
+                    continue
+                new_val, did_mutate = mutate_locus(locus_val, dom, rec, rate)
             if did_mutate:
-                # If mutation creates RR, force to Rr instead
+                # If mutation creates RR (lethal), suppress it entirely
                 if locus_name == "r_locus" and new_val[0] == "R" and new_val[1] == "R":
-                    new_val = ("R", "r")
+                    continue
                 loci[locus_name] = (new_val, dom, rec)
                 display = LOCUS_DISPLAY_NAMES[locus_name]
                 mutations.append(f"{display} ({locus_val[0]}/{locus_val[1]} -> {new_val[0]}/{new_val[1]})")

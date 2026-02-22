@@ -210,6 +210,8 @@ class BiomeConfig:
     BIOME_CONTRACT_REWARD_BONUS: float = 0.25      # 25% reward bonus for biome contracts
     BIOME_CONTRACT_CHANCE: float = 0.3             # 30% chance for biome requirement on hard+
     ACCLIMATION_DAYS: float = 3.0                  # game-days to adopt a new biome
+    COLOR_MATCH_AFFINITY_REDUCTION: float = 0.6    # 60% reduction in penalty when pig color matches biome
+    COLOR_MATCH_ACCLIMATION_MULTIPLIER: float = 0.5  # Acclimate 2x faster to color-matching biome
 
 
 @dataclass(frozen=True)
@@ -252,6 +254,8 @@ class GeneticsConfig:
     """Configuration for genetics and mutations."""
     MUTATION_RATE: float = 0.02  # 2% per locus
     MUTATION_RATE_WITH_LAB: float = 0.03  # 3% per locus with Genetics Lab
+    DIRECTIONAL_MUTATION_RATE: float = 0.06  # 6% per color locus in matching biome
+    DIRECTIONAL_MUTATION_RATE_WITH_LAB: float = 0.09  # 9% with Genetics Lab
 
 
 @dataclass(frozen=True)
@@ -379,13 +383,18 @@ class BehaviorConfig:
     UNREACHABLE_CRITICAL_CYCLES: int = 2       # Reduced backoff when need is critical
 
     # Biome affinity — pigs prefer facilities in their birth biome
-    BIOME_AFFINITY_PENALTY: float = 15.0   # Score penalty for facilities outside preferred biome
+    BIOME_AFFINITY_PENALTY: float = 30.0   # Score penalty for facilities outside preferred biome
 
     # Room overcrowding — pigs in overcrowded rooms seek facilities elsewhere
     ROOM_OVERCROWDING_PENALTY: float = 10.0  # Score penalty per pig over room capacity
 
     # Idle drift
     IDLE_DRIFT_RADIUS: float = 5.0         # If another pig is within this radius, idle → wander
+
+    # Biome-aware wandering — probabilistic direction bias toward preferred biome
+    BIOME_WANDER_BIAS_OUTSIDE: float = 3.0  # Weight multiplier for homeward directions
+    BIOME_WANDER_BIAS_INSIDE: float = 1.5   # Weight multiplier for inward directions (reduce edge drift)
+    BIOME_HOMING_CHANCE: float = 0.7        # Chance to A* pathfind home when outside preferred biome
 
     # Courtship
     COURTSHIP_TOGETHER_SECONDS: float = 4.0   # Adjacent time before pregnancy
