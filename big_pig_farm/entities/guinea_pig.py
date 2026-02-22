@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from datetime import datetime
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -18,7 +18,7 @@ from big_pig_farm.entities.genetics import (
 )
 
 if TYPE_CHECKING:
-    from big_pig_farm.entities.biomes import BiomeType
+    pass
 
 from big_pig_farm.data.config import BREEDING, ECONOMY, NEEDS, SIMULATION
 
@@ -87,7 +87,7 @@ class Position(BaseModel):
     x: float = 0.0
     y: float = 0.0
 
-    def distance_to(self, other: "Position") -> float:
+    def distance_to(self, other: Position) -> float:
         """Calculate distance to another position."""
         return ((self.x - other.x) ** 2 + (self.y - other.y) ** 2) ** 0.5
 
@@ -119,41 +119,45 @@ class GuineaPig(BaseModel):
     position: Position = Field(default_factory=Position)
 
     # Movement
-    target_position: Optional[Position] = None
-    target_description: Optional[str] = None  # What the pig is trying to do (e.g., "eating at Food Bowl")
-    target_facility_id: Optional[UUID] = None  # ID of facility pig is heading to
+    target_position: Position | None = None
+    target_description: str | None = None  # What the pig is trying to do (e.g., "eating at Food Bowl")
+    target_facility_id: UUID | None = None  # ID of facility pig is heading to
     path: list[tuple[int, int]] = Field(default_factory=list)
 
     # Breeding
     is_pregnant: bool = False
     pregnancy_days: float = 0.0
-    partner_id: Optional[UUID] = None
-    partner_genotype: Optional[Genotype] = None  # Stored at conception for birth
-    partner_name: Optional[str] = None  # Stored at conception in case father is sold
-    last_birth_age: Optional[float] = None
+    partner_id: UUID | None = None
+    partner_genotype: Genotype | None = None  # Stored at conception for birth
+    partner_name: str | None = None  # Stored at conception in case father is sold
+    last_birth_age: float | None = None
 
     # Courtship (defaults restore cleanly on load — initiator will repath)
-    courting_partner_id: Optional[UUID] = None  # Pig we're courting with
+    courting_partner_id: UUID | None = None  # Pig we're courting with
     courting_initiator: bool = False             # True = this pig moves to partner
     courting_timer: float = 0.0                  # Seconds in together-phase
 
     # Family
-    mother_id: Optional[UUID] = None
-    father_id: Optional[UUID] = None
-    mother_name: Optional[str] = None
-    father_name: Optional[str] = None
+    mother_id: UUID | None = None
+    father_id: UUID | None = None
+    mother_name: str | None = None
+    father_name: str | None = None
 
     # Breeding control
     breeding_locked: bool = False  # If True, pig won't auto-breed
     marked_for_sale: bool = False  # If True, pig will be auto-sold when it reaches adulthood
 
     # Origin info (e.g., "Spotted Bloodline" for bloodline pigs)
-    origin_tag: Optional[str] = None
+    origin_tag: str | None = None
 
     # Area/biome tracking
-    current_area_id: Optional[UUID] = None    # Updated each tick from position
-    birth_area_id: Optional[UUID] = None      # Set at birth
-    preferred_biome: Optional[str] = None     # BiomeType value, assigned at birth
+    current_area_id: UUID | None = None    # Updated each tick from position
+    birth_area_id: UUID | None = None      # Set at birth
+    preferred_biome: str | None = None     # BiomeType value, assigned at birth
+
+    # Biome acclimation — pigs adopt a new biome after spending time there
+    acclimation_timer: float = 0.0               # game-hours in current non-preferred biome
+    acclimating_biome: str | None = None      # biome being acclimated to (or None)
 
     # Behavior log for debugging (recent decisions/actions)
     behavior_log: list[str] = Field(default_factory=list)
@@ -169,13 +173,13 @@ class GuineaPig(BaseModel):
         cls,
         name: str,
         gender: Gender,
-        genotype: Optional[Genotype] = None,
-        position: Optional[Position] = None,
+        genotype: Genotype | None = None,
+        position: Position | None = None,
         age_days: float = 0.0,
-        mother_id: Optional[UUID] = None,
-        father_id: Optional[UUID] = None,
-        mother_name: Optional[str] = None,
-        father_name: Optional[str] = None,
+        mother_id: UUID | None = None,
+        father_id: UUID | None = None,
+        mother_name: str | None = None,
+        father_name: str | None = None,
     ) -> GuineaPig:
         """Create a new guinea pig with calculated phenotype."""
         if genotype is None:

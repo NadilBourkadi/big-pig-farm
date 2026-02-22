@@ -76,7 +76,7 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
         biome_info = BIOMES[mother_biome]
         if biome_info.mutation_boost_loci:
             locus_rates = {}
-            for locus in ("e_locus", "b_locus", "s_locus", "c_locus", "r_locus"):
+            for locus in ("e_locus", "b_locus", "s_locus", "c_locus", "r_locus", "d_locus"):
                 locus_rates[locus] = mutation_rate + biome_info.mutation_boost_loci.get(locus, 0.0)
 
     # Determine birth area for babies
@@ -119,11 +119,14 @@ def _process_birth(mother: GuineaPig, game_state) -> bool:
             father_name=father_name,
         )
 
-        # Set area/biome fields
+        # Set area/biome fields — babies inherit the mother's preferred biome
+        # (which may differ from birth location if she acclimated), so
+        # acclimated mothers anchor their offspring in the new biome.
         baby.birth_area_id = birth_area_id
         baby.current_area_id = birth_area_id
-        if birth_area:
-            baby.preferred_biome = birth_area.biome.value
+        baby.preferred_biome = mother.preferred_biome or (
+            birth_area.biome.value if birth_area else None
+        )
 
         game_state.add_guinea_pig(baby)
         game_state.total_pigs_born += 1
