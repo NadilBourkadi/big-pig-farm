@@ -23,7 +23,7 @@ ALL_INTENSITIES = list(ColorIntensity)
 ALL_ROAN_TYPES = [RoanType.NONE, RoanType.ROAN]
 
 TOTAL_PHENOTYPES = len(ALL_BASE_COLORS) * len(ALL_PATTERNS) * len(ALL_INTENSITIES) * len(ALL_ROAN_TYPES)
-# 4 colors x 3 patterns x 3 intensities x 2 roan = 72
+# 8 colors x 3 patterns x 3 intensities x 2 roan = 144
 
 
 def phenotype_key(phenotype: Phenotype) -> str:

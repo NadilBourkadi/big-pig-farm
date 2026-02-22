@@ -9,6 +9,7 @@ from big_pig_farm.data.config import NEEDS
 from big_pig_farm.economy.contracts import generate_contracts
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.acclimation import update_acclimation
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs
 from big_pig_farm.simulation.breeding import check_breeding_opportunities, start_pregnancy_from_courtship
@@ -54,6 +55,9 @@ class SimulationRunner:
         # 1. Rebuild spatial grid first — used by needs, behaviors, and collision
         controller.collision.rebuild_spatial_grid()
 
+        # 1b. Rebuild per-area population/capacity caches for overcrowding logic
+        controller.facility_manager.update_area_populations()
+
         # 2. Update all guinea pig needs
         if profiling:
             phase_start = time.perf_counter()
@@ -93,28 +97,49 @@ class SimulationRunner:
         if profiling:
             collision_ms = (time.perf_counter() - phase_start) * 1000.0
 
-        # 5. Advance pregnancies
+        # 5. Biome acclimation — pigs adopt a new biome after extended stays
+        game_hours = game_minutes / 60.0
+        farm = state.farm
+        for pig in pigs:
+            if pig.preferred_biome is None:
+                continue
+            # O(1) via area dict instead of grid cell lookup
+            biome_str: str | None = None
+            if pig.current_area_id:
+                area = farm.get_area_by_id(pig.current_area_id)
+                if area:
+                    biome_str = area.biome.value
+            if biome_str == pig.preferred_biome and pig.acclimation_timer == 0.0 and pig.acclimating_biome is None:
+                continue  # Home biome with no active timer — nothing to do
+            old_biome = pig.preferred_biome
+            update_acclimation(pig, biome_str, game_hours)
+            if pig.preferred_biome != old_biome:
+                state.log_event(
+                    f"{pig.name} acclimated to the {pig.preferred_biome} biome!",
+                    event_type="acclimation",
+                )
+
+        # 6. Advance pregnancies
         if profiling:
             phase_start = time.perf_counter()
-        game_hours = game_minutes / 60.0
         advance_pregnancies(state, game_hours)
 
-        # 6. Age pigs and cleanup controller state for deaths
+        # 7. Age pigs and cleanup controller state for deaths
         deaths = age_all_pigs(state, game_hours)
         for dead_pig in deaths:
             controller.cleanup_dead_pig(dead_pig.id)
 
-        # 7. Cull surplus breeders
+        # 8. Cull surplus breeders
         cull_surplus_breeders(state)
 
-        # 8. Auto-sell marked pigs that reached adulthood
+        # 9. Auto-sell marked pigs that reached adulthood
         sold_pigs = sell_marked_adults(state)
         for pig_name, total, pig_id in sold_pigs:
             controller.cleanup_dead_pig(pig_id)
             if self.on_pig_sold:
                 self.on_pig_sold(pig_name, total, pig_id)
 
-        # 9. Check for breeding
+        # 10. Check for breeding
         events_before = len(state.events)
         check_breeding_opportunities(state)
 
@@ -124,7 +149,7 @@ class SimulationRunner:
                 if event.event_type == "birth" and "gave birth" in event.message:
                     self.on_birth(event.message)
 
-        # 10. Check contract refresh/expiry
+        # 11. Check contract refresh/expiry
         game_day = state.game_time.day
         board = state.contract_board
         board.check_expiry(game_day)
@@ -136,7 +161,7 @@ class SimulationRunner:
         if profiling:
             breeding_ms = (time.perf_counter() - phase_start) * 1000.0
 
-        # 11. Debug logging
+        # 12. Debug logging
         if profiling:
             tick_ms = (time.perf_counter() - tick_start) * 1000.0
             phase_times = {
@@ -145,9 +170,10 @@ class SimulationRunner:
                 "collision": collision_ms,
                 "breeding": breeding_ms,
             }
+            assert self.debug_logger is not None
             self.debug_logger.tick(state, controller, tick_ms, phase_times)
 
-        # 12. Auto-save every ~30 seconds (300 ticks)
+        # 13. Auto-save every ~30 seconds (300 ticks)
         self._save_counter += 1
         if self._save_counter >= 300:
             self._save_counter = 0

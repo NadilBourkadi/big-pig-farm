@@ -206,9 +206,10 @@ TIER_UPGRADES: list[TierUpgrade] = [
 class BiomeConfig:
     """Configuration for biome effects."""
     PREFERRED_BIOME_HAPPINESS_BONUS: float = 1.5  # per game hour
-    BIOME_MUTATION_BOOST: float = 0.01             # base per-locus extra rate
+    BIOME_MUTATION_BOOST: float = 0.08             # 8% per-locus boost in matching biome
     BIOME_CONTRACT_REWARD_BONUS: float = 0.25      # 25% reward bonus for biome contracts
     BIOME_CONTRACT_CHANCE: float = 0.3             # 30% chance for biome requirement on hard+
+    ACCLIMATION_DAYS: float = 3.0                  # game-days to adopt a new biome
 
 
 @dataclass(frozen=True)
@@ -376,6 +377,12 @@ class BehaviorConfig:
     # skip re-searching for that need type for N decision cycles (~10s)
     UNREACHABLE_BACKOFF_CYCLES: int = 5        # Normal backoff (~10s at 2s interval)
     UNREACHABLE_CRITICAL_CYCLES: int = 2       # Reduced backoff when need is critical
+
+    # Biome affinity — pigs prefer facilities in their birth biome
+    BIOME_AFFINITY_PENALTY: float = 15.0   # Score penalty for facilities outside preferred biome
+
+    # Room overcrowding — pigs in overcrowded rooms seek facilities elsewhere
+    ROOM_OVERCROWDING_PENALTY: float = 10.0  # Score penalty per pig over room capacity
 
     # Idle drift
     IDLE_DRIFT_RADIUS: float = 5.0         # If another pig is within this radius, idle → wander

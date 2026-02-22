@@ -346,19 +346,38 @@ def purchase_new_room(state: GameState, biome: BiomeType) -> bool:
     if result is None:
         return False
 
-    new_area, tunnels, offset_x, offset_y = result
+    new_area, tunnels, offset_x, offset_y, room_deltas = result
 
-    # Shift entities if grid expanded
-    if offset_x or offset_y:
-        for facility in state.get_facilities_list():
+    # Shift entities: grid shift applies uniformly, then per-room deltas
+    # (areas are already at NEW positions, so check against OLD bounds)
+    for facility in state.get_facilities_list():
+        if offset_x or offset_y:
             facility.position_x += offset_x
             facility.position_y += offset_y
+        if facility.area_id in room_deltas:
+            dx, dy = room_deltas[facility.area_id]
+            state.farm.remove_facility(facility)
+            facility.position_x += dx
+            facility.position_y += dy
+            state.farm.place_facility(facility)
 
-        for pig in state.get_pigs_list():
+    for pig in state.get_pigs_list():
+        if offset_x or offset_y:
             pig.position.x += offset_x
             pig.position.y += offset_y
-            pig.path = []
-            pig.target_position = None
+        pig_x, pig_y = int(pig.position.x), int(pig.position.y)
+        for area_id, (dx, dy) in room_deltas.items():
+            area = state.farm.get_area_by_id(area_id)
+            if not area:
+                continue
+            # Check against OLD area bounds (current bounds - delta)
+            if (area.x1 - dx <= pig_x <= area.x2 - dx
+                    and area.y1 - dy <= pig_y <= area.y2 - dy):
+                pig.position.x += dx
+                pig.position.y += dy
+                break
+        pig.path = []
+        pig.target_position = None
 
     state.spend_money(total_cost)
     biome_name = BIOMES[biome].display_name

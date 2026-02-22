@@ -73,6 +73,14 @@ class BreedingContract(BaseModel):
             hints.append("Golden bloodline (Tier 2)")
         elif self.required_color == BaseColor.CHOCOLATE:
             hints.append("Chocolate bloodline")
+        elif self.required_color == BaseColor.BLUE:
+            hints.append("Breed in Alpine biome (Dilution)")
+        elif self.required_color == BaseColor.LILAC:
+            hints.append("Chocolate bloodline + Alpine biome")
+        elif self.required_color == BaseColor.SAFFRON:
+            hints.append("Golden bloodline + Alpine biome")
+        elif self.required_color == BaseColor.SMOKE:
+            hints.append("Golden + Chocolate + Alpine biome")
 
         if self.required_pattern in (Pattern.DUTCH, Pattern.DALMATIAN):
             hints.append("Spotted bloodline")
@@ -101,6 +109,10 @@ class BreedingContract(BaseModel):
                 BaseColor.CHOCOLATE: "Chocolate",
                 BaseColor.GOLDEN: "Golden",
                 BaseColor.CREAM: "Cream",
+                BaseColor.BLUE: "Blue",
+                BaseColor.LILAC: "Lilac",
+                BaseColor.SAFFRON: "Saffron",
+                BaseColor.SMOKE: "Smoke",
             }
             parts.append(color_names.get(self.required_color, self.required_color.value))
         if self.required_biome:
@@ -183,6 +195,10 @@ COLOR_TIER_REQUIREMENTS: dict[BaseColor, int] = {
     BaseColor.CHOCOLATE: 1,
     BaseColor.GOLDEN: 1,
     BaseColor.CREAM: 2,
+    BaseColor.BLUE: 3,
+    BaseColor.LILAC: 3,
+    BaseColor.SAFFRON: 3,
+    BaseColor.SMOKE: 4,
 }
 
 PATTERN_TIER_REQUIREMENTS: dict[Pattern, int] = {

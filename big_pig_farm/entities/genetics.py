@@ -30,13 +30,21 @@ class Allele(str, Enum):
     R = "R"   # Roan (dominant, lethal when homozygous)
     r = "r"   # Normal (recessive)
 
+    # Dilution locus (D)
+    D = "D"   # Full color (dominant)
+    d = "d"   # Diluted (recessive)
+
 
 class BaseColor(str, Enum):
-    """Base coat colors derived from E and B loci."""
+    """Base coat colors derived from E, B, and D loci."""
     BLACK = "black"
     CHOCOLATE = "chocolate"
     GOLDEN = "golden"
     CREAM = "cream"
+    BLUE = "blue"         # Diluted black (dd)
+    LILAC = "lilac"       # Diluted chocolate (bb + dd)
+    SAFFRON = "saffron"   # Diluted golden (ee + dd)
+    SMOKE = "smoke"       # Diluted cream (ee + bb + dd)
 
 
 class Pattern(str, Enum):
@@ -76,6 +84,7 @@ class Genotype(BaseModel):
     s_locus: tuple[str, str]  # Spotting: (S/s, S/s)
     c_locus: tuple[str, str]  # Color intensity: (C/ch, C/ch)
     r_locus: tuple[str, str]  # Roan: (R/r, R/r)
+    d_locus: tuple[str, str] = ("D", "D")  # Dilution: (D/d, D/d)
 
     @classmethod
     def random(cls) -> Self:
@@ -86,6 +95,7 @@ class Genotype(BaseModel):
             s_locus=("S", "S"),  # Start with solid colors
             c_locus=("C", "C"),  # Full color
             r_locus=("r", "r"),  # No roan
+            d_locus=("D", "D"),  # Full color (not diluted)
         )
 
     @classmethod
@@ -97,6 +107,7 @@ class Genotype(BaseModel):
             s_locus=("S", "S"),
             c_locus=("C", "C"),
             r_locus=("r", "r"),
+            d_locus=("D", "D"),
         )
 
     def has_dominant(self, locus: tuple[str, str], dominant: str) -> bool:
@@ -144,6 +155,10 @@ class Phenotype(BaseModel):
             BaseColor.CHOCOLATE: "Chocolate",
             BaseColor.GOLDEN: "Golden",
             BaseColor.CREAM: "Cream",
+            BaseColor.BLUE: "Blue",
+            BaseColor.LILAC: "Lilac",
+            BaseColor.SAFFRON: "Saffron",
+            BaseColor.SMOKE: "Smoke",
         }
         parts.append(color_names[self.base_color])
 
@@ -157,28 +172,33 @@ class Phenotype(BaseModel):
             BaseColor.CHOCOLATE: "orange4",
             BaseColor.GOLDEN: "gold1",
             BaseColor.CREAM: "wheat1",
+            BaseColor.BLUE: "steel_blue1",
+            BaseColor.LILAC: "plum1",
+            BaseColor.SAFFRON: "dark_orange",
+            BaseColor.SMOKE: "grey62",
         }
         return color_map.get(self.base_color, "white")
 
 
-def _determine_base_color(has_E: bool, has_B: bool) -> BaseColor:
-    """Determine base coat color from E and B locus dominance."""
+def _determine_base_color(has_E: bool, has_B: bool, has_D: bool = True) -> BaseColor:
+    """Determine base coat color from E, B, and D locus dominance."""
     if has_E and has_B:
-        return BaseColor.BLACK
+        return BaseColor.BLACK if has_D else BaseColor.BLUE
     elif has_E and not has_B:
-        return BaseColor.CHOCOLATE
+        return BaseColor.CHOCOLATE if has_D else BaseColor.LILAC
     elif not has_E and has_B:
-        return BaseColor.GOLDEN
+        return BaseColor.GOLDEN if has_D else BaseColor.SAFFRON
     else:
-        return BaseColor.CREAM
+        return BaseColor.CREAM if has_D else BaseColor.SMOKE
 
 
 def calculate_phenotype(genotype: Genotype) -> Phenotype:
     """Calculate the observable phenotype from a genotype."""
-    # Base color from E and B loci
+    # Base color from E, B, and D loci
     has_E = genotype.has_dominant(genotype.e_locus, "E")
     has_B = genotype.has_dominant(genotype.b_locus, "B")
-    base_color = _determine_base_color(has_E, has_B)
+    has_D = genotype.has_dominant(genotype.d_locus, "D")
+    base_color = _determine_base_color(has_E, has_B, has_D)
 
     # Pattern from S locus
     if genotype.is_homozygous_dominant(genotype.s_locus, "S"):
@@ -243,6 +263,16 @@ def calculate_rarity(
     if base_color in (BaseColor.CHOCOLATE, BaseColor.CREAM):
         rare_count += 1
 
+    # Diluted colors require dd (homozygous recessive)
+    if base_color == BaseColor.BLUE:
+        rare_count += 2
+    elif base_color == BaseColor.LILAC:
+        rare_count += 3  # bb + dd
+    elif base_color == BaseColor.SAFFRON:
+        rare_count += 3  # ee + dd
+    elif base_color == BaseColor.SMOKE:
+        rare_count += 4  # ee + bb + dd
+
     # Determine tier
     if rare_count >= 6:
         return Rarity.LEGENDARY
@@ -269,6 +299,7 @@ LOCUS_DEFINITIONS: list[tuple[str, str, str]] = [
     ("s_locus", "S", "s"),
     ("c_locus", "C", "ch"),
     ("r_locus", "R", "r"),
+    ("d_locus", "D", "d"),
 ]
 
 # Human-readable names for mutation logging
@@ -278,6 +309,7 @@ LOCUS_DISPLAY_NAMES: dict[str, str] = {
     "s_locus": "Spotted",
     "c_locus": "Intensity",
     "r_locus": "Roan",
+    "d_locus": "Dilution",
 }
 
 
@@ -340,6 +372,7 @@ def breed(
     child_s = inherit_allele(parent1.s_locus, parent2.s_locus)
     child_c = inherit_allele(parent1.c_locus, parent2.c_locus)
     child_r = inherit_allele(parent1.r_locus, parent2.r_locus)
+    child_d = inherit_allele(parent1.d_locus, parent2.d_locus)
 
     # Check for lethal roan combination
     if child_r[0] == "R" and child_r[1] == "R":
@@ -354,6 +387,7 @@ def breed(
         "s_locus": (child_s, "S", "s"),
         "c_locus": (child_c, "C", "ch"),
         "r_locus": (child_r, "R", "r"),
+        "d_locus": (child_d, "D", "d"),
     }
 
     if mutation_rate > 0 or locus_rates:
@@ -376,6 +410,7 @@ def breed(
         s_locus=loci["s_locus"][0],
         c_locus=loci["c_locus"][0],
         r_locus=loci["r_locus"][0],
+        d_locus=loci["d_locus"][0],
     )
 
     return BreedResult(genotype=genotype, mutations=mutations)
@@ -395,6 +430,8 @@ def carrier_summary(genotype: Genotype) -> str:
         carriers.append("C/ch")
     if "R" in g.r_locus and "r" in g.r_locus:
         carriers.append("R/r")
+    if g.d_locus[0] != g.d_locus[1] and "d" in g.d_locus:
+        carriers.append("D/d")
     return ", ".join(carriers) if carriers else "None"
 
 
@@ -476,20 +513,23 @@ def _color_probability(
     p2: Genotype,
     targets: set[BaseColor],
 ) -> float:
-    """P(offspring color in targets). Color depends on E+B loci jointly."""
+    """P(offspring color in targets). Color depends on E+B+D loci jointly."""
     e_outcomes = _locus_outcome_probs(p1.e_locus, p2.e_locus)
     b_outcomes = _locus_outcome_probs(p1.b_locus, p2.b_locus)
+    d_outcomes = _locus_outcome_probs(p1.d_locus, p2.d_locus)
 
     prob = 0.0
     for e_alleles, e_prob in e_outcomes.items():
         has_E = _has_dominant_allele(e_alleles, "E")
         for b_alleles, b_prob in b_outcomes.items():
             has_B = _has_dominant_allele(b_alleles, "B")
+            for d_alleles, d_prob in d_outcomes.items():
+                has_D = _has_dominant_allele(d_alleles, "D")
 
-            color = _determine_base_color(has_E, has_B)
+                color = _determine_base_color(has_E, has_B, has_D)
 
-            if color in targets:
-                prob += e_prob * b_prob
+                if color in targets:
+                    prob += e_prob * b_prob * d_prob
 
     return prob
 

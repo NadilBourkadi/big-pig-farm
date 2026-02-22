@@ -47,7 +47,7 @@ class TestAddRoom:
         farm = FarmGrid.create_starter()
         result = farm.add_room(BiomeType.BURROW)
         assert result is not None
-        new_area, tunnels, offset_x, offset_y = result
+        new_area, tunnels, offset_x, offset_y, _ = result
         assert new_area.biome == BiomeType.BURROW
         assert len(farm.areas) == 2
         assert len(farm.tunnels) >= 2  # At least two tunnels per connection
@@ -74,7 +74,7 @@ class TestAddRoom:
         farm = FarmGrid.create_starter()
         result = farm.add_room(BiomeType.GARDEN)
         assert result is not None
-        _, tunnels, _, _ = result
+        _, tunnels, _, _, _ = result
         area_ids = {a.id for a in farm.areas}
         for tunnel in farm.tunnels:
             assert tunnel.area_a_id in area_ids
@@ -107,7 +107,7 @@ class TestAddRoom:
         farm = FarmGrid.create_starter()
         result = farm.add_room(BiomeType.BURROW)
         assert result is not None
-        new_area, _, _, _ = result
+        new_area, _, _, _, _ = result
 
         # Find walkable cells in each room
         start = farm.find_random_walkable_in_area(farm.areas[0].id)
@@ -144,6 +144,72 @@ class TestAddRoom:
         farm.add_room(BiomeType.BURROW)
         cap2 = farm.capacity
         assert cap2 > cap1
+
+
+class TestThirdRoomLayout:
+    def test_no_ghost_cells_after_third_room(self):
+        """Adding a 3rd room repositions existing areas; old cells must be cleared."""
+        farm = FarmGrid.create_starter()
+        farm.add_room(BiomeType.BURROW)
+
+        # Record room 0 position before 3rd room
+        old_x1 = farm.areas[0].x1
+
+        farm.add_room(BiomeType.GARDEN)
+
+        # Room 0 should have shifted right (wider room 2 is in same column)
+        new_x1 = farm.areas[0].x1
+        assert new_x1 > old_x1, "Room 0 should shift right to center in wider column"
+
+        # No cell outside any area or tunnel should have an area_id
+        for y in range(farm.height):
+            for x in range(farm.width):
+                cell = farm.cells[y][x]
+                if cell.area_id is not None and not cell.is_tunnel:
+                    # Cell claims to belong to an area — verify it's within bounds
+                    area = farm.get_area_by_id(cell.area_id)
+                    assert area is not None, f"Cell ({x},{y}) has orphaned area_id"
+                    assert area.contains(x, y), (
+                        f"Ghost cell ({x},{y}) has area_id for {area.name} "
+                        f"but is outside its bounds ({area.x1},{area.y1})-({area.x2},{area.y2})"
+                    )
+
+
+    def test_no_interior_walls_after_third_room(self):
+        """Old border cells must become interior floors when rooms reposition."""
+        from big_pig_farm.game.world import CellType
+        farm = FarmGrid.create_starter()
+        farm.add_room(BiomeType.BURROW)
+        farm.add_room(BiomeType.GARDEN)
+
+        for area in farm.areas:
+            for x in range(area.interior_x1, area.interior_x2 + 1):
+                for y in range(area.interior_y1, area.interior_y2 + 1):
+                    cell = farm.cells[y][x]
+                    if cell.is_tunnel:
+                        continue
+                    assert cell.cell_type != CellType.WALL, (
+                        f"Interior cell ({x},{y}) in {area.name} is still WALL"
+                    )
+
+    def test_repair_clears_stale_interior_walls(self):
+        """_repair_area_cells fixes WALL cells stuck in room interiors."""
+        from big_pig_farm.game.world import CellType
+        farm = FarmGrid.create_starter()
+        farm.add_room(BiomeType.BURROW)
+        farm.add_room(BiomeType.GARDEN)
+
+        # Manually corrupt: set an interior cell to WALL (simulates old bug)
+        area = farm.areas[0]
+        center_x, center_y = area.center_x, area.center_y
+        farm.cells[center_y][center_x].cell_type = CellType.WALL
+        farm.cells[center_y][center_x].is_walkable = False
+
+        farm._repair_area_cells()
+
+        cell = farm.cells[center_y][center_x]
+        assert cell.cell_type == CellType.FLOOR
+        assert cell.is_walkable
 
 
 class TestAdjacentPairs:

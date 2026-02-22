@@ -61,7 +61,7 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#3a2d1a",
         wall_tint_plank=["#7a5a30", "#8a6a40", "#6a4a20", "#8a6535", "#7a5525"],
         wall_tint_grain=["#4a3018", "#3c2510", "#5a4020"],
-        mutation_boost_loci={"b_locus": 0.01},
+        mutation_boost_loci={"b_locus": 0.08},
         happiness_bonus=0.5,
     ),
     BiomeType.GARDEN: BiomeInfo(
@@ -74,7 +74,7 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#1e4a1e",
         wall_tint_plank=["#6a8a40", "#7a9a50", "#5a7a30", "#6a8535", "#7a9045"],
         wall_tint_grain=["#3a5020", "#2c4018", "#4a6028"],
-        mutation_boost_loci={"e_locus": 0.01},
+        mutation_boost_loci={"e_locus": 0.08},
         happiness_bonus=0.8,
     ),
     BiomeType.TROPICAL: BiomeInfo(
@@ -87,7 +87,7 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#5a4020",
         wall_tint_plank=["#a08050", "#b09060", "#907040", "#a08555", "#b09565"],
         wall_tint_grain=["#6a5030", "#5c4020", "#7a6040"],
-        mutation_boost_loci={"s_locus": 0.01},
+        mutation_boost_loci={"s_locus": 0.08},
         happiness_bonus=0.8,
     ),
     BiomeType.ALPINE: BiomeInfo(
@@ -100,7 +100,7 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#3a4a5a",
         wall_tint_plank=["#708090", "#809098", "#607080", "#6a7a88", "#7a8a98"],
         wall_tint_grain=["#405060", "#354550", "#506070"],
-        mutation_boost_loci={"c_locus": 0.01},
+        mutation_boost_loci={"c_locus": 0.08, "d_locus": 0.08},
         happiness_bonus=1.0,
     ),
     BiomeType.CRYSTAL: BiomeInfo(
@@ -113,7 +113,7 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#2a2040",
         wall_tint_plank=["#6050a0", "#7060b0", "#504090", "#6555a5", "#7565b5"],
         wall_tint_grain=["#302850", "#252040", "#403860"],
-        mutation_boost_loci={"r_locus": 0.01},
+        mutation_boost_loci={"r_locus": 0.08, "d_locus": 0.05},
         happiness_bonus=1.0,
     ),
     BiomeType.WILDFLOWER: BiomeInfo(
@@ -126,7 +126,7 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#3a5a20",
         wall_tint_plank=["#8aaa50", "#9aba60", "#7a9a40", "#8aa555", "#9ab565"],
         wall_tint_grain=["#4a6028", "#3c5020", "#5a7030"],
-        mutation_boost_loci={"s_locus": 0.005, "e_locus": 0.005},
+        mutation_boost_loci={"s_locus": 0.05, "e_locus": 0.05},
         happiness_bonus=1.2,
     ),
     BiomeType.SANCTUARY: BiomeInfo(
@@ -140,11 +140,12 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         wall_tint_plank=["#b0a060", "#c0b070", "#a09050", "#b0a565", "#c0b575"],
         wall_tint_grain=["#6a5830", "#5c4a28", "#7a6838"],
         mutation_boost_loci={
-            "e_locus": 0.005,
-            "b_locus": 0.005,
-            "s_locus": 0.005,
-            "c_locus": 0.005,
-            "r_locus": 0.005,
+            "e_locus": 0.03,
+            "b_locus": 0.03,
+            "s_locus": 0.03,
+            "c_locus": 0.03,
+            "r_locus": 0.03,
+            "d_locus": 0.03,
         },
         happiness_bonus=1.5,
     ),

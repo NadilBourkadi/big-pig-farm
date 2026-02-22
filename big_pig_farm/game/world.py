@@ -436,6 +436,14 @@ class FarmGrid(BaseModel):
         """Get an area by its UUID."""
         return self._area_lookup.get(area_id)
 
+    def get_area_capacity(self, area_id: UUID) -> int:
+        """Get the pig capacity for an area based on its position in the room list."""
+        for i, area in enumerate(self.areas):
+            if area.id == area_id:
+                tier_idx = min(i, len(ROOM_TIERS) - 1)
+                return ROOM_TIERS[tier_idx].capacity_add
+        return 0
+
     def get_biome_at(self, x: int, y: int) -> BiomeType | None:
         """Get the biome type at a position."""
         area = self.get_area_at(x, y)
@@ -447,9 +455,25 @@ class FarmGrid(BaseModel):
         """Re-stamp area_id on border cells and mark void cells non-walkable.
 
         Needed for saves created before add_area() was used consistently.
-        Also marks cells outside any area/tunnel as non-walkable so pigs
-        can't wander into the void between areas.
+        Also cleans up ghost cells — cells whose area_id points to an area
+        that no longer contains that position (from room repositioning).
         """
+        # First pass: clear orphaned area_id from cells outside their area
+        for y in range(self.height):
+            for x in range(self.width):
+                cell = self.cells[y][x]
+                if cell.area_id is None or cell.is_tunnel:
+                    continue
+                area = self.get_area_by_id(cell.area_id)
+                if area is None or not area.contains(x, y):
+                    cell.area_id = None
+                    cell.facility_id = None
+                    cell.cell_type = CellType.FLOOR
+                    cell.is_walkable = False
+                    cell.is_corner = False
+                    cell.is_horizontal_wall = False
+
+        # Second pass: stamp cells within each area's bounds
         for area in self.areas:
             for x in range(area.x1, area.x2 + 1):
                 for y in range(area.y1, area.y2 + 1):
@@ -464,9 +488,12 @@ class FarmGrid(BaseModel):
                         cell.cell_type = CellType.WALL
                         cell.is_walkable = False
                         cell.area_id = area.id
-                    elif cell.area_id is None:
+                    else:
+                        # Unconditionally reset interior cells — fixes stale
+                        # WALL cells left behind when rooms reposition.
                         cell.cell_type = CellType.FLOOR
-                        cell.is_walkable = True
+                        if cell.facility_id is None:
+                            cell.is_walkable = True
                         cell.area_id = area.id
 
         # Mark void cells (outside all areas and tunnels) as non-walkable
@@ -793,12 +820,13 @@ class FarmGrid(BaseModel):
         self,
         biome: BiomeType,
         room_name: str | None = None,
-    ) -> tuple[FarmArea, list[TunnelConnection], int, int] | None:
+    ) -> tuple[FarmArea, list[TunnelConnection], int, int, dict[UUID, tuple[int, int]]] | None:
         """Add a new room with the given biome using 2-column grid layout.
 
-        Returns (new_area, tunnels, offset_x, offset_y) or None if at max rooms.
-        offset_x/offset_y are the grid expansion offsets that entities need
-        to be shifted by.
+        Returns (new_area, tunnels, offset_x, offset_y, room_deltas) or None
+        if at max rooms.  offset_x/offset_y are the grid expansion offsets.
+        room_deltas maps area_id → (dx, dy) for each existing area that
+        repositioned (callers must use this to relocate entities per-room).
         """
         # Ensure there's at least a starter area to attach to
         if not self.areas:
@@ -873,6 +901,7 @@ class FarmGrid(BaseModel):
         # Only shift existing content if offset changed
         entity_offset_x = 0
         entity_offset_y = 0
+        room_deltas: dict[UUID, tuple[int, int]] = {}
         if offset_x != 0 or offset_y != 0:
             # We need to rebuild the entire grid with proper positions
             # Clear tunnel cells first
@@ -889,6 +918,25 @@ class FarmGrid(BaseModel):
                 self.expand_grid(need_w, need_h, shift_x, shift_y)
                 entity_offset_x = shift_x
                 entity_offset_y = shift_y
+
+            # Clear all area ownership before repositioning so orphaned
+            # cells at old positions don't render as ghost walls/floors
+            for row in self.cells:
+                for cell in row:
+                    if cell.area_id is not None and not cell.is_tunnel:
+                        cell.area_id = None
+                        cell.cell_type = CellType.FLOOR
+                        cell.is_walkable = False
+                        cell.is_corner = False
+                        cell.is_horizontal_wall = False
+
+            # Compute per-room deltas BEFORE repositioning (after grid shift)
+            for i, area in enumerate(self.areas):
+                target_x1, target_y1 = origins[i]
+                dx = target_x1 - area.x1
+                dy = target_y1 - area.y1
+                if dx != 0 or dy != 0:
+                    room_deltas[area.id] = (dx, dy)
 
             # Reposition existing areas to their new grid positions
             for i, area in enumerate(self.areas):
@@ -916,7 +964,7 @@ class FarmGrid(BaseModel):
         # Rebuild all tunnel connections based on adjacency
         self._rebuild_tunnels()
 
-        return new_area, list(self.tunnels), entity_offset_x, entity_offset_y
+        return new_area, list(self.tunnels), entity_offset_x, entity_offset_y, room_deltas
 
 
 def relayout_areas(state: "GameState") -> bool:

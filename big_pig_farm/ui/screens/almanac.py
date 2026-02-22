@@ -26,6 +26,10 @@ _COLOR_HEADERS = {
     BaseColor.CHOCOLATE: "Chocolate",
     BaseColor.GOLDEN: "Golden",
     BaseColor.CREAM: "Cream",
+    BaseColor.BLUE: "Blue",
+    BaseColor.LILAC: "Lilac",
+    BaseColor.SAFFRON: "Saffron",
+    BaseColor.SMOKE: "Smoke",
 }
 _INTENSITY_LABELS = {
     ColorIntensity.FULL: "Full",
