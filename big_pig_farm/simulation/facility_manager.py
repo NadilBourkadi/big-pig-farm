@@ -4,7 +4,8 @@ import random
 from collections import OrderedDict
 from uuid import UUID
 
-from big_pig_farm.data.config import BEHAVIOR, FACILITY_INTERACTION, NEEDS
+from big_pig_farm.data.config import BEHAVIOR, BIOME, FACILITY_INTERACTION, NEEDS
+from big_pig_farm.entities.biomes import BIOME_SIGNATURE_COLORS, COLOR_TO_BIOME
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Position
 from big_pig_farm.game.state import GameState
@@ -13,6 +14,12 @@ from big_pig_farm.simulation.needs import get_most_urgent_need
 
 # Maximum number of entries in the cross-tick path cache.
 _PATH_CACHE_MAX_SIZE = 512
+
+
+def _pig_color_matches_biome(pig: GuineaPig, biome_str: str) -> bool:
+    """Check if a pig's base color matches a biome's signature color."""
+    signature = BIOME_SIGNATURE_COLORS.get(biome_str)
+    return signature is not None and pig.phenotype.base_color == signature
 
 
 class FacilityManager:
@@ -300,8 +307,10 @@ class FacilityManager:
             for facility in facilities
         }
 
-        # Pre-compute facility biomes for affinity scoring
-        pig_biome = pig.preferred_biome
+        # Pre-compute facility biomes for affinity scoring.
+        # Color-derived biome takes priority over preferred_biome so that
+        # facility selection agrees with the wandering direction bias.
+        pig_biome = COLOR_TO_BIOME.get(pig.phenotype.base_color) or pig.preferred_biome
         facility_biomes = {
             facility.id: self._get_facility_biome(facility)
             for facility in facilities
@@ -325,7 +334,11 @@ class FacilityManager:
                       + random.uniform(0, BEHAVIOR.SCORING_RANDOM_VARIANCE))
             facility_biome = facility_biomes.get(facility.id)
             if pig_biome and facility_biome is not None and facility_biome != pig_biome:
-                result += BEHAVIOR.BIOME_AFFINITY_PENALTY
+                penalty = BEHAVIOR.BIOME_AFFINITY_PENALTY
+                # Reduce penalty if pig's color matches the facility biome's signature
+                if _pig_color_matches_biome(pig, facility_biome):
+                    penalty *= (1.0 - BIOME.COLOR_MATCH_AFFINITY_REDUCTION)
+                result += penalty
             if facility.area_id:
                 result += area_overcrowding.get(facility.area_id, 0.0)
             return result

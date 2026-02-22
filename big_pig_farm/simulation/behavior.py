@@ -4,10 +4,12 @@ import random
 from uuid import UUID
 
 from big_pig_farm.data.config import BEHAVIOR, NEEDS, SIMULATION
+from big_pig_farm.entities.areas import FarmArea
+from big_pig_farm.entities.biomes import COLOR_TO_BIOME
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality, Position
-from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.breeding import clear_courtship
+from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.facility_manager import FacilityManager
 from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facility_for_need
 
@@ -584,6 +586,82 @@ class BehaviorController:
 
         return target  # Fallback to original target
 
+    def _get_biome_wander_target(self, pig: GuineaPig) -> tuple[FarmArea | None, bool]:
+        """Find the target area for biome-biased wandering.
+
+        Color is the primary driver: a pig whose base color matches a biome's
+        signature color will target that biome's area.  Falls back to
+        preferred_biome for pigs whose color has no matching biome on the farm.
+
+        Returns (target_area, is_color_match).  A* homing only fires for
+        color matches; preferred_biome fallback only gets the soft direction
+        bias, so rooms stay populated even when their signature color is rare.
+        """
+        farm = self.game_state.farm
+        pig_x, pig_y = pig.position.x, pig.position.y
+
+        def _closest(areas: list[FarmArea]) -> FarmArea:
+            return min(areas, key=lambda a: abs(a.center_x - pig_x) + abs(a.center_y - pig_y))
+
+        # Primary: match pig's base color to a biome's signature color
+        color_biome = COLOR_TO_BIOME.get(pig.phenotype.base_color)
+        if color_biome:
+            areas = farm.find_areas_by_biome(color_biome)
+            if areas:
+                return _closest(areas), True
+
+        # Fallback: use preferred_biome (inherited from birth area)
+        if pig.preferred_biome:
+            areas = farm.find_areas_by_biome(pig.preferred_biome)
+            if areas:
+                return _closest(areas), False
+
+        return None, False
+
+    def _bias_wander_directions(
+        self,
+        pig: GuineaPig,
+        target_area: FarmArea,
+    ) -> list[tuple[int, int]]:
+        """Return cardinal directions weighted toward the target area.
+
+        If the pig is outside the target area, directions aligned with the
+        vector toward the area center get a higher weight.  If inside,
+        directions pointing away from the nearest edge get a higher weight
+        to reduce tunnel drift-out.
+        """
+        pig_gx, pig_gy = pig.position.grid_pos()
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        inside = target_area.contains_interior(pig_gx, pig_gy)
+
+        if inside:
+            # Boost directions that point away from the nearest edge (inward),
+            # so pigs near a tunnel opening are less likely to drift out.
+            edge_dists = {
+                (1, 0): target_area.interior_x2 - pig_gx,
+                (-1, 0): pig_gx - target_area.interior_x1,
+                (0, 1): target_area.interior_y2 - pig_gy,
+                (0, -1): pig_gy - target_area.interior_y1,
+            }
+            weights: list[float] = [
+                BEHAVIOR.BIOME_WANDER_BIAS_INSIDE if edge_dists[d] > 3 else 1.0
+                for d in directions
+            ]
+        else:
+            # Outside: weight toward the area center
+            vec_x = target_area.center_x - pig_gx
+            vec_y = target_area.center_y - pig_gy
+            weights = []
+            for dx, dy in directions:
+                # Dot product with normalized direction gives alignment
+                alignment = dx * vec_x + dy * vec_y
+                if alignment > 0:
+                    weights.append(BEHAVIOR.BIOME_WANDER_BIAS_OUTSIDE)
+                else:
+                    weights.append(1.0)
+
+        return random.choices(directions, weights=weights, k=len(directions))
+
     def _start_wandering(self, pig: GuineaPig) -> None:
         """Start random wandering using simple straight-line movement.
 
@@ -595,28 +673,88 @@ class BehaviorController:
         farm = self.game_state.farm
         pig_gx, pig_gy = pig.position.grid_pos()
 
-        # Cardinal directions to try
+        # Cardinal directions — biased toward preferred biome if applicable
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        random.shuffle(directions)
+        target_area, is_color_match = self._get_biome_wander_target(pig)
+        if target_area:
+            inside = target_area.contains_interior(pig_gx, pig_gy)
 
-        best_path: list[tuple[int, int]] = []
+            # A* homing only fires for color-matched biomes — it's the only
+            # way to cross rooms (tunnels block straight-line wander).  Pigs
+            # whose color biome isn't on the farm get only the soft direction
+            # bias toward their preferred_biome, keeping non-matching rooms
+            # populated while directional mutations build up matching colors.
+            if is_color_match and not inside and random.random() < BEHAVIOR.BIOME_HOMING_CHANCE:
+                home_target = farm.find_random_walkable_in_area(target_area.id)
+                if home_target:
+                    self._set_path_to(pig, home_target)
+                    if pig.path:
+                        pig.log_behavior(f"Heading home to {target_area.name}")
+                        pig.target_description = f"heading to {target_area.name}"
+                        pig.behavior_state = BehaviorState.WANDERING
+                        return
+                    else:
+                        pig.log_behavior(f"Homing path failed to {target_area.name}")
+                else:
+                    pig.log_behavior(f"No walkable tile in {target_area.name}")
 
-        for dx, dy in directions:
+            # Inside or homing skipped: biased straight-line wander.
+            # Pick one direction from the weighted distribution and commit
+            # to it — trying all four and keeping the longest lets tunnel
+            # directions win over homeward ones near room edges.
+            biased = self._bias_wander_directions(pig, target_area)
+            chosen_dx, chosen_dy = biased[0]
             steps = random.randint(
                 BEHAVIOR.SIMPLE_WANDER_MIN_STEPS,
                 BEHAVIOR.SIMPLE_WANDER_MAX_STEPS,
             )
-            path: list[tuple[int, int]] = []
+            best_path: list[tuple[int, int]] = []
             cx, cy = pig_gx, pig_gy
             for _ in range(steps):
-                nx, ny = cx + dx, cy + dy
+                nx, ny = cx + chosen_dx, cy + chosen_dy
                 if farm.is_walkable(nx, ny):
-                    path.append((nx, ny))
+                    best_path.append((nx, ny))
                     cx, cy = nx, ny
                 else:
                     break
-            if len(path) > len(best_path):
-                best_path = path
+            # If biased direction is blocked, fall back to longest of all 4
+            if not best_path:
+                random.shuffle(directions)
+                for dx, dy in directions:
+                    steps = random.randint(
+                        BEHAVIOR.SIMPLE_WANDER_MIN_STEPS,
+                        BEHAVIOR.SIMPLE_WANDER_MAX_STEPS,
+                    )
+                    path: list[tuple[int, int]] = []
+                    cx, cy = pig_gx, pig_gy
+                    for _ in range(steps):
+                        nx, ny = cx + dx, cy + dy
+                        if farm.is_walkable(nx, ny):
+                            path.append((nx, ny))
+                            cx, cy = nx, ny
+                        else:
+                            break
+                    if len(path) > len(best_path):
+                        best_path = path
+        else:
+            random.shuffle(directions)
+            best_path = []
+            for dx, dy in directions:
+                steps = random.randint(
+                    BEHAVIOR.SIMPLE_WANDER_MIN_STEPS,
+                    BEHAVIOR.SIMPLE_WANDER_MAX_STEPS,
+                )
+                path = []
+                cx, cy = pig_gx, pig_gy
+                for _ in range(steps):
+                    nx, ny = cx + dx, cy + dy
+                    if farm.is_walkable(nx, ny):
+                        path.append((nx, ny))
+                        cx, cy = nx, ny
+                    else:
+                        break
+                if len(path) > len(best_path):
+                    best_path = path
 
         if best_path:
             pig.path = best_path

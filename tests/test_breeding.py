@@ -141,6 +141,58 @@ class TestBirth:
             assert baby.father_id == male.id
             assert baby.age_days == 0
 
+    def test_baby_preferred_biome_from_birth_area(self):
+        """Baby preferred_biome comes from birth location, not color."""
+        from big_pig_farm.entities.areas import FarmArea
+        from big_pig_farm.entities.biomes import BiomeType
+
+        state = GameState()
+        # Place parents in a tropical area
+        tropical = FarmArea(
+            name="Tropical", biome=BiomeType.TROPICAL,
+            x1=0, y1=0, x2=20, y2=20,
+        )
+        state.farm.add_area(tropical)
+        male, female = _make_breeding_pair(state)
+        female.preferred_biome = "meadow"  # Mother prefers meadow
+
+        female.is_pregnant = True
+        female.pregnancy_days = BREEDING.GESTATION_DAYS
+        female.partner_id = male.id
+
+        initial_ids = {p.id for p in state.get_pigs_list()}
+        check_breeding_opportunities(state)
+
+        new_pigs = [p for p in state.get_pigs_list() if p.id not in initial_ids]
+        assert len(new_pigs) > 0
+
+        for baby in new_pigs:
+            # Should prefer tropical (birth area), not meadow (mother's)
+            # and not color-derived biome
+            assert baby.preferred_biome == "tropical"
+
+    def test_baby_preferred_biome_uses_birth_area_not_color(self):
+        """Baby preferred_biome uses birth area, not derived from color."""
+        state = GameState()
+        male, female = _make_breeding_pair(state)
+        # Mother prefers garden, but she's standing in meadow (default area)
+        female.preferred_biome = "garden"
+
+        female.is_pregnant = True
+        female.pregnancy_days = BREEDING.GESTATION_DAYS
+        female.partner_id = male.id
+
+        initial_ids = {p.id for p in state.get_pigs_list()}
+        check_breeding_opportunities(state)
+
+        new_pigs = [p for p in state.get_pigs_list() if p.id not in initial_ids]
+        assert len(new_pigs) > 0
+
+        for baby in new_pigs:
+            # Should prefer meadow (birth area), not garden (mother's)
+            # and not color-derived biome
+            assert baby.preferred_biome == "meadow"
+
 
 class TestAging:
     """Tests for the aging system."""

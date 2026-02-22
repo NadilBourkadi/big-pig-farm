@@ -34,7 +34,9 @@ class TestBiomeType:
         sanctuary = BIOMES[BiomeType.SANCTUARY]
         assert sanctuary.required_tier == 5
         assert sanctuary.cost > 0
-        assert len(sanctuary.mutation_boost_loci) == 6  # All loci boosted
+        # Non-color loci boosted (s, c, r); color loci (e, b, d) handled by directional system
+        assert len(sanctuary.mutation_boost_loci) == 3
+        assert len(sanctuary.directional_alleles) == 3
 
     def test_mutation_boosts_are_positive(self):
         """All mutation boosts should be positive floats."""

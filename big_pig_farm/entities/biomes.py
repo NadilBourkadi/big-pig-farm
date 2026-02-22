@@ -1,7 +1,11 @@
 """Biome definitions for farm areas."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
+
+from big_pig_farm.entities.genetics import BaseColor
 
 
 class BiomeType(str, Enum):
@@ -33,8 +37,13 @@ class BiomeInfo:
     wall_tint_plank: list[str] = field(default_factory=list)
     wall_tint_grain: list[str] = field(default_factory=list)
 
-    # Mutation boost: locus_name -> extra per-locus rate
+    # Mutation boost: locus_name -> extra per-locus rate (non-color loci only)
     mutation_boost_loci: dict[str, float] = field(default_factory=dict)
+
+    # Signature color for directional mutations
+    signature_color: BaseColor | None = None
+    # Target alleles for directional mutations at color loci (e/b/d)
+    directional_alleles: dict[str, str] = field(default_factory=dict)
 
     # Happiness bonus per game hour when pig is in preferred biome
     happiness_bonus: float = 0.0
@@ -49,6 +58,8 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_chars=["♣", "·", "'", ",", ".", '"', "`"],
         floor_colors=["#4a8a3a", "#3d7a30", "#55964a", "#3a7028", "#4d8e40", "#5a9a50"],
         floor_bg="#2d5a1e",
+        signature_color=BaseColor.BLACK,
+        directional_alleles={"e_locus": "E", "b_locus": "B", "d_locus": "D"},
         happiness_bonus=0.5,
     ),
     BiomeType.BURROW: BiomeInfo(
@@ -61,7 +72,8 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#3a2d1a",
         wall_tint_plank=["#7a5a30", "#8a6a40", "#6a4a20", "#8a6535", "#7a5525"],
         wall_tint_grain=["#4a3018", "#3c2510", "#5a4020"],
-        mutation_boost_loci={"b_locus": 0.08},
+        signature_color=BaseColor.CHOCOLATE,
+        directional_alleles={"e_locus": "E", "b_locus": "b", "d_locus": "D"},
         happiness_bonus=0.5,
     ),
     BiomeType.GARDEN: BiomeInfo(
@@ -74,7 +86,8 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#1e4a1e",
         wall_tint_plank=["#6a8a40", "#7a9a50", "#5a7a30", "#6a8535", "#7a9045"],
         wall_tint_grain=["#3a5020", "#2c4018", "#4a6028"],
-        mutation_boost_loci={"e_locus": 0.08},
+        signature_color=BaseColor.GOLDEN,
+        directional_alleles={"e_locus": "e", "b_locus": "B", "d_locus": "D"},
         happiness_bonus=0.8,
     ),
     BiomeType.TROPICAL: BiomeInfo(
@@ -88,6 +101,8 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         wall_tint_plank=["#a08050", "#b09060", "#907040", "#a08555", "#b09565"],
         wall_tint_grain=["#6a5030", "#5c4020", "#7a6040"],
         mutation_boost_loci={"s_locus": 0.08},
+        signature_color=BaseColor.CREAM,
+        directional_alleles={"e_locus": "e", "b_locus": "b", "d_locus": "D"},
         happiness_bonus=0.8,
     ),
     BiomeType.ALPINE: BiomeInfo(
@@ -100,7 +115,9 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#3a4a5a",
         wall_tint_plank=["#708090", "#809098", "#607080", "#6a7a88", "#7a8a98"],
         wall_tint_grain=["#405060", "#354550", "#506070"],
-        mutation_boost_loci={"c_locus": 0.08, "d_locus": 0.08},
+        mutation_boost_loci={"c_locus": 0.08},
+        signature_color=BaseColor.BLUE,
+        directional_alleles={"e_locus": "E", "b_locus": "B", "d_locus": "d"},
         happiness_bonus=1.0,
     ),
     BiomeType.CRYSTAL: BiomeInfo(
@@ -113,7 +130,9 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#2a2040",
         wall_tint_plank=["#6050a0", "#7060b0", "#504090", "#6555a5", "#7565b5"],
         wall_tint_grain=["#302850", "#252040", "#403860"],
-        mutation_boost_loci={"r_locus": 0.08, "d_locus": 0.05},
+        mutation_boost_loci={"r_locus": 0.08},
+        signature_color=BaseColor.LILAC,
+        directional_alleles={"e_locus": "E", "b_locus": "b", "d_locus": "d"},
         happiness_bonus=1.0,
     ),
     BiomeType.WILDFLOWER: BiomeInfo(
@@ -126,7 +145,9 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         floor_bg="#3a5a20",
         wall_tint_plank=["#8aaa50", "#9aba60", "#7a9a40", "#8aa555", "#9ab565"],
         wall_tint_grain=["#4a6028", "#3c5020", "#5a7030"],
-        mutation_boost_loci={"s_locus": 0.05, "e_locus": 0.05},
+        mutation_boost_loci={"s_locus": 0.05},
+        signature_color=BaseColor.SAFFRON,
+        directional_alleles={"e_locus": "e", "b_locus": "B", "d_locus": "d"},
         happiness_bonus=1.2,
     ),
     BiomeType.SANCTUARY: BiomeInfo(
@@ -140,13 +161,25 @@ BIOMES: dict[BiomeType, BiomeInfo] = {
         wall_tint_plank=["#b0a060", "#c0b070", "#a09050", "#b0a565", "#c0b575"],
         wall_tint_grain=["#6a5830", "#5c4a28", "#7a6838"],
         mutation_boost_loci={
-            "e_locus": 0.03,
-            "b_locus": 0.03,
             "s_locus": 0.03,
             "c_locus": 0.03,
             "r_locus": 0.03,
-            "d_locus": 0.03,
         },
+        signature_color=BaseColor.SMOKE,
+        directional_alleles={"e_locus": "e", "b_locus": "b", "d_locus": "d"},
         happiness_bonus=1.5,
     ),
+}
+
+
+# Lookup: biome value string -> signature BaseColor (for facility_manager / acclimation)
+BIOME_SIGNATURE_COLORS: dict[str, BaseColor] = {
+    biome.value: info.signature_color
+    for biome, info in BIOMES.items()
+    if info.signature_color is not None
+}
+
+# Reverse lookup: BaseColor -> biome value string (for birth / wandering)
+COLOR_TO_BIOME: dict[BaseColor, str] = {
+    color: biome_value for biome_value, color in BIOME_SIGNATURE_COLORS.items()
 }
