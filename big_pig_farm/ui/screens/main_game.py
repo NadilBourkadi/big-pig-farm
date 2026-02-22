@@ -444,6 +444,19 @@ class MainGameScreen(Screen):
         lines.append(f"=== DEBUG DUMP {now} ===")
         lines.append(f"Speed: {SPEED_DISPLAY[self.state.speed]}  Paused: {self.state.is_paused}")
         lines.append(f"Money: ${self.state.money}  Pigs: {len(self.state.get_pigs_list())}  Facilities: {len(self.state.get_facilities_list())}")
+
+        # Biome concentration summary
+        pigs = self.state.get_pigs_list()
+        in_preferred = 0
+        has_preferred = 0
+        for pig in pigs:
+            if pig.preferred_biome:
+                has_preferred += 1
+                current_area = self.state.farm.get_area_at(int(pig.position.x), int(pig.position.y))
+                if current_area and current_area.biome.value == pig.preferred_biome:
+                    in_preferred += 1
+        if has_preferred > 0:
+            lines.append(f"Biome concentration: {in_preferred}/{has_preferred} ({100*in_preferred/has_preferred:.0f}%) in preferred biome")
         lines.append("")
 
         # Facilities
@@ -452,6 +465,13 @@ class MainGameScreen(Screen):
             lines.append(f"  {f.name} [{f.id.hex[:8]}] at ({f.position_x},{f.position_y}) size={f.width}x{f.height}")
             lines.append(f"    amount={f.current_amount:.1f}/{f.max_amount:.1f} empty={f.is_empty}")
             lines.append(f"    interaction_point={f.interaction_point}  all_points={f.interaction_points}")
+        lines.append("")
+
+        # Areas
+        lines.append("--- AREAS ---")
+        for area in self.state.farm.areas:
+            lines.append(f"  {area.name} [{area.id.hex[:8]}] biome={area.biome.value}")
+            lines.append(f"    bounds=({area.x1},{area.y1})-({area.x2},{area.y2})  center=({area.center_x},{area.center_y})")
         lines.append("")
 
         # Pigs
@@ -475,6 +495,9 @@ class MainGameScreen(Screen):
             lines.append(f"    timers: decision={decision_timer:.2f}s  blocked={blocked_timer:.2f}s")
             lines.append(f"    failed_facilities: {', '.join(failed_names) if failed_names else 'none'}")
             lines.append(f"    personality: {[p.value for p in pig.personality]}")
+            current_area = self.state.farm.get_area_at(int(pig.position.x), int(pig.position.y))
+            current_biome = current_area.biome.value if current_area else "none"
+            lines.append(f"    color={pig.phenotype.base_color.value}  preferred_biome={pig.preferred_biome}  current_biome={current_biome}")
             lines.append(f"    behavior_log (last 10):")
             for entry in pig.behavior_log[-10:]:
                 lines.append(f"      - {entry}")
