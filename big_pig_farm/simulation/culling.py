@@ -14,6 +14,11 @@ from big_pig_farm.simulation.breeding_program import (
     should_keep_pig,
 )
 
+# Minimum diversity score gap between best and worst adult to trigger
+# active replacement.  Prevents oscillation when colors are already
+# balanced (similar scores → gap < threshold → no replacement).
+_DIVERSITY_REPLACEMENT_GAP = 2.0
+
 
 def sell_marked_adults(game_state) -> list[tuple[str, int, UUID]]:
     """Auto-sell pigs that were marked for sale and have reached adulthood.
@@ -139,31 +144,43 @@ def _would_break_gender_balance(pig: GuineaPig, adults: list[GuineaPig]) -> bool
 def _active_replacement(game_state, adults: list[GuineaPig], program, has_lab: bool) -> None:
     """Phase out the worst adult when at or below stock limit.
 
-    Two modes:
+    Three modes:
     - With targets: sell the worst non-matching adult
-    - Diversity/Money (no targets): sell the lowest-scoring adult
+    - Diversity (no targets): sell the worst-scoring adult only when the
+      gap between best and worst diversity scores exceeds 2.0 points
+      (prevents oscillation when colors are already balanced)
+    - Money/Target (no targets): no replacement (surplus culling only)
 
     Marks at most 1 pig per call. Skips pregnant pigs and preserves
     gender balance (never sells the last male or last female).
     """
     if program.has_target:
-        # Target mode: only consider non-matching adults
         candidates = [
             p for p in adults
             if not should_keep_pig(program, p, has_genetics_lab=has_lab)
         ]
         reason = "non-matching"
+    elif program.strategy == BreedingStrategy.DIVERSITY:
+        # Score all adults; only replace if diversity gap is meaningful
+        scored = _score_adults(adults, program, has_lab, game_state)
+        best_score = scored[0][1]
+        worst_score = scored[-1][1]
+        gap = best_score[0] - worst_score[0]
+        if gap < _DIVERSITY_REPLACEMENT_GAP:
+            return  # Colors are balanced enough — no replacement needed
+        candidates = [scored[-1][0]]
+        reason = f"low diversity, gap {gap:.1f}"
     else:
         # Without targets, active replacement would sell the "worst" pig every
         # time population hits the limit, causing it to oscillate below the
         # stock limit permanently.  Only surplus culling (len > limit) should
-        # fire for diversity/money mode without explicit targets.
+        # fire for money/target mode without explicit targets.
         return
 
     if not candidates:
         return
 
-    # Score them worst-first
+    # Score candidates worst-first (diversity branch already has 1 candidate)
     scored = _score_adults(candidates, program, has_lab, game_state)
     scored.reverse()  # Worst first
 
