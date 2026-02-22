@@ -248,23 +248,7 @@ def _auto_pair_from_program(game_state) -> None:
     if not program.should_auto_pair():
         return
 
-    # Determine target traits for pairing
-    target_colors = program.target_colors
-    target_patterns = program.target_patterns
-    target_intensities = program.target_intensities
-    target_roan = program.target_roan
-
-    if not program.has_target:
-        if program.strategy == BreedingStrategy.MONEY:
-            # Derive implicit targets from active contracts
-            target_colors, target_patterns, target_intensities, target_roan = (
-                _derive_contract_targets(game_state)
-            )
-            if not (target_colors or target_patterns or target_intensities or target_roan):
-                return  # No contracts to optimize toward
-        else:
-            return
-
+    # Gather eligible pigs (shared across all strategy branches)
     pigs = game_state.get_pigs_list()
     males = [
         p for p in pigs
@@ -294,6 +278,27 @@ def _auto_pair_from_program(game_state) -> None:
             )
         return
 
+    # Diversity mode: pair for genetic distance and rare-color production
+    if program.strategy == BreedingStrategy.DIVERSITY:
+        _auto_pair_diversity(game_state, males, females)
+        return
+
+    # Target/Money modes: pair for target probability
+    target_colors = program.target_colors
+    target_patterns = program.target_patterns
+    target_intensities = program.target_intensities
+    target_roan = program.target_roan
+
+    if not program.has_target:
+        if program.strategy == BreedingStrategy.MONEY:
+            target_colors, target_patterns, target_intensities, target_roan = (
+                _derive_contract_targets(game_state)
+            )
+            if not (target_colors or target_patterns or target_intensities or target_roan):
+                return  # No contracts to optimize toward
+        else:
+            return
+
     best_pair = None
     best_score = -1.0
     for male in males:
@@ -303,7 +308,6 @@ def _auto_pair_from_program(game_state) -> None:
                 target_colors, target_patterns,
                 target_intensities, target_roan,
             )
-            # Affinity as tiebreaker only — never override zero probability
             affinity = game_state.get_affinity(male.id, female.id)
             affinity_bonus = min(affinity * BREEDING.AFFINITY_WEIGHT, BREEDING.MAX_AFFINITY_SELECTION_BONUS)
             score = prob + (affinity_bonus if prob > 0 else 0)
@@ -323,6 +327,97 @@ def _auto_pair_from_program(game_state) -> None:
             f"Breeding program paired {male.name} x {female.name} ({prob * 100:.1f}% target chance)",
             event_type="breeding",
         )
+
+
+def _auto_pair_diversity(game_state, males: list[GuineaPig], females: list[GuineaPig]) -> None:
+    """Pair pigs for maximum genetic distance and rare-color production."""
+    all_pigs = game_state.get_pigs_list()
+
+    # Find underrepresented colors: below average count, plus any absent colors
+    color_counts: dict[BaseColor, int] = {}
+    for pig in all_pigs:
+        color = pig.phenotype.base_color
+        color_counts[color] = color_counts.get(color, 0) + 1
+    avg_count = len(all_pigs) / max(len(BaseColor), 1)
+    underrepresented: set[BaseColor] = {
+        color for color in BaseColor
+        if color_counts.get(color, 0) < avg_count
+    }
+
+    best_pair = None
+    best_score = -1.0
+    for male in males:
+        for female in females:
+            score = _diversity_pair_score(male, female, underrepresented, game_state)
+            if score > best_score:
+                best_score = score
+                best_pair = (male, female)
+
+    if best_pair and best_score > 0:
+        male, female = best_pair
+        game_state.set_breeding_pair(male.id, female.id)
+        game_state.log_event(
+            f"Breeding program paired {male.name} x {female.name} (diversity score {best_score:.1f})",
+            event_type="breeding",
+        )
+
+
+# Color-determining loci (from entities/genetics.py LOCUS_DEFINITIONS):
+#   e_locus: eumelanin (E=black, e=golden)
+#   b_locus: brown (B=black, b=chocolate)
+#   d_locus: dilution (D=full, d=diluted)
+# Pattern/intensity/roan loci are excluded because the problem being solved
+# is specifically color dominance from biome-driven mutation pressure.
+_COLOR_LOCI = ("e_locus", "b_locus", "d_locus")
+_RARE_COLOR_WEIGHT = 5.0
+
+
+def _diversity_pair_score(
+    male: GuineaPig,
+    female: GuineaPig,
+    underrepresented: set[BaseColor],
+    game_state,
+) -> float:
+    """Score a breeding pair for genetic distance and rare-color potential.
+
+    Components:
+    - Genetic distance (0-9): allele differences at color loci (e, b, d).
+      Base distance = count of differing allele pairs (0-6), plus 0.5 bonus
+      per locus where the allele *sets* differ (heterozygous vs homozygous).
+    - Rare-color bonus: probability of producing underrepresented colors,
+      scaled by _RARE_COLOR_WEIGHT.
+    - Affinity bonus: existing social bond tiebreaker.
+    """
+    male_genotype = male.genotype
+    female_genotype = female.genotype
+
+    # Genetic distance at color loci
+    distance = 0.0
+    for locus_name in _COLOR_LOCI:
+        male_alleles = getattr(male_genotype, locus_name)
+        female_alleles = getattr(female_genotype, locus_name)
+        # Count individual allele differences (0-2 per locus)
+        for i in range(2):
+            if male_alleles[i] != female_alleles[i]:
+                distance += 1.0
+        # Bonus if allele sets differ (one has variant the other doesn't)
+        if set(male_alleles) != set(female_alleles):
+            distance += 0.5
+
+    # Rare-color production bonus
+    rare_bonus = 0.0
+    if underrepresented:
+        prob = calculate_target_probability(
+            male_genotype, female_genotype,
+            underrepresented, set(), set(), set(),
+        )
+        rare_bonus = prob * _RARE_COLOR_WEIGHT
+
+    # Affinity tiebreaker
+    affinity = game_state.get_affinity(male.id, female.id)
+    affinity_bonus = min(affinity * BREEDING.AFFINITY_WEIGHT, BREEDING.MAX_AFFINITY_SELECTION_BONUS)
+
+    return distance + rare_bonus + affinity_bonus
 
 
 def _derive_contract_targets(game_state) -> tuple[set, set, set, set]:

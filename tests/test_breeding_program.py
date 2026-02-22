@@ -1,26 +1,29 @@
 """Tests for the breeding program system."""
 
-import pytest
 
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
+from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.genetics import (
-    Genotype,
     BaseColor,
-    Pattern,
     ColorIntensity,
+    Genotype,
+    Pattern,
     RoanType,
-    calculate_phenotype,
     calculate_target_probability,
 )
-from big_pig_farm.data.config import BREEDING
-from big_pig_farm.simulation.breeding_program import (
-    BreedingProgram, BreedingStrategy, should_keep_pig, breeding_value, diversity_value,
-    money_value, _heterozygosity_count,
-)
-from big_pig_farm.simulation.breeding import _auto_pair_from_program
-from big_pig_farm.simulation.birth import _apply_breeding_filter
-from big_pig_farm.simulation.culling import cull_surplus_breeders, _would_break_gender_balance
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.birth import _apply_breeding_filter
+from big_pig_farm.simulation.breeding import _auto_pair_from_program
+from big_pig_farm.simulation.breeding_program import (
+    BreedingProgram,
+    BreedingStrategy,
+    _heterozygosity_count,
+    breeding_value,
+    diversity_value,
+    money_value,
+    should_keep_pig,
+)
+from big_pig_farm.simulation.culling import _would_break_gender_balance, cull_surplus_breeders
 
 
 def _make_pig_with_genotype(**loci) -> GuineaPig:
@@ -476,6 +479,80 @@ class TestAutoPair:
         assert state.breeding_pair is None
 
 
+class TestDiversityAutoPair:
+    """Tests for diversity-aware auto-pairing."""
+
+    def test_pairs_different_colors_without_targets(self):
+        """Diversity mode should pair pigs with different color genetics even without targets."""
+        state = GameState()
+        # Male 1: black (EE BB DD) — same as female
+        male_black = _make_pig("BlackM", Gender.MALE)
+        # Male 2: golden carrier (Ee BB DD) — different color alleles
+        male_carrier = _make_pig("CarrierM", Gender.MALE, e_locus=("E", "e"), b_locus=("B", "b"))
+        # Female: black (EE BB DD)
+        female = _make_pig("BlackF", Gender.FEMALE)
+
+        state.add_guinea_pig(male_black)
+        state.add_guinea_pig(male_carrier)
+        state.add_guinea_pig(female)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            strategy=BreedingStrategy.DIVERSITY,
+        )
+
+        _auto_pair_from_program(state)
+        # Should pick the carrier male — higher genetic distance
+        assert state.breeding_pair is not None
+        assert state.breeding_pair.male_id == male_carrier.id
+
+    def test_disabled_diversity_does_not_pair(self):
+        """Disabled program shouldn't pair even in diversity mode."""
+        state = GameState()
+        state.add_guinea_pig(_make_pig("M1", Gender.MALE, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE))
+
+        state.breeding_program = BreedingProgram(
+            enabled=False,
+            auto_pair=True,
+            strategy=BreedingStrategy.DIVERSITY,
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is None
+
+    def test_diversity_prefers_rare_color_production(self):
+        """When genetic distance is equal, rare-color production tips the balance."""
+        state = GameState()
+        # Both males have the same genetic distance to the carrier female,
+        # but only male_diverse can actually produce non-black offspring.
+        # Male 1: EE BB DD — distance 3.0, but EE×Ee → 0% ee, BB×Bb → 0% bb
+        male_black = _make_pig("PureBlack", Gender.MALE)
+        # Male 2: ee bb DD — distance 3.0, and ee×Ee → 50% ee, bb×Bb → 50% bb
+        male_diverse = _make_pig("Cream", Gender.MALE, e_locus=("e", "e"), b_locus=("b", "b"))
+        # Female: Ee Bb DD (carrier)
+        female = _make_pig("CarrierF", Gender.FEMALE, e_locus=("E", "e"), b_locus=("B", "b"))
+        # Extra black to skew population toward black
+        extra_black = _make_pig("ExtraB", Gender.FEMALE, age_days=5.0)
+
+        state.add_guinea_pig(male_black)
+        state.add_guinea_pig(male_diverse)
+        state.add_guinea_pig(female)
+        state.add_guinea_pig(extra_black)
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            auto_pair=True,
+            strategy=BreedingStrategy.DIVERSITY,
+        )
+
+        _auto_pair_from_program(state)
+        assert state.breeding_pair is not None
+        # Cream male + carrier female can produce golden, chocolate, cream offspring
+        assert state.breeding_pair.male_id == male_diverse.id
+
+
 # ─── cull_surplus_breeders tests ───
 
 
@@ -785,6 +862,36 @@ class TestDiversityValue:
 
         assert diversity_value(het, all_pigs) > diversity_value(homo, all_pigs)
 
+    def test_rare_color_beats_common_color_despite_unique_sub_phenotype(self):
+        """A rare-color pig should outscore a common-color pig even when the common
+        one has a unique sub-phenotype (different pattern/intensity)."""
+        # 10 black pigs across different sub-phenotypes
+        blacks = []
+        for i in range(9):
+            blacks.append(_make_pig(f"B{i}", Gender.MALE, age_days=5.0))
+        # 10th black has dalmatian pattern — unique sub-phenotype
+        unique_black = _make_pig("BDal", Gender.MALE, age_days=5.0, s_locus=("s", "s"))
+        # 1 chocolate pig
+        choc = _make_pig("Choc", Gender.MALE, age_days=5.0, b_locus=("b", "b"))
+        all_pigs = blacks + [unique_black, choc]
+
+        # Chocolate (1/11 pigs of that color) should beat the unique-sub-phenotype black
+        # (1/1 phenotype uniqueness but 10/11 color dominance)
+        assert diversity_value(choc, all_pigs) > diversity_value(unique_black, all_pigs)
+
+    def test_equal_color_distribution_similar_scores(self):
+        """When colors are equally distributed, diversity scores should be similar."""
+        # 2 black + 2 golden — equal distribution
+        b1 = _make_pig("B1", Gender.MALE, age_days=5.0)
+        b2 = _make_pig("B2", Gender.FEMALE, age_days=5.0)
+        g1 = _make_pig("G1", Gender.MALE, age_days=5.0, e_locus=("e", "e"))
+        g2 = _make_pig("G2", Gender.FEMALE, age_days=5.0, e_locus=("e", "e"))
+        all_pigs = [b1, b2, g1, g2]
+
+        # Same age, same het count (0), same phenotype count (2), same color count (2)
+        # Scores should be identical
+        assert abs(diversity_value(b1, all_pigs) - diversity_value(g1, all_pigs)) < 0.01
+
 
 class TestCullWithDiversity:
     """Tests for culling with diversity strategy enabled."""
@@ -1063,9 +1170,10 @@ class TestActiveReplacement:
         # One of the duplicate blacks should be marked, not the unique golden
         assert "B" in marked[0].name
 
-    def test_diversity_only_no_replacement_at_limit(self):
-        """Diversity at stock limit without targets should NOT replace anyone."""
+    def test_diversity_replaces_dominant_color_at_limit(self):
+        """Diversity at stock limit with skewed colors should replace the worst pig."""
         state = GameState()
+        # 3 black + 1 golden: color gap = 10/1 - 10/3 = 6.67 (> 2.0 threshold)
         state.add_guinea_pig(_make_pig("B1", Gender.MALE, age_days=5.0))
         state.add_guinea_pig(_make_pig("B2", Gender.FEMALE, age_days=5.0))
         state.add_guinea_pig(_make_pig("B3", Gender.FEMALE, age_days=5.0))
@@ -1078,7 +1186,10 @@ class TestActiveReplacement:
         )
 
         cull_surplus_breeders(state)
-        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        # Should mark 1 black pig (lowest diversity), not the golden
+        assert len(marked) == 1
+        assert "B" in marked[0].name
 
     def test_diversity_only_skips_when_not_enabled(self):
         """Without diversity/money strategy and no targets, no replacement happens."""
@@ -1094,6 +1205,67 @@ class TestActiveReplacement:
 
         cull_surplus_breeders(state)
         assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_diversity_no_replacement_when_balanced(self):
+        """Diversity should NOT replace when color distribution is balanced."""
+        state = GameState()
+        # 2 black + 2 golden — balanced distribution, gap < 2.0
+        state.add_guinea_pig(_make_pig("B1", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("B2", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("G1", Gender.MALE, age_days=5.0, e_locus=("e", "e")))
+        state.add_guinea_pig(_make_pig("G2", Gender.FEMALE, age_days=5.0, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.DIVERSITY,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        assert all(not p.marked_for_sale for p in state.get_pigs_list())
+
+    def test_diversity_replacement_skews_toward_dominant_color(self):
+        """Diversity replacement should mark a pig from the dominant color group."""
+        state = GameState()
+        # 5 black + 1 golden at stock_limit=6: heavy skew
+        for i in range(4):
+            gender = Gender.MALE if i == 0 else Gender.FEMALE
+            state.add_guinea_pig(_make_pig(f"Black{i}", gender, age_days=5.0))
+        state.add_guinea_pig(_make_pig("Black4", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("Gold", Gender.FEMALE, age_days=5.0, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.DIVERSITY,
+            stock_limit=6,
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        assert len(marked) == 1
+        assert "Black" in marked[0].name
+
+    def test_diversity_replacement_preserves_gender_balance(self):
+        """Diversity replacement should not sell the last male."""
+        state = GameState()
+        # 1 male (black) + 3 females (black) + skewed → male is worst-scoring
+        # but selling him would break gender balance
+        state.add_guinea_pig(_make_pig("OnlyMale", Gender.MALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("F1", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("F2", Gender.FEMALE, age_days=5.0))
+        state.add_guinea_pig(_make_pig("Gold", Gender.FEMALE, age_days=5.0, e_locus=("e", "e")))
+
+        state.breeding_program = BreedingProgram(
+            enabled=True,
+            strategy=BreedingStrategy.DIVERSITY,
+            stock_limit=4,
+        )
+
+        cull_surplus_breeders(state)
+        marked = [p for p in state.get_pigs_list() if p.marked_for_sale]
+        # Should mark a female black pig, not the only male
+        if marked:
+            assert marked[0].gender == Gender.FEMALE
 
 
 class TestGenderBalanceHelper:
