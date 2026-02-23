@@ -1,5 +1,7 @@
 """Simulation tick orchestration — runs all game systems each tick."""
 
+import logging
+import threading
 import time
 from collections import deque
 from collections.abc import Callable
@@ -17,11 +19,14 @@ from big_pig_farm.simulation.breeding import check_breeding_opportunities, start
 from big_pig_farm.simulation.culling import cull_surplus_breeders, sell_marked_adults
 from big_pig_farm.simulation.needs import precompute_nearby_counts, update_all_needs
 
+logger = logging.getLogger(__name__)
+
 
 class SaveProtocol(Protocol):
     """Minimal interface for save managers used by SimulationRunner."""
 
     def save(self, state: GameState) -> None: ...
+    def save_blob(self, json_blob: str) -> None: ...
 
 
 class SimulationRunner:
@@ -45,6 +50,7 @@ class SimulationRunner:
         self.on_pregnancy = on_pregnancy
         self.on_birth = on_birth
         self._save_counter = 0
+        self._save_thread: threading.Thread | None = None
         # Rolling TPS measurement (last 50 tick timestamps)
         self._tick_timestamps: deque[float] = deque(maxlen=50)
         self.current_tps: float = 0.0
@@ -193,4 +199,27 @@ class SimulationRunner:
         self._save_counter += 1
         if self._save_counter >= 300:
             self._save_counter = 0
-            self.save_manager.save(state)
+            self._background_save(state)
+
+    def _background_save(self, state: GameState) -> None:
+        """Serialize state on main thread, offload I/O to a daemon thread.
+
+        Skips if the previous save is still running. Serialization happens
+        within tick(), which is synchronous — no state mutations can occur
+        until model_dump_json() completes and the method returns.
+        """
+        if self._save_thread is not None and self._save_thread.is_alive():
+            logger.warning("Auto-save skipped: previous save still in progress")
+            return
+
+        json_blob = state.model_dump_json()
+        save_manager = self.save_manager
+
+        def _write_save() -> None:
+            try:
+                save_manager.save_blob(json_blob)
+            except Exception:
+                logger.exception("Background auto-save failed")
+
+        self._save_thread = threading.Thread(target=_write_save, daemon=True)
+        self._save_thread.start()
