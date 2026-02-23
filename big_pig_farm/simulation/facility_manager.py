@@ -66,7 +66,15 @@ class FacilityManager:
     def _cached_find_path(
         self, start: tuple[int, int], goal: tuple[int, int],
     ) -> list[tuple[int, int]]:
-        """find_path with persistent cross-tick LRU caching."""
+        """find_path with persistent cross-tick LRU caching.
+
+        Short-circuits to a straight-line walk when start and goal are
+        close and every cell along the line is walkable — avoids the
+        A* heap/dict overhead for the common nearby-facility case.
+        """
+        if start == goal:
+            return [start]
+
         gen = self.game_state.farm._grid_generation
         key = (start, goal, gen)
         result = self._path_cache.get(key)
@@ -74,12 +82,69 @@ class FacilityManager:
             self.cache_hits += 1
             self._path_cache.move_to_end(key)
             return result
+
+        # Straight-line shortcut for nearby goals
+        manhattan = abs(start[0] - goal[0]) + abs(start[1] - goal[1])
+        if manhattan <= BEHAVIOR.STRAIGHT_LINE_MAX_DISTANCE:
+            straight = self._try_straight_line(start, goal)
+            if straight:
+                self._path_cache[key] = straight
+                if len(self._path_cache) > _PATH_CACHE_MAX_SIZE:
+                    self._path_cache.popitem(last=False)
+                return straight
+
         self.cache_misses += 1
         path = self.game_state.farm.find_path(start, goal)
         self._path_cache[key] = path
         # Evict oldest entry if over capacity
         if len(self._path_cache) > _PATH_CACHE_MAX_SIZE:
             self._path_cache.popitem(last=False)
+        return path
+
+    def _try_straight_line(
+        self, start: tuple[int, int], goal: tuple[int, int],
+    ) -> list[tuple[int, int]] | None:
+        """Try to build a straight-line path (no A* overhead).
+
+        Walks one cell at a time, moving diagonally when possible and
+        falling back to single-axis steps. Handles L-shaped corridors
+        better than a pure axis-first approach.
+        """
+        farm = self.game_state.farm
+        path = [start]
+        current_x, current_y = start
+
+        step_x = 1 if goal[0] > current_x else -1 if goal[0] < current_x else 0
+        step_y = 1 if goal[1] > current_y else -1 if goal[1] < current_y else 0
+
+        while (current_x, current_y) != goal:
+            # Try diagonal step when both axes need movement
+            if current_x != goal[0] and current_y != goal[1]:
+                next_x, next_y = current_x + step_x, current_y + step_y
+                if farm.is_walkable(next_x, next_y):
+                    current_x, current_y = next_x, next_y
+                    path.append((current_x, current_y))
+                    continue
+
+            # Try X-axis step
+            if current_x != goal[0]:
+                next_x = current_x + step_x
+                if farm.is_walkable(next_x, current_y):
+                    current_x = next_x
+                    path.append((current_x, current_y))
+                    continue
+
+            # Try Y-axis step
+            if current_y != goal[1]:
+                next_y = current_y + step_y
+                if farm.is_walkable(current_x, next_y):
+                    current_y = next_y
+                    path.append((current_x, current_y))
+                    continue
+
+            # Blocked in all directions
+            return None
+
         return path
 
     def get_failed_facilities(self, pig_id: UUID) -> set[UUID]:
@@ -161,6 +226,71 @@ class FacilityManager:
         # Fall back to all facilities (cross-area)
         return self._filter_reachable(pig, facilities)
 
+    def get_candidate_facilities_ranked(
+        self, pig: GuineaPig, facility_type: FacilityType,
+    ) -> list[Facility]:
+        """Get facilities filtered and ranked by heuristic — no A* calls.
+
+        Replaces get_reachable_facilities + rank_facilities_by_spread for the
+        common case. Callers iterate the result and call
+        find_open_interaction_point on each until one succeeds.
+        """
+        facilities = self.game_state.get_facilities_by_type(facility_type)
+        if not facilities:
+            return []
+
+        # Filter out empty consumables
+        if facility_type in (FacilityType.FOOD_BOWL, FacilityType.WATER_BOTTLE, FacilityType.HAY_RACK):
+            facilities = [facility for facility in facilities if not facility.is_empty]
+
+        # Filter out recently failed facilities for this pig
+        failed = self._failed_facilities.get(pig.id, set())
+        if failed:
+            facilities = [facility for facility in facilities if facility.id not in failed]
+
+        if not facilities:
+            return []
+
+        # Manhattan distance pre-filter — skip facilities too far away
+        start = pig.position.grid_pos()
+        max_dist = BEHAVIOR.MAX_FACILITY_PATHFIND_DISTANCE
+        facilities = [
+            facility for facility in facilities
+            if any(
+                abs(start[0] - point[0]) + abs(start[1] - point[1]) <= max_dist
+                for point in facility.interaction_points
+            )
+        ]
+
+        if not facilities:
+            return []
+
+        # Same-area priority: if pig's area is not overcrowded,
+        # prefer same-area facilities (they are closer and avoid tunnels)
+        pig_area = pig.current_area_id
+        same_area_facilities: list[Facility] | None = None
+        if pig_area:
+            area_pop = self._area_populations.get(pig_area, 0)
+            area_cap = self._area_capacities.get(pig_area, 0)
+            if area_pop <= area_cap:
+                same_area_facilities = [
+                    facility for facility in facilities if facility.area_id == pig_area
+                ]
+                if not same_area_facilities:
+                    same_area_facilities = None
+
+        # Rank by spread score (Manhattan + crowd count, no A*)
+        to_rank = same_area_facilities if same_area_facilities else facilities
+        ranked = self.rank_facilities_by_spread(pig, to_rank)
+
+        # If same-area candidates exist, append cross-area as fallback
+        if same_area_facilities and len(same_area_facilities) < len(facilities):
+            cross_area = [facility for facility in facilities if facility.area_id != pig_area]
+            if cross_area:
+                ranked.extend(self.rank_facilities_by_spread(pig, cross_area))
+
+        return ranked
+
     def _filter_reachable(
         self, pig: GuineaPig, facilities: list[Facility],
     ) -> list[Facility]:
@@ -192,8 +322,15 @@ class FacilityManager:
 
         return reachable
 
-    def find_open_interaction_point(self, pig: GuineaPig, facility: Facility) -> tuple[int, int] | None:
-        """Find an unoccupied interaction point around a facility."""
+    def find_open_interaction_point(
+        self, pig: GuineaPig, facility: Facility,
+    ) -> tuple[tuple[int, int], list[tuple[int, int]]] | None:
+        """Find an unoccupied interaction point and the path to it.
+
+        Returns (point, path) where path excludes the pig's current
+        position (ready to assign to pig.path), or None if no open
+        reachable point exists.
+        """
         farm = self.game_state.farm
         start = pig.position.grid_pos()
         grid = self.collision.spatial_grid
@@ -204,7 +341,7 @@ class FacilityManager:
         occupancy_radius = BEHAVIOR.BLOCKING_FACILITY_USE
 
         # Get all interaction points and filter to walkable/valid ones
-        candidates = []
+        candidates: list[tuple[tuple[int, int], list[tuple[int, int]]]] = []
         for point in facility.interaction_points:
             # Bounds check first
             if not farm.is_valid_position(point[0], point[1]):
@@ -244,12 +381,13 @@ class FacilityManager:
                 # Verify we can path there
                 path = self._cached_find_path(start, point)
                 if path:
-                    candidates.append((point, len(path)))
+                    candidates.append((point, path))
 
         if candidates:
             # Pick the closest unoccupied point (by path length, not manhattan distance)
-            candidates.sort(key=lambda x: x[1])
-            return candidates[0][0]
+            candidates.sort(key=lambda candidate: len(candidate[1]))
+            point, path = candidates[0]
+            return (point, path[1:])
 
         # All interaction points are occupied - return None so the caller
         # can try a different facility instead of sending the pig to cluster
@@ -555,26 +693,21 @@ class FacilityManager:
             return False
 
         for facility_type in facility_types:
-            # get_reachable_facilities already filters out failed facilities
-            facilities = self.get_reachable_facilities(pig, facility_type)
-            if not facilities:
+            candidates = self.get_candidate_facilities_ranked(pig, facility_type)
+            if not candidates:
                 continue
 
-            ranked = self.rank_facilities_by_spread(pig, facilities)
-
-            for facility in ranked:
-                target = self.find_open_interaction_point(pig, facility)
-                if target:
-                    start = pig.position.grid_pos()
-                    path = self._cached_find_path(start, target)
-                    if path:
-                        pig.path = path[1:]
-                        if pig.path:
-                            pig.target_position = Position(x=float(target[0]), y=float(target[1]))
-                            pig.target_facility_id = facility.id
-                            pig.log_behavior(f"Blocked, switching to {facility.name}")
-                            pig.target_description = f"going to {facility.name}"
-                            return True
+            for facility in candidates[:BEHAVIOR.MAX_FACILITY_CANDIDATES]:
+                result = self.find_open_interaction_point(pig, facility)
+                if result:
+                    target, path = result
+                    pig.path = path
+                    if pig.path:
+                        pig.target_position = Position(x=float(target[0]), y=float(target[1]))
+                        pig.target_facility_id = facility.id
+                        pig.log_behavior(f"Blocked, switching to {facility.name}")
+                        pig.target_description = f"going to {facility.name}"
+                        return True
 
         return False
 
