@@ -215,14 +215,14 @@ class FarmView(Static):
         if width == self._buf_width and height == self._buf_height:
             # Clear in-place — much cheaper than reallocating
             for row in self._char_buffer:
-                for x in range(width):
-                    row[x] = " "
+                for column in range(width):
+                    row[column] = " "
             for row in self._style_buffer:
-                for x in range(width):
-                    row[x] = None
+                for column in range(width):
+                    row[column] = None
             for row in self._terrain_bg_buffer:
-                for x in range(width):
-                    row[x] = None
+                for column in range(width):
+                    row[column] = None
         else:
             self._buf_width = width
             self._buf_height = height
