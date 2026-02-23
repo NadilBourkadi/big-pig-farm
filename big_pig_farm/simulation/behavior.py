@@ -1,7 +1,11 @@
 """AI state machine and decision making for guinea pigs."""
 
 import random
+from typing import TYPE_CHECKING
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from big_pig_farm.game.state import GameState
 
 from big_pig_farm.data.config import BEHAVIOR, NEEDS, SIMULATION
 from big_pig_farm.entities.areas import FarmArea
@@ -17,7 +21,7 @@ from big_pig_farm.simulation.needs import get_most_urgent_need, get_target_facil
 class BehaviorController:
     """Controls guinea pig behavior and decision making."""
 
-    def __init__(self, game_state):
+    def __init__(self, game_state: "GameState"):
         self.game_state = game_state
         self.collision = CollisionHandler(game_state)
         self.facility_manager = FacilityManager(game_state, self.collision)
