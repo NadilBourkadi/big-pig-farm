@@ -202,7 +202,7 @@ class FarmView(Static):
         cache_key = (
             self._viewport_x, self._viewport_y,
             self._zoom.value, width, height,
-            farm._grid_generation,
+            farm.grid_generation,
         )
         if cache_key == self._terrain_cache_key:
             self._restore_terrain_snapshot(height)

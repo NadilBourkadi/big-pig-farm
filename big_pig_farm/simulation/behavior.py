@@ -89,7 +89,7 @@ class BehaviorController:
         """Update behavior for a guinea pig."""
         # Clear unreachable backoff when the walkable grid changes
         # (facility built/removed) so pigs notice new facilities immediately
-        grid_gen = self.game_state.farm._grid_generation
+        grid_gen = self.game_state.farm.grid_generation
         if grid_gen != self._last_grid_gen:
             self._unreachable_needs.clear()
             self._last_grid_gen = grid_gen
@@ -766,7 +766,7 @@ class BehaviorController:
             if pig.current_area_id:
                 target = farm.find_random_walkable_in_area(pig.current_area_id)
             if not target:
-                target = farm._find_nearest_walkable((pig_gx, pig_gy), max_distance=10)
+                target = farm.find_nearest_walkable((pig_gx, pig_gy), max_distance=10)
             if target and target != (pig_gx, pig_gy):
                 pig.position.x = float(target[0])
                 pig.position.y = float(target[1])
@@ -813,7 +813,7 @@ class BehaviorController:
             target = farm.find_random_walkable_in_area(pig.current_area_id)
         if not target:
             gx, gy = int(pig.position.x), int(pig.position.y)
-            target = farm._find_nearest_walkable((gx, gy), max_distance=20)
+            target = farm.find_nearest_walkable((gx, gy), max_distance=20)
         if target:
             pig.position.x = float(target[0])
             pig.position.y = float(target[1])

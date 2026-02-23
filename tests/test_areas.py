@@ -193,7 +193,7 @@ class TestThirdRoomLayout:
                     )
 
     def test_repair_clears_stale_interior_walls(self):
-        """_repair_area_cells fixes WALL cells stuck in room interiors."""
+        """repair_area_cells fixes WALL cells stuck in room interiors."""
         from big_pig_farm.game.world import CellType
         farm = FarmGrid.create_starter()
         farm.add_room(BiomeType.BURROW)
@@ -205,7 +205,7 @@ class TestThirdRoomLayout:
         farm.cells[center_y][center_x].cell_type = CellType.WALL
         farm.cells[center_y][center_x].is_walkable = False
 
-        farm._repair_area_cells()
+        farm.repair_area_cells()
 
         cell = farm.cells[center_y][center_x]
         assert cell.cell_type == CellType.FLOOR

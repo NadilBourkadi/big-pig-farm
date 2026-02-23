@@ -97,12 +97,12 @@ class SaveManagerV2:
 
             # Migrate saves from before multi-area support
             if not state.farm.areas:
-                state.farm._create_legacy_starter_area()
+                state.farm.create_legacy_starter_area()
             elif not relayout_areas(state):
                 # relayout_areas already rebuilds everything when it fires;
                 # only run repair + tunnel rebuild when it was a no-op
-                state.farm._repair_area_cells()
-                state.farm._rebuild_tunnels()
+                state.farm.repair_area_cells()
+                state.farm.rebuild_tunnels()
 
             return state
         except Exception as e:
