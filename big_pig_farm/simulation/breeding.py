@@ -21,19 +21,24 @@ def _is_permanently_unbreedable(pig: GuineaPig) -> bool:
     return pig.breeding_locked or pig.is_senior
 
 
-def check_breeding_opportunities(game_state) -> int:
-    """Check for and process breeding opportunities. Returns number of births."""
+def check_breeding_opportunities(game_state, run_expensive: bool = True) -> int:
+    """Check for and process breeding opportunities. Returns number of births.
+
+    When run_expensive is False, only births and manual pairs are processed
+    (the O(m*f) auto-pair and new-pair scans are skipped).
+    """
     births = check_births(game_state)
 
-    # Process manual breeding pair before auto-breeding
+    # Process manual breeding pair before auto-breeding (cheap, runs every tick)
     _check_manual_breeding(game_state)
 
-    # Auto-pair from breeding program if slot is empty
-    _auto_pair_from_program(game_state)
+    if run_expensive:
+        # Auto-pair from breeding program if slot is empty
+        _auto_pair_from_program(game_state)
 
-    # Check for new breeding pairs (re-fetch: births may have changed the list)
-    if not game_state.is_at_capacity:
-        _check_for_new_breeding(game_state)
+        # Check for new breeding pairs (re-fetch: births may have changed the list)
+        if not game_state.is_at_capacity:
+            _check_for_new_breeding(game_state)
 
     return births
 
