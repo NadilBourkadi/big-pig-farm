@@ -130,6 +130,11 @@ class FarmView(Static):
         self._render_tick: int = 0
         # Status indicator ephemeral timers per pig
         self._indicator_timers: dict[UUID, _IndicatorTimer] = {}
+        # Terrain snapshot cache — avoids redrawing static terrain every frame
+        self._terrain_cache_key: tuple | None = None
+        self._terrain_snapshot_char: list[list[str]] = []
+        self._terrain_snapshot_style: list[list[Style | None]] = []
+        self._terrain_snapshot_bg: list[list[Style | None]] = []
 
     @property
     def zoom(self) -> ZoomLevel:
@@ -193,11 +198,21 @@ class FarmView(Static):
         offset_x = max(0, (width - scaled_w) // 2)
         offset_y = max(0, (height - scaled_h) // 2)
 
-        # Initialize buffers
-        self._init_buffers(width, height)
+        # Terrain cache: skip _init_buffers + _draw_terrain on cache hit
+        cache_key = (
+            self._viewport_x, self._viewport_y,
+            self._zoom.value, width, height,
+            farm._grid_generation,
+        )
+        if cache_key == self._terrain_cache_key:
+            self._restore_terrain_snapshot(height)
+        else:
+            self._init_buffers(width, height)
+            self._draw_terrain(width, height, offset_x, offset_y)
+            self._snapshot_terrain(height)
+            self._terrain_cache_key = cache_key
 
         # Draw layers
-        self._draw_terrain(width, height, offset_x, offset_y)
         self._draw_facilities(width, height, offset_x, offset_y)
         self._draw_guinea_pigs(width, height, offset_x, offset_y)
 
@@ -229,6 +244,28 @@ class FarmView(Static):
             self._char_buffer = [[" "] * width for _ in range(height)]
             self._style_buffer = [[None] * width for _ in range(height)]
             self._terrain_bg_buffer = [[None] * width for _ in range(height)]
+
+    def _snapshot_terrain(self, height: int) -> None:
+        """Snapshot the 3 render buffers after terrain draw.
+
+        Elements (strings, Style objects) are immutable, so shallow row
+        copies preserve object identity for the RLE fast-path in
+        _buffer_to_text().
+        """
+        self._terrain_snapshot_char = [row[:] for row in self._char_buffer[:height]]
+        self._terrain_snapshot_style = [row[:] for row in self._style_buffer[:height]]
+        self._terrain_snapshot_bg = [row[:] for row in self._terrain_bg_buffer[:height]]
+
+    def _restore_terrain_snapshot(self, height: int) -> None:
+        """Restore terrain snapshot into render buffers via slice assignment.
+
+        ~120 C-level list_ass_slice calls replace ~9600 Python __setitem__
+        calls from _init_buffers + _draw_terrain.
+        """
+        for row_idx in range(height):
+            self._char_buffer[row_idx][:] = self._terrain_snapshot_char[row_idx]
+            self._style_buffer[row_idx][:] = self._terrain_snapshot_style[row_idx]
+            self._terrain_bg_buffer[row_idx][:] = self._terrain_snapshot_bg[row_idx]
 
     # ------------------------------------------------------------------
     # Terrain
