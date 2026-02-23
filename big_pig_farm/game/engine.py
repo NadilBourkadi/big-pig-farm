@@ -2,8 +2,8 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional
 
 from big_pig_farm.data.config import SIMULATION, TIME, GameSpeed
 from big_pig_farm.game.state import GameState
@@ -17,7 +17,7 @@ class GameEngine:
     def __init__(self, state: GameState):
         self.state = state
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._tick_callbacks: list[Callable[[float], None]] = []
         self._last_tick_time: float = 0.0
 
@@ -81,11 +81,12 @@ class GameEngine:
         """Main game loop."""
         tick_interval = 1.0 / SIMULATION.TICKS_PER_SECOND
         max_delta = 0.5  # Cap delta to handle laptop sleep/wake gracefully
+        min_sleep = 0.01  # Floor to avoid starving the event loop
 
         while self._running:
-            current_time = asyncio.get_event_loop().time()
-            delta_time = current_time - self._last_tick_time
-            self._last_tick_time = current_time
+            tick_start = asyncio.get_event_loop().time()
+            delta_time = tick_start - self._last_tick_time
+            self._last_tick_time = tick_start
 
             # Clamp delta to prevent huge time jumps after sleep/wake
             delta_time = min(delta_time, max_delta)
@@ -98,8 +99,9 @@ class GameEngine:
             # Update last update timestamp
             self.state.game_time.last_update = datetime.now()
 
-            # Wait for next tick
-            await asyncio.sleep(tick_interval)
+            # Compensating sleep: subtract tick processing time
+            elapsed = asyncio.get_event_loop().time() - tick_start
+            await asyncio.sleep(max(min_sleep, tick_interval - elapsed))
 
     async def _tick(self, delta_seconds: float) -> None:
         """Process a single game tick."""
