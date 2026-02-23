@@ -129,7 +129,7 @@ class MainGameScreen(Screen):
     def on_mount(self) -> None:
         """Handle screen mount."""
         self.update_display()
-        self.set_interval(0.15, self.update_display)
+        self.set_interval(0.1, self.update_display)
 
     def update_display(self) -> None:
         """Update all display elements."""

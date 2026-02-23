@@ -68,7 +68,7 @@ class StatusBar(Static):
         return " \u2502 ".join(parts)
 
     _facility_frame_counter: int = 0
-    _FACILITY_QUERY_INTERVAL: int = 7  # recompute every ~1s at 7 Hz
+    _FACILITY_QUERY_INTERVAL: int = 10  # recompute every ~1s at 10 Hz
 
     def update_from_state(self, state, tps: float = 0.0) -> None:
         """Update all values from game state."""
