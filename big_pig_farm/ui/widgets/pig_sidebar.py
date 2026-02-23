@@ -1,18 +1,18 @@
 """Sidebar widget showing selected pig details."""
 
-from textual.widgets import Static
-from textual.reactive import reactive
 from rich.text import Text
+from textual.reactive import reactive
+from textual.widgets import Static
 
 from big_pig_farm.data.pig_portraits import generate_portrait_with_scene
 from big_pig_farm.data.sprite_engine import (
+    PALETTES,
     convert_pixels,
     render_to_rich_text,
-    PALETTES,
 )
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig
 from big_pig_farm.simulation.needs import get_most_urgent_need
-from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
+from big_pig_farm.ui.utils import format_breeding_status, format_needs_bar
 
 
 class PigSidebar(Static):
@@ -38,6 +38,9 @@ class PigSidebar(Static):
         super().__init__(**kwargs)
         self.state = state
         self._pig: GuineaPig | None = None
+        self._portrait_cache_key: tuple | None = None
+        self._portrait_cache: Text | None = None
+        self._content_fingerprint: tuple | None = None
 
     def set_pig(self, pig: GuineaPig | None) -> None:
         """Set the pig to display."""
@@ -49,25 +52,63 @@ class PigSidebar(Static):
         self.refresh_content()
 
     def _build_portrait(self, pig: GuineaPig) -> Text:
-        """Render a half-block portrait for the sidebar."""
+        """Render a half-block portrait for the sidebar (cached by phenotype)."""
+        phenotype = pig.phenotype
+        cache_key = (
+            pig.id,
+            phenotype.base_color,
+            phenotype.pattern,
+            phenotype.intensity,
+            phenotype.roan,
+        )
+        if cache_key == self._portrait_cache_key and self._portrait_cache is not None:
+            return self._portrait_cache
+
         grid = generate_portrait_with_scene(
-            pig.phenotype.base_color.name,
-            pig.phenotype.pattern.value,
-            pig.phenotype.intensity.value,
-            pig.phenotype.roan.value,
+            phenotype.base_color.name,
+            phenotype.pattern.value,
+            phenotype.intensity.value,
+            phenotype.roan.value,
             str(pig.id),
         )
-        palette = PALETTES.get(pig.phenotype.base_color.name, PALETTES["BLACK"])
+        palette = PALETTES.get(phenotype.base_color.name, PALETTES["BLACK"])
         converted = convert_pixels(grid, palette)
-        return render_to_rich_text(converted, center_width=34)
+        portrait = render_to_rich_text(converted, center_width=34)
+        self._portrait_cache_key = cache_key
+        self._portrait_cache = portrait
+        return portrait
+
+    def _compute_fingerprint(self, pig: GuineaPig) -> tuple:
+        """Build a fingerprint of all dynamic sidebar fields."""
+        needs = pig.needs
+        return (
+            pig.id,
+            int(needs.hunger), int(needs.thirst), int(needs.energy),
+            int(needs.happiness), int(needs.health), int(needs.social),
+            int(needs.boredom),
+            pig.behavior_state,
+            pig.target_description,
+            len(pig.path),
+            pig.is_pregnant,
+            len(pig.behavior_log),
+            self.size.height,
+        )
 
     def refresh_content(self) -> None:
         """Refresh the sidebar content."""
         if not self._pig:
+            self._content_fingerprint = None
             self.update("")
             return
 
         pig = self._pig
+
+        # Skip full rebuild if nothing visible changed
+        fingerprint = self._compute_fingerprint(pig)
+        if fingerprint == self._content_fingerprint:
+            return
+        self._content_fingerprint = fingerprint
+
         lines = []
 
         # Header
