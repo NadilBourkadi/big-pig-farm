@@ -129,7 +129,7 @@ class MainGameScreen(Screen):
     def on_mount(self) -> None:
         """Handle screen mount."""
         self.update_display()
-        self.set_interval(0.1, self.update_display)
+        self.set_interval(0.15, self.update_display)
 
     def update_display(self) -> None:
         """Update all display elements."""
@@ -258,6 +258,7 @@ class MainGameScreen(Screen):
             parts.append(f"{hay_racks} hay")
 
         if parts:
+            self.query_one("#status-bar", StatusBar).force_refresh_facilities(self.state)
             self.notify(f"Refilled: {', '.join(parts)}")
         else:
             self.notify("No facilities to refill", severity="warning")
@@ -369,6 +370,7 @@ class MainGameScreen(Screen):
                 refund = get_facility_cost(facility.facility_type)
                 farm_view.remove_selected_facility()
                 add_money(self.state, refund, f"Removed {facility.facility_type.display_name}")
+                self.query_one("#status-bar", StatusBar).force_refresh_facilities(self.state)
                 name = facility.facility_type.display_name
                 self.notify(f"Removed: {name} (+{format_currency(refund)})", severity="information")
             else:

@@ -67,6 +67,9 @@ class StatusBar(Static):
 
         return " \u2502 ".join(parts)
 
+    _facility_frame_counter: int = 0
+    _FACILITY_QUERY_INTERVAL: int = 7  # recompute every ~1s at 7 Hz
+
     def update_from_state(self, state, tps: float = 0.0) -> None:
         """Update all values from game state."""
         self.debug_tps = tps
@@ -81,10 +84,23 @@ class StatusBar(Static):
         self.speed = state.speed.value
         self._speed_enum = state.speed
 
-        # Calculate food level (bowls + hay racks) and water level separately
+        # Recompute facility levels and population warning only every ~1s
+        self._facility_frame_counter += 1
+        if self._facility_frame_counter >= self._FACILITY_QUERY_INTERVAL:
+            self._facility_frame_counter = 0
+            self._recompute_facility_levels(state)
+            self._recompute_population_warning(state)
+
+    def force_refresh_facilities(self, state) -> None:
+        """Force immediate facility recompute (call after player actions)."""
+        self._facility_frame_counter = 0
+        self._recompute_facility_levels(state)
+
+    def _recompute_facility_levels(self, state) -> None:
+        """Query facilities and update food/water percentages."""
         food_facilities = (
-            state.get_facilities_by_type(FacilityType.FOOD_BOWL) +
-            state.get_facilities_by_type(FacilityType.HAY_RACK)
+            state.get_facilities_by_type(FacilityType.FOOD_BOWL)
+            + state.get_facilities_by_type(FacilityType.HAY_RACK)
         )
         if food_facilities:
             avg_food = sum(f.fill_percentage for f in food_facilities) / len(food_facilities)
@@ -99,7 +115,8 @@ class StatusBar(Static):
         else:
             self.water_level = 0
 
-        # Population warning when breeding program is active
+    def _recompute_population_warning(self, state) -> None:
+        """Check breeding population and update warning."""
         if state.breeding_program.enabled:
             adults = [p for p in state.get_pigs_list() if not p.is_baby]
             if len(adults) <= BREEDING.MIN_BREEDING_POPULATION:
