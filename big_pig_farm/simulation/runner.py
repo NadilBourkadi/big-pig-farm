@@ -1,6 +1,7 @@
 """Simulation tick orchestration — runs all game systems each tick."""
 
 import time
+from collections import deque
 from collections.abc import Callable
 from typing import Protocol
 from uuid import UUID
@@ -44,10 +45,21 @@ class SimulationRunner:
         self.on_pregnancy = on_pregnancy
         self.on_birth = on_birth
         self._save_counter = 0
+        # Rolling TPS measurement (last 50 tick timestamps)
+        self._tick_timestamps: deque[float] = deque(maxlen=50)
+        self.current_tps: float = 0.0
+        # Throttle expensive O(m*f) breeding checks to every 10 ticks (~1s)
+        self._breeding_check_counter = 0
+        self._breeding_check_interval = 10
 
     def tick(self, delta_seconds: float) -> None:
         """Process one simulation tick. delta_seconds is already speed-scaled."""
         tick_start = time.perf_counter()
+        self._tick_timestamps.append(tick_start)
+        if len(self._tick_timestamps) >= 2:
+            elapsed = self._tick_timestamps[-1] - self._tick_timestamps[0]
+            if elapsed > 0:
+                self.current_tps = (len(self._tick_timestamps) - 1) / elapsed
         state = self.state
         controller = self.behavior_controller
         profiling = self.debug_logger is not None
@@ -139,9 +151,13 @@ class SimulationRunner:
             if self.on_pig_sold:
                 self.on_pig_sold(pig_name, total, pig_id)
 
-        # 10. Check for breeding
+        # 10. Check for breeding (throttle expensive O(m*f) scans)
+        self._breeding_check_counter += 1
+        run_expensive = self._breeding_check_counter >= self._breeding_check_interval
+        if run_expensive:
+            self._breeding_check_counter = 0
         events_before = len(state.events)
-        check_breeding_opportunities(state)
+        check_breeding_opportunities(state, run_expensive=run_expensive)
 
         # Notify on births
         if self.on_birth:
