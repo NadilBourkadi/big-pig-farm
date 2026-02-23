@@ -781,7 +781,7 @@ def clear_pig_navigation(state: GameState) -> None:
         # If pig is standing on an unwalkable cell, move to nearest walkable
         gx, gy = pig.position.grid_pos()
         if not farm.is_walkable(gx, gy):
-            new_pos = farm._find_nearest_walkable((gx, gy))
+            new_pos = farm.find_nearest_walkable((gx, gy))
             if new_pos:
                 pig.position.x = float(new_pos[0])
                 pig.position.y = float(new_pos[1])

@@ -552,7 +552,7 @@ class SaveManager:
 
             # Legacy migration: if no areas were loaded, create a single MEADOW area
             if not farm.areas:
-                farm._create_legacy_starter_area()
+                farm.create_legacy_starter_area()
 
             state = GameState(
                 money=row["money"],

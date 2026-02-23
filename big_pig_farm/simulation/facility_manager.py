@@ -75,7 +75,7 @@ class FacilityManager:
         if start == goal:
             return [start]
 
-        gen = self.game_state.farm._grid_generation
+        gen = self.game_state.farm.grid_generation
         key = (start, goal, gen)
         result = self._path_cache.get(key)
         if result is not None:

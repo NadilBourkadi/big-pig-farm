@@ -63,7 +63,7 @@ class FarmGrid(BaseModel):
     # Grid generation counter — incremented whenever the walkable grid changes
     # (facility placed/removed, area added, tunnels carved).  Used by the
     # cross-tick path cache to invalidate stale entries.
-    _grid_generation: int = 0
+    grid_generation: int = 0
 
     # Performance counters (reset each debug snapshot window)
     _pathfind_calls: int = 0
@@ -88,7 +88,7 @@ class FarmGrid(BaseModel):
         self._walkable_cache = None
         self._area_walkable_cache = {}
         self._biome_area_cache = {}
-        self._grid_generation += 1
+        self.grid_generation += 1
 
     def _compute_wall_flags(self) -> None:
         """Pre-compute is_corner and is_horizontal_wall for all wall cells.
@@ -138,10 +138,10 @@ class FarmGrid(BaseModel):
         """Create a starter farm grid with a MEADOW area."""
         room = ROOM_TIERS[0]
         grid = cls(width=room.room_width, height=room.room_height, tier=1)
-        grid._create_legacy_starter_area()
+        grid.create_legacy_starter_area()
         return grid
 
-    def _create_legacy_starter_area(self) -> None:
+    def create_legacy_starter_area(self) -> None:
         """Create a MEADOW starter area covering the entire grid.
 
         Used by create_starter() and as a safety net for legacy saves where
@@ -327,7 +327,7 @@ class FarmGrid(BaseModel):
 
         if not self.is_walkable(goal[0], goal[1]):
             # Try to find nearest walkable cell to goal
-            goal = self._find_nearest_walkable(goal)
+            goal = self.find_nearest_walkable(goal)
             if goal is None:
                 return []
 
@@ -379,7 +379,7 @@ class FarmGrid(BaseModel):
         """Manhattan distance heuristic for A*."""
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-    def _find_nearest_walkable(
+    def find_nearest_walkable(
         self,
         pos: tuple[int, int],
         max_distance: int = 5,
@@ -462,7 +462,7 @@ class FarmGrid(BaseModel):
             return area.biome
         return None
 
-    def _repair_area_cells(self) -> None:
+    def repair_area_cells(self) -> None:
         """Re-stamp area_id on border cells and mark void cells non-walkable.
 
         Needed for saves created before add_area() was used consistently.
@@ -536,7 +536,7 @@ class FarmGrid(BaseModel):
 
         return pairs
 
-    def _rebuild_tunnels(self) -> None:
+    def rebuild_tunnels(self) -> None:
         """Re-carve all tunnel connections using current tunnel dimensions.
 
         Uses _get_adjacent_pairs() so newly adjacent rooms after relayout
@@ -841,7 +841,7 @@ class FarmGrid(BaseModel):
         """
         # Ensure there's at least a starter area to attach to
         if not self.areas:
-            self._create_legacy_starter_area()
+            self.create_legacy_starter_area()
 
         room_idx = len(self.areas)
         if room_idx >= len(ROOM_TIERS):
@@ -960,7 +960,7 @@ class FarmGrid(BaseModel):
                 area.y2 = target_y1 + ah - 1
 
             # Rebuild cells for all existing areas
-            self._repair_area_cells()
+            self.repair_area_cells()
         elif need_w > self.width or need_h > self.height:
             self.expand_grid(need_w, need_h, 0, 0)
 
@@ -973,7 +973,7 @@ class FarmGrid(BaseModel):
         self.add_area(new_area)
 
         # Rebuild all tunnel connections based on adjacency
-        self._rebuild_tunnels()
+        self.rebuild_tunnels()
 
         return new_area, list(self.tunnels), entity_offset_x, entity_offset_y, room_deltas
 
@@ -1072,14 +1072,14 @@ def relayout_areas(state: "GameState") -> bool:
         farm.place_facility(facility)
 
     # Rebuild tunnels using adjacency pairs
-    farm._rebuild_tunnels()
+    farm.rebuild_tunnels()
 
     # Clamp any orphaned pigs (e.g. those that were in tunnel corridors)
     # to the nearest walkable cell
     for pig in state.get_pigs_list():
         px, py = int(pig.position.x), int(pig.position.y)
         if not farm.is_walkable(px, py):
-            walkable = farm._find_nearest_walkable((px, py), max_distance=20)
+            walkable = farm.find_nearest_walkable((px, py), max_distance=20)
             if walkable:
                 pig.position.x = float(walkable[0])
                 pig.position.y = float(walkable[1])
