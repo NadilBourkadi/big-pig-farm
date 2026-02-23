@@ -115,6 +115,10 @@ class FarmView(Static):
         self._viewport_y = 0
         self._char_buffer: list[list[str]] = []
         self._style_buffer: list[list[Style | None]] = []
+        self._terrain_bg_buffer: list[list[Style | None]] = []
+        # Cached buffer dimensions — only reallocate when size changes
+        self._buf_width: int = 0
+        self._buf_height: int = 0
         # Cursor position for edit mode
         self._cursor_x = 5
         self._cursor_y = 5
@@ -203,13 +207,28 @@ class FarmView(Static):
         return self._buffer_to_text()
 
     def _init_buffers(self, width: int, height: int) -> None:
-        """Initialize character and style buffers."""
-        self._char_buffer = [[" " for _ in range(width)] for _ in range(height)]
-        self._style_buffer = [[None for _ in range(width)] for _ in range(height)]
-        # Separate buffer for terrain/facility background colors.
-        # Used when drawing pig outlines so semi-transparent edge pixels
-        # blend with the ground instead of with other pigs' body colors.
-        self._terrain_bg_buffer = [[None for _ in range(width)] for _ in range(height)]
+        """Initialize or clear character and style buffers.
+
+        Reuses existing buffer arrays when dimensions haven't changed,
+        avoiding ~57,600 object allocations per frame.
+        """
+        if width == self._buf_width and height == self._buf_height:
+            # Clear in-place — much cheaper than reallocating
+            for row in self._char_buffer:
+                for x in range(width):
+                    row[x] = " "
+            for row in self._style_buffer:
+                for x in range(width):
+                    row[x] = None
+            for row in self._terrain_bg_buffer:
+                for x in range(width):
+                    row[x] = None
+        else:
+            self._buf_width = width
+            self._buf_height = height
+            self._char_buffer = [[" "] * width for _ in range(height)]
+            self._style_buffer = [[None] * width for _ in range(height)]
+            self._terrain_bg_buffer = [[None] * width for _ in range(height)]
 
     # ------------------------------------------------------------------
     # Terrain
@@ -780,14 +799,31 @@ class FarmView(Static):
     # ------------------------------------------------------------------
 
     def _buffer_to_text(self) -> Text:
-        """Convert the character buffer to Rich Text."""
+        """Convert the character buffer to Rich Text.
+
+        Uses run-length encoding to batch consecutive same-style characters
+        into single Text.append() calls, reducing call count from ~6400 to
+        ~200-500 per frame.
+        """
         text = Text()
+        style_rows = self._style_buffer
+        last_row = len(self._char_buffer) - 1
 
         for y, row in enumerate(self._char_buffer):
-            for x, char in enumerate(row):
-                style = self._style_buffer[y][x]
-                text.append(char, style=style)
-            if y < len(self._char_buffer) - 1:
+            styles = style_rows[y]
+            # Run-length encode: group consecutive chars with the same style
+            run_start = 0
+            run_style = styles[0] if row else None
+            for x in range(1, len(row)):
+                style = styles[x]
+                if style is not run_style and style != run_style:
+                    text.append("".join(row[run_start:x]), style=run_style)
+                    run_start = x
+                    run_style = style
+            # Flush final run
+            if row:
+                text.append("".join(row[run_start:]), style=run_style)
+            if y < last_row:
                 text.append("\n")
 
         return text
