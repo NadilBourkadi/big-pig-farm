@@ -8,6 +8,7 @@ from big_pig_farm.entities.facilities import FacilityType
 from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality
 
 if TYPE_CHECKING:
+    from big_pig_farm.game.state import GameState
     from big_pig_farm.simulation.collision import SpatialGrid
 
 
@@ -47,7 +48,7 @@ def precompute_nearby_counts(
 
 
 def update_all_needs(
-    pig: GuineaPig, game_minutes: float, game_state,
+    pig: GuineaPig, game_minutes: float, game_state: "GameState",
     nearby_count: int | None = None,
 ) -> None:
     """Update all needs for a guinea pig based on elapsed game time."""
@@ -126,7 +127,7 @@ def update_all_needs(
     pig.needs.clamp_all()
 
 
-def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state) -> None:
+def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state: "GameState") -> None:
     """Apply need recovery based on current behavior."""
     hours = game_minutes / 60.0
 
@@ -151,7 +152,7 @@ def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state) ->
         pig.needs.social += NEEDS.SOCIAL_RECOVERY * hours
 
 
-def _count_nearby_pigs(pig: GuineaPig, game_state, radius: float) -> int:
+def _count_nearby_pigs(pig: GuineaPig, game_state: "GameState", radius: float) -> int:
     """Count how many other pigs are within the given radius."""
     count = 0
     for other in game_state.get_pigs_list():
