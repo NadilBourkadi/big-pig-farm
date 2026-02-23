@@ -1,5 +1,6 @@
 """Breeding program - goal-oriented autopilot for selective breeding."""
 
+from collections import Counter
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -253,7 +254,24 @@ def _heterozygosity_count(genotype: Genotype) -> int:
     return count
 
 
-def diversity_value(pig: GuineaPig, all_pigs: list[GuineaPig]) -> float:
+def build_diversity_counters(
+    pigs: list[GuineaPig],
+) -> tuple[Counter[str], Counter[BaseColor]]:
+    """Pre-compute phenotype and color frequency counters. O(n)."""
+    phenotype_counts: Counter[str] = Counter()
+    color_counts: Counter[BaseColor] = Counter()
+    for pig in pigs:
+        phenotype_counts[phenotype_key(pig.phenotype)] += 1
+        color_counts[pig.phenotype.base_color] += 1
+    return phenotype_counts, color_counts
+
+
+def diversity_value(
+    pig: GuineaPig,
+    all_pigs: list[GuineaPig],
+    phenotype_counts: Counter[str] | None = None,
+    color_counts: Counter[BaseColor] | None = None,
+) -> float:
     """Score a pig's contribution to phenotype diversity.
 
     Components (0-28 max for breeding-age pigs):
@@ -271,13 +289,19 @@ def diversity_value(pig: GuineaPig, all_pigs: list[GuineaPig]) -> float:
     sub-phenotypes (pattern/intensity variants). Without it, 42 blue pigs
     across ~12 sub-phenotypes each score ~2.9 uniqueness instead of the
     ~0.24 they'd score at the color level.
+
+    Pass pre-computed counters from build_diversity_counters() to avoid
+    O(n) per call (makes batch scoring O(n) instead of O(n²)).
     """
+    if phenotype_counts is None or color_counts is None:
+        phenotype_counts, color_counts = build_diversity_counters(all_pigs)
+
     key = phenotype_key(pig.phenotype)
-    same_phenotype = sum(1 for p in all_pigs if phenotype_key(p.phenotype) == key)
+    same_phenotype = phenotype_counts[key]
     phenotype_uniqueness = 10.0 / same_phenotype
 
     pig_color = pig.phenotype.base_color
-    same_color = sum(1 for p in all_pigs if p.phenotype.base_color == pig_color)
+    same_color = color_counts[pig_color]
     color_uniqueness = 10.0 / same_color
 
     het_bonus = float(_heterozygosity_count(pig.genotype))

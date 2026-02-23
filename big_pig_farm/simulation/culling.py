@@ -9,6 +9,7 @@ from big_pig_farm.entities.guinea_pig import Gender, GuineaPig
 from big_pig_farm.simulation.breeding_program import (
     BreedingStrategy,
     breeding_value,
+    build_diversity_counters,
     diversity_value,
     money_value,
     should_keep_pig,
@@ -117,8 +118,10 @@ def _score_adults(
     Returns a list of (pig, score_tuple) sorted best-first.
     """
     if program.strategy == BreedingStrategy.DIVERSITY:
+        phenotype_counts, color_counts = build_diversity_counters(adults)
         scored = [
-            (p, (diversity_value(p, adults), breeding_value(p, program, has_lab)))
+            (p, (diversity_value(p, adults, phenotype_counts, color_counts),
+                 breeding_value(p, program, has_lab)))
             for p in adults
         ]
     elif program.strategy == BreedingStrategy.MONEY:
