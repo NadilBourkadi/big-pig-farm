@@ -1,10 +1,11 @@
 """Farm view widget - renders the farm grid with guinea pigs."""
 
-from typing import Optional
 from uuid import UUID
 
 from rich.style import Style
 from rich.text import Text
+from textual.events import Click, MouseScrollDown, MouseScrollUp
+from textual.message import Message
 from textual.reactive import reactive
 from textual.widgets import Static
 
@@ -79,10 +80,23 @@ class _IndicatorTimer:
 class FarmView(Static):
     """Widget that renders the farm grid with guinea pigs and facilities."""
 
-    selected_pig_id: reactive[Optional[UUID]] = reactive(None)
+    selected_pig_id: reactive[UUID | None] = reactive(None)
     edit_mode: reactive[bool] = reactive(False)
-    selected_facility_id: reactive[Optional[UUID]] = reactive(None)
+    selected_facility_id: reactive[UUID | None] = reactive(None)
     moving_facility: reactive[bool] = reactive(False)
+
+    class ScrollPanned(Message):
+        """Posted when the user scrolls the farm view."""
+
+    class PigClicked(Message):
+        """Posted when the user clicks on a pig sprite."""
+
+        def __init__(self, pig: GuineaPig) -> None:
+            super().__init__()
+            self.pig = pig
+
+    class EmptyClicked(Message):
+        """Posted when the user clicks on empty space (no pig)."""
 
     DEFAULT_CSS = """
     FarmView {
@@ -100,7 +114,7 @@ class FarmView(Static):
         self._viewport_x = 0
         self._viewport_y = 0
         self._char_buffer: list[list[str]] = []
-        self._style_buffer: list[list[Optional[Style]]] = []
+        self._style_buffer: list[list[Style | None]] = []
         # Cursor position for edit mode
         self._cursor_x = 5
         self._cursor_y = 5
@@ -676,7 +690,7 @@ class FarmView(Static):
     # Status indicators
     # ------------------------------------------------------------------
 
-    def _update_indicator_timer(self, pig: GuineaPig) -> Optional[IndicatorType]:
+    def _update_indicator_timer(self, pig: GuineaPig) -> IndicatorType | None:
         """Manage the show/cooldown/resurface cycle for a pig's status indicator.
 
         Returns the IndicatorType to draw, or None if nothing should be shown.
@@ -798,7 +812,7 @@ class FarmView(Static):
         self._clamp_viewport()
         self.refresh()
 
-    def select_pig(self, pig_id: Optional[UUID]) -> None:
+    def select_pig(self, pig_id: UUID | None) -> None:
         """Select a guinea pig."""
         self.selected_pig_id = pig_id
 
@@ -815,6 +829,87 @@ class FarmView(Static):
         self._viewport_y += dy
         self._clamp_viewport()
         self.refresh()
+
+    # ------------------------------------------------------------------
+    # Mouse events
+    # ------------------------------------------------------------------
+
+    def on_mouse_scroll_up(self, event: MouseScrollUp) -> None:
+        """Pan viewport on scroll-up. Shift+scroll pans left instead."""
+        if event.shift:
+            self.scroll(-2, 0)
+        else:
+            self.scroll(0, -2)
+        self.post_message(self.ScrollPanned())
+
+    def on_mouse_scroll_down(self, event: MouseScrollDown) -> None:
+        """Pan viewport on scroll-down. Shift+scroll pans right instead."""
+        if event.shift:
+            self.scroll(2, 0)
+        else:
+            self.scroll(0, 2)
+        self.post_message(self.ScrollPanned())
+
+    def on_click(self, event: Click) -> None:
+        """Click on a pig to follow, or on empty space to stop following."""
+        if self.edit_mode:
+            return
+        pig = self._pig_at_screen_pos(event.x, event.y)
+        if pig is not None:
+            self.post_message(self.PigClicked(pig))
+        else:
+            self.post_message(self.EmptyClicked())
+
+    def _pig_at_screen_pos(self, screen_x: int, screen_y: int) -> GuineaPig | None:
+        """Return the pig whose sprite covers (screen_x, screen_y), or None."""
+        scale = self._scale()
+        width = self.size.width
+        height = self.size.height
+
+        farm = self.state.farm
+        scaled_w = int(farm.width * scale)
+        scaled_h = int(farm.height * scale)
+        offset_x = max(0, (width - scaled_w) // 2)
+        offset_y = max(0, (height - scaled_h) // 2)
+
+        best_pig: GuineaPig | None = None
+        best_dist = float("inf")
+
+        for pig in self.state.get_pigs_list():
+            direction = self._pig_facing.get(pig.id, Direction.RIGHT)
+            base_color_name = pig.phenotype.base_color.name
+
+            # Use frame=0 for hit-testing — all frames share the same dimensions
+            halfblock = get_pig_halfblock_sprite(
+                pig.display_state, direction, base_color_name,
+                is_baby=pig.is_baby, zoom=self._zoom, frame=0,
+            )
+            if halfblock is None:
+                continue
+
+            sprite_h = len(halfblock)
+            sprite_w = len(halfblock[0])
+
+            base_x = int((pig.position.x - self._viewport_x) * scale) + offset_x
+            base_y = int((pig.position.y - self._viewport_y) * scale) + offset_y
+
+            anchor_x = base_x - sprite_w // 2
+            anchor_y = base_y - sprite_h // 2
+
+            # 1px padding on small sprites so far-zoom dots are easier to click
+            pad = 1 if sprite_w <= 3 or sprite_h <= 3 else 0
+            if not (anchor_x - pad <= screen_x < anchor_x + sprite_w + pad
+                    and anchor_y - pad <= screen_y < anchor_y + sprite_h + pad):
+                continue
+
+            # Pick the pig closest to the click point (overlapping pigs
+            # resolve by center distance, not render Z-order)
+            dist = abs(screen_x - base_x) + abs(screen_y - base_y)
+            if dist < best_dist:
+                best_dist = dist
+                best_pig = pig
+
+        return best_pig
 
     # ------------------------------------------------------------------
     # Edit mode (unchanged)
@@ -876,7 +971,7 @@ class FarmView(Static):
         self._cursor_y = new_y
         self.refresh()
 
-    def select_facility_at_cursor(self) -> Optional[Facility]:
+    def select_facility_at_cursor(self) -> Facility | None:
         """Select the facility under the cursor."""
         if not self.edit_mode:
             return None
@@ -920,7 +1015,7 @@ class FarmView(Static):
             return True
         return False
 
-    def remove_selected_facility(self) -> Optional[Facility]:
+    def remove_selected_facility(self) -> Facility | None:
         """Remove the currently selected facility."""
         if self.selected_facility_id:
             facility = self.state.remove_facility(self.selected_facility_id)
@@ -929,7 +1024,7 @@ class FarmView(Static):
             return facility
         return None
 
-    def get_selected_facility(self) -> Optional[Facility]:
+    def get_selected_facility(self) -> Facility | None:
         """Get the currently selected facility."""
         if self.selected_facility_id:
             return self.state.get_facility(self.selected_facility_id)

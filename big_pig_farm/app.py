@@ -3,21 +3,59 @@
 from pathlib import Path
 from uuid import UUID
 
+from textual import events
+from textual._xterm_parser import XTermParser
 from textual.app import App
 
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender, Position
-from big_pig_farm.entities.facilities import Facility, FacilityType
-from big_pig_farm.entities.pigdex import phenotype_key
 from big_pig_farm.data.names import generate_unique_name
-from big_pig_farm.game.state import GameState
+from big_pig_farm.economy.currency import format_currency
+from big_pig_farm.entities.facilities import Facility, FacilityType
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
+from big_pig_farm.entities.pigdex import phenotype_key
+from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.game.engine import GameEngine
 from big_pig_farm.game.save_manager_v2 import CombinedSaveManager
-from big_pig_farm.game.debug_logger import DebugLogger
+from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.behavior import BehaviorController
 from big_pig_farm.simulation.birth import register_pig_in_pigdex
-from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.simulation.runner import SimulationRunner
 from big_pig_farm.ui.screens.main_game import MainGameScreen
+
+# ---------------------------------------------------------------------------
+# Patch Textual's xterm parser to support horizontal trackpad scrolling.
+#
+# SGR mouse protocol scroll button codes:
+#   64 = scroll up,   65 = scroll down   (bit 1 clear → vertical)
+#   66 = scroll left,  67 = scroll right  (bit 1 set   → horizontal)
+#
+# Textual only checks bit 0 (up vs down) and ignores bit 1 entirely, so
+# horizontal trackpad scrolling arrives as vertical.  We fix this by
+# setting the shift flag when bit 1 is set, which our FarmView scroll
+# handlers already interpret as "pan horizontally".
+# ---------------------------------------------------------------------------
+_original_parse_mouse_code = XTermParser.parse_mouse_code
+
+
+def _patched_parse_mouse_code(self: XTermParser, code: str) -> events.Event | None:
+    event = _original_parse_mouse_code(self, code)
+    if event is None:
+        return None
+    if isinstance(event, events.MouseScrollUp | events.MouseScrollDown):
+        # Re-parse the button code to check bit 1 (horizontal flag)
+        sgr_match = self._re_sgr_mouse.match(code)
+        if sgr_match:
+            buttons = int(sgr_match.group(1))
+            if buttons & 2:  # horizontal scroll
+                # Reconstruct the event with shift=True
+                event = type(event)(
+                    event.x, event.y, event.delta_x, event.delta_y,
+                    event.button, True, event.meta, event.ctrl,
+                    screen_x=event.screen_x, screen_y=event.screen_y,
+                )
+    return event
+
+
+XTermParser.parse_mouse_code = _patched_parse_mouse_code  # type: ignore[assignment]
 
 
 class BigPigFarmApp(App):
