@@ -13,7 +13,9 @@ from big_pig_farm.simulation.collision import CollisionHandler
 from big_pig_farm.simulation.needs import get_most_urgent_need
 
 # Maximum number of entries in the cross-tick path cache.
-_PATH_CACHE_MAX_SIZE = 512
+# Sized for ~84 pigs × multiple facility targets; 512 was too small
+# (only 66% hit rate at full population).
+_PATH_CACHE_MAX_SIZE = 2048
 
 
 def _pig_color_matches_biome(pig: GuineaPig, biome_str: str) -> bool:
