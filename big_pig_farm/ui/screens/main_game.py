@@ -133,9 +133,12 @@ class MainGameScreen(Screen):
 
     def update_display(self) -> None:
         """Update all display elements."""
-        farm_view = self.query_one("#farm-view", FarmView)
-        status_bar = self.query_one("#status-bar", StatusBar)
-        pig_sidebar = self.query_one("#pig-sidebar", PigSidebar)
+        try:
+            farm_view = self.query_one("#farm-view", FarmView)
+            status_bar = self.query_one("#status-bar", StatusBar)
+            pig_sidebar = self.query_one("#pig-sidebar", PigSidebar)
+        except NoMatches:
+            return  # Widgets not mounted yet (screen transition)
 
         # Check if we should follow a pig (set by pig list/detail screens)
         if self.app.pig_to_follow:
@@ -510,6 +513,18 @@ class MainGameScreen(Screen):
         dump_path = dump_dir / "debug_dump.txt"
         dump_path.write_text("\n".join(lines))
         self.notify(f"Debug dump saved to {dump_path}")
+
+    def on_farm_view_scroll_panned(self, message: FarmView.ScrollPanned) -> None:
+        """Mouse scroll pans viewport — stop following any pig."""
+        self._stop_following()
+
+    def on_farm_view_pig_clicked(self, message: FarmView.PigClicked) -> None:
+        """Click on a pig sprite — start following it."""
+        self._follow_pig(message.pig)
+
+    def on_farm_view_empty_clicked(self, message: FarmView.EmptyClicked) -> None:
+        """Click on empty space — stop following."""
+        self._stop_following()
 
     def action_quit_game(self) -> None:
         """Quit the game."""
