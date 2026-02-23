@@ -44,12 +44,14 @@ class SaveManagerV2:
 
     def save(self, state: GameState) -> None:
         """Save entire game state as JSON."""
+        self.save_blob(state.model_dump_json())
+
+    def save_blob(self, json_blob: str) -> None:
+        """Save pre-serialized JSON blob to SQLite."""
         # Create backup before writing
         if self.save_path.exists():
             backup = self.save_path.with_suffix(".db.bak")
             shutil.copy2(str(self.save_path), str(backup))
-
-        json_blob = state.model_dump_json()
 
         conn = sqlite3.connect(str(self.save_path))
         try:
@@ -149,6 +151,10 @@ class CombinedSaveManager:
     def save(self, state: GameState) -> None:
         """Save using v2 format."""
         self.v2.save(state)
+
+    def save_blob(self, json_blob: str) -> None:
+        """Save pre-serialized JSON blob using v2 format."""
+        self.v2.save_blob(json_blob)
 
     def load(self) -> GameState | None:
         """Load from v2 first, fall back to v1."""
