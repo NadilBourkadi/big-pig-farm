@@ -301,7 +301,7 @@ class SimulationConfig:
     BASE_MOVE_SPEED: float = 1.0  # Cells per game minute
 
     # Pathfinding
-    MAX_PATHFINDING_ITERATIONS: int = 3000
+    MAX_PATHFINDING_ITERATIONS: int = 1500
 
     # Behavior
     DECISION_INTERVAL_SECONDS: float = 2.0
@@ -370,6 +370,8 @@ class BehaviorConfig:
 
     # Facility pathfinding limits
     MAX_FACILITY_PATHFIND_DISTANCE: int = 100  # Skip A* when Manhattan distance exceeds this
+    MAX_FACILITY_CANDIDATES: int = 4  # Max facilities to try A* on per decision
+    STRAIGHT_LINE_MAX_DISTANCE: int = 6  # Max Manhattan distance for straight-line path shortcut
 
     # Content pig throttle — pigs with no urgent needs decide less often
     CONTENT_DECISION_INTERVAL: float = 8.0  # Seconds between decisions for content pigs

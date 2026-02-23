@@ -341,7 +341,7 @@ class FarmGrid(BaseModel):
         f_score: dict[tuple[int, int], float] = {start: self._heuristic(start, goal)}
 
         iterations = 0
-        max_iterations = SIMULATION.MAX_PATHFINDING_ITERATIONS + 500 * len(self.areas)
+        max_iterations = SIMULATION.MAX_PATHFINDING_ITERATIONS + 250 * len(self.areas)
 
         while open_set and iterations < max_iterations:
             iterations += 1
