@@ -24,6 +24,7 @@ class StatusBar(Static):
     speed: reactive[int] = reactive(1)
     warning: reactive[str] = reactive("")
     edit_mode: reactive[bool] = reactive(False)
+    debug_tps: reactive[float] = reactive(0.0)
 
     DEFAULT_CSS = """
     StatusBar {
@@ -58,13 +59,17 @@ class StatusBar(Static):
         if self.warning:
             parts.append(f"\u26a0 {self.warning}")
 
+        if self.debug_tps > 0:
+            parts.append(f"{self.debug_tps:.1f} tps")
+
         if self.edit_mode:
             parts.append("[bold reverse] EDIT [/]")
 
         return " \u2502 ".join(parts)
 
-    def update_from_state(self, state) -> None:
+    def update_from_state(self, state, tps: float = 0.0) -> None:
         """Update all values from game state."""
+        self.debug_tps = tps
         self.day = state.game_time.day
         self.time_display = state.game_time.display_time
         self.time_of_day = state.game_time.time_of_day

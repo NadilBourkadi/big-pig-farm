@@ -154,7 +154,9 @@ class MainGameScreen(Screen):
             else:
                 self._stop_following()
 
-        status_bar.update_from_state(self.state)
+        tps = getattr(self.app, 'runner', None)
+        tps_value = tps.current_tps if tps and self.app.debug_mode else 0.0
+        status_bar.update_from_state(self.state, tps=tps_value)
         farm_view.refresh()
         pig_sidebar.refresh_content()
 
