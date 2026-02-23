@@ -1,23 +1,23 @@
 """ASCII art definitions for guinea pigs and facilities."""
 
 from enum import Enum
-from typing import Optional
+from functools import lru_cache
 
-from big_pig_farm.data.sprite_engine import (
-    ANIM_FRAME_COUNT,
-    ANIM_TICKS_PER_FRAME,
-    HalfBlockRows,
-    convert_pixels,
-    scale_pixel_grid,
-    PALETTES,
-)
-from big_pig_farm.data.pig_sprite_lookup import get_pig_pixel_sprite
 from big_pig_farm.data.facility_pixels import (
     FACILITY_PALETTES,
     FACILITY_PIXELS,
     FACILITY_PIXELS_FAR,
 )
 from big_pig_farm.data.facility_pixels_close import FACILITY_PIXELS_CLOSE
+from big_pig_farm.data.pig_sprite_lookup import get_pig_pixel_sprite
+from big_pig_farm.data.sprite_engine import (
+    ANIM_FRAME_COUNT,  # noqa: F401 (re-exported)
+    ANIM_TICKS_PER_FRAME,  # noqa: F401 (re-exported)
+    PALETTES,
+    HalfBlockRows,
+    convert_pixels,
+    scale_pixel_grid,
+)
 
 
 class ZoomLevel(Enum):
@@ -286,6 +286,7 @@ def get_pig_sprite(state: str, direction: Direction, is_baby: bool = False) -> l
     return sprites.get(fallback, sprites["idle_right"])
 
 
+@lru_cache(maxsize=1024)
 def get_pig_halfblock_sprite(
     state: str,
     direction: Direction,
@@ -293,7 +294,7 @@ def get_pig_halfblock_sprite(
     is_baby: bool = False,
     zoom: ZoomLevel = ZoomLevel.NORMAL,
     frame: int = 0,
-) -> Optional[HalfBlockRows]:
+) -> HalfBlockRows | None:
     """Get a half-block rendered pig sprite with phenotype colors.
 
     Args:
@@ -324,11 +325,12 @@ def get_facility_sprite(facility_type: str, state: str = "") -> list[str]:
     return FACILITY_SPRITES.get(facility_type, ["[?]"])
 
 
+@lru_cache(maxsize=128)
 def get_facility_halfblock_sprite(
     facility_type: str,
     state: str = "",
     zoom: ZoomLevel = ZoomLevel.NORMAL,
-) -> Optional[HalfBlockRows]:
+) -> HalfBlockRows | None:
     """Get a half-block rendered facility sprite.
 
     Args:
