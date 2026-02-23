@@ -52,9 +52,6 @@ class FacilityInfo:
     sale_bonus: float = 0.0
     food_production: int = 0
 
-    def get(self, key: str, default: object = None) -> object:
-        """Dict-like access for backwards compatibility."""
-        return getattr(self, key, default)
 
 
 # Facility metadata
