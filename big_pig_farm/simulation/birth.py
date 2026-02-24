@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.entities.biomes import BIOMES
-from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.facilities import FACILITY_INFO, FacilityType
 from big_pig_farm.entities.genetics import breed as breed_genetics
 from big_pig_farm.entities.genetics import calculate_phenotype
 from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
@@ -214,8 +214,26 @@ def age_all_pigs(game_state: "BirthContext", game_hours: float) -> list[GuineaPi
     game_days = game_hours / 24.0
     deaths = []
 
+    # Pre-compute nursery interaction points for growth bonus checks
+    nurseries = game_state.get_facilities_by_type(FacilityType.NURSERY)
+    nursery_points: list[tuple[int, int]] = []
+    for nursery in nurseries:
+        nursery_points.extend(nursery.interaction_points)
+
     for pig in game_state.get_pigs_list():
-        pig.age_days += game_days
+        aging_days = game_days
+
+        # Baby pigs near a nursery age faster (growth_bonus from FACILITY_INFO)
+        if pig.is_baby and nursery_points:
+            pig_x, pig_y = int(pig.position.x), int(pig.position.y)
+            for point_x, point_y in nursery_points:
+                distance = abs(pig_x - point_x) + abs(pig_y - point_y)
+                if distance <= 3:
+                    growth_bonus = FACILITY_INFO[FacilityType.NURSERY].growth_bonus
+                    aging_days = game_days * (1.0 + growth_bonus)
+                    break
+
+        pig.age_days += aging_days
 
         # Check for death from old age
         if pig.age_days >= SIMULATION.MAX_AGE_DAYS:
