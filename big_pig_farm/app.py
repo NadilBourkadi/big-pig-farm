@@ -16,7 +16,7 @@ from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.game.engine import GameEngine
 from big_pig_farm.game.save_manager_v2 import CombinedSaveManager
 from big_pig_farm.game.state import GameState
-from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.behavior_controller import BehaviorController
 from big_pig_farm.simulation.birth import register_pig_in_pigdex
 from big_pig_farm.simulation.runner import SimulationRunner
 from big_pig_farm.ui.screens.main_game import MainGameScreen

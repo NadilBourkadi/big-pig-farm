@@ -4,7 +4,7 @@ from big_pig_farm.entities.genetics import Genotype, calculate_phenotype
 from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig, Position
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.world import FarmGrid
-from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.behavior_controller import BehaviorController
 
 
 def _make_state() -> GameState:

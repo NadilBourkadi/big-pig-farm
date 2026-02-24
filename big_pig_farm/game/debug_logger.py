@@ -10,7 +10,7 @@ from uuid import UUID
 from big_pig_farm.data.config import SPEED_DISPLAY
 from big_pig_farm.entities.guinea_pig import Gender
 from big_pig_farm.game.state import GameState
-from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.behavior_controller import BehaviorController
 
 
 class DebugLogger:

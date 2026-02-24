@@ -13,7 +13,7 @@ from big_pig_farm.economy.contracts import generate_contracts
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.acclimation import update_acclimation
-from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.behavior_controller import BehaviorController
 from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs
 from big_pig_farm.simulation.breeding import check_breeding_opportunities, start_pregnancy_from_courtship
 from big_pig_farm.simulation.culling import cull_surplus_breeders, sell_marked_adults
