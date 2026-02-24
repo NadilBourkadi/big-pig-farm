@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from big_pig_farm.game.state import GameState
+    from big_pig_farm.game.facades import BirthContext
 
 from big_pig_farm.data.config import BREEDING, GENETICS, SIMULATION
 from big_pig_farm.data.names import generate_unique_name
@@ -17,7 +17,7 @@ from big_pig_farm.entities.pigdex import get_discovery_reward, get_milestone_rew
 from big_pig_farm.simulation.breeding_program import should_keep_pig
 
 
-def check_births(game_state: "GameState") -> int:
+def check_births(game_state: "BirthContext") -> int:
     """Check for and process births from existing pregnancies. Returns number of births."""
     births = 0
     for pig in game_state.get_pigs_list():
@@ -27,7 +27,7 @@ def check_births(game_state: "GameState") -> int:
     return births
 
 
-def _check_birth(mother: GuineaPig, game_state: "GameState") -> bool:
+def _check_birth(mother: GuineaPig, game_state: "BirthContext") -> bool:
     """Check if a pregnant pig should give birth. Returns True if birth occurred."""
     if not mother.is_pregnant:
         return False
@@ -36,7 +36,7 @@ def _check_birth(mother: GuineaPig, game_state: "GameState") -> bool:
     return False
 
 
-def _process_birth(mother: GuineaPig, game_state: "GameState") -> bool:
+def _process_birth(mother: GuineaPig, game_state: "BirthContext") -> bool:
     """Process a birth event. Returns True if successful."""
     if game_state.is_at_capacity:
         _cancel_pregnancy(mother, game_state, "farm is at capacity")
@@ -188,7 +188,7 @@ def _process_birth(mother: GuineaPig, game_state: "GameState") -> bool:
     return True
 
 
-def _cancel_pregnancy(mother: GuineaPig, game_state: "GameState", reason: str) -> None:
+def _cancel_pregnancy(mother: GuineaPig, game_state: "BirthContext", reason: str) -> None:
     """Cancel a pregnancy and log the event."""
     mother.is_pregnant = False
     mother.pregnancy_days = 0.0
@@ -201,7 +201,7 @@ def _cancel_pregnancy(mother: GuineaPig, game_state: "GameState", reason: str) -
     )
 
 
-def advance_pregnancies(game_state: "GameState", game_hours: float) -> None:
+def advance_pregnancies(game_state: "BirthContext", game_hours: float) -> None:
     """Advance pregnancy progress for all pregnant pigs."""
     game_days = game_hours / 24.0
     for pig in game_state.get_pigs_list():
@@ -209,7 +209,7 @@ def advance_pregnancies(game_state: "GameState", game_hours: float) -> None:
             pig.pregnancy_days += game_days
 
 
-def age_all_pigs(game_state: "GameState", game_hours: float) -> list[GuineaPig]:
+def age_all_pigs(game_state: "BirthContext", game_hours: float) -> list[GuineaPig]:
     """Age all guinea pigs. Returns list of pigs that died of old age."""
     game_days = game_hours / 24.0
     deaths = []
@@ -233,7 +233,7 @@ def age_all_pigs(game_state: "GameState", game_hours: float) -> list[GuineaPig]:
     return deaths
 
 
-def register_pig_in_pigdex(game_state: "GameState", pig: GuineaPig) -> None:
+def register_pig_in_pigdex(game_state: "BirthContext", pig: GuineaPig) -> None:
     """Register a pig's phenotype in the pigdex with rewards."""
     key = phenotype_key(pig.phenotype)
     game_day = game_state.game_time.day
@@ -260,7 +260,7 @@ def register_pig_in_pigdex(game_state: "GameState", pig: GuineaPig) -> None:
             )
 
 
-def _apply_breeding_filter(game_state: "GameState", babies: list[GuineaPig]) -> None:
+def _apply_breeding_filter(game_state: "BirthContext", babies: list[GuineaPig]) -> None:
     """Mark newborns that don't match the breeding program target for auto-sell."""
     program = game_state.breeding_program
     if not program.enabled:

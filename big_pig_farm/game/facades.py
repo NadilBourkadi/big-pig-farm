@@ -1,111 +1,81 @@
-"""Domain-specific facades that limit access to GameState.
+"""Protocol interfaces for simulation subsystem dependencies.
 
-These thin wrappers restrict what each subsystem can see and mutate,
-making dependencies explicit. Modules can be migrated to facades
-gradually — GameState remains unchanged.
+Each Protocol defines the narrowest view of GameState that a subsystem needs.
+GameState satisfies all Protocols implicitly — no wrapper classes needed.
 """
 
-from typing import Optional
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from uuid import UUID
 
-from big_pig_farm.entities.guinea_pig import GuineaPig
-from big_pig_farm.entities.facilities import Facility
+if TYPE_CHECKING:
+    from big_pig_farm.economy.contracts import ContractBoard
+    from big_pig_farm.entities.facilities import Facility, FacilityType
+    from big_pig_farm.entities.guinea_pig import GuineaPig
+    from big_pig_farm.entities.pigdex import Pigdex
+    from big_pig_farm.game.state import BreedingPair, GameTime
+    from big_pig_farm.game.world import FarmGrid
+    from big_pig_farm.simulation.breeding_program import BreedingProgram
 
 
-class EconomyFacade:
-    """Read/write access to money and event logging only."""
+@runtime_checkable
+class NeedsContext(Protocol):
+    """Used by simulation/needs.py — read-only pig/biome access."""
 
-    def __init__(self, state):
-        self._state = state
+    farm: FarmGrid
 
-    @property
-    def money(self) -> int:
-        return self._state.money
-
-    def add_money(self, amount: int) -> None:
-        self._state.add_money(amount)
-
-    def spend_money(self, amount: int) -> bool:
-        return self._state.spend_money(amount)
-
-    def log_event(self, message: str, event_type: str = "info") -> None:
-        self._state.log_event(message, event_type)
+    def get_pigs_list(self) -> list[GuineaPig]: ...
 
 
-class PopulationFacade:
-    """Read/write access to pigs and facilities."""
+@runtime_checkable
+class BreedingContext(Protocol):
+    """Used by simulation/breeding.py — breeding pair management."""
 
-    def __init__(self, state):
-        self._state = state
+    breeding_pair: BreedingPair | None
+    breeding_program: BreedingProgram
+    contract_board: ContractBoard
+    game_time: GameTime
+    is_at_capacity: bool
 
-    @property
-    def farm(self):
-        return self._state.farm
-
-    @property
-    def pig_count(self) -> int:
-        return self._state.pig_count
-
-    @property
-    def capacity(self) -> int:
-        return self._state.capacity
-
-    def get_pigs_list(self) -> list[GuineaPig]:
-        return self._state.get_pigs_list()
-
-    def get_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
-        return self._state.get_guinea_pig(pig_id)
-
-    def add_guinea_pig(self, pig: GuineaPig) -> None:
-        self._state.add_guinea_pig(pig)
-
-    def remove_guinea_pig(self, pig_id: UUID) -> Optional[GuineaPig]:
-        return self._state.remove_guinea_pig(pig_id)
-
-    def get_facilities_list(self) -> list[Facility]:
-        return self._state.get_facilities_list()
-
-    def get_facilities_by_type(self, facility_type) -> list[Facility]:
-        return self._state.get_facilities_by_type(facility_type)
-
-    def get_facility(self, facility_id: UUID) -> Optional[Facility]:
-        return self._state.get_facility(facility_id)
-
-    def add_facility(self, facility: Facility) -> bool:
-        return self._state.add_facility(facility)
-
-    def remove_facility(self, facility_id: UUID) -> Optional[Facility]:
-        return self._state.remove_facility(facility_id)
-
-    def log_event(self, message: str, event_type: str = "info") -> None:
-        self._state.log_event(message, event_type)
+    def clear_breeding_pair(self) -> None: ...
+    def get_affinity(self, id1: UUID, id2: UUID) -> int: ...
+    def get_facilities_by_type(self, facility_type: FacilityType) -> list[Facility]: ...
+    def get_guinea_pig(self, pig_id: UUID) -> GuineaPig | None: ...
+    def get_pigs_list(self) -> list[GuineaPig]: ...
+    def log_event(self, message: str, event_type: str = "info") -> None: ...
+    def set_breeding_pair(self, male_id: UUID, female_id: UUID) -> None: ...
 
 
-class BreedingFacade:  # TODO: wire into breeding callers
-    """Read/write access to breeding-related state."""
+@runtime_checkable
+class BirthContext(Protocol):
+    """Used by simulation/birth.py — birth processing, aging, pigdex."""
 
-    def __init__(self, state):
-        self._state = state
+    breeding_program: BreedingProgram
+    capacity: int
+    farm: FarmGrid
+    game_time: GameTime
+    is_at_capacity: bool
+    pig_count: int
+    pigdex: Pigdex
+    total_pigs_born: int
 
-    @property
-    def pigdex(self):
-        return self._state.pigdex
+    def add_guinea_pig(self, pig: GuineaPig) -> None: ...
+    def add_money(self, amount: int) -> None: ...
+    def get_facilities_by_type(self, facility_type: FacilityType) -> list[Facility]: ...
+    def get_guinea_pig(self, pig_id: UUID) -> GuineaPig | None: ...
+    def get_pigs_list(self) -> list[GuineaPig]: ...
+    def log_event(self, message: str, event_type: str = "info") -> None: ...
+    def remove_guinea_pig(self, pig_id: UUID) -> GuineaPig | None: ...
 
-    @property
-    def breeding_program(self):
-        return self._state.breeding_program
 
-    @property
-    def breeding_pair(self):
-        return self._state.breeding_pair
+@runtime_checkable
+class CullingContext(Protocol):
+    """Used by simulation/culling.py — surplus management."""
 
-    @breeding_pair.setter
-    def breeding_pair(self, value):
-        self._state.breeding_pair = value
+    breeding_program: BreedingProgram
+    contract_board: ContractBoard
 
-    @property
-    def contract_board(self):
-        return self._state.contract_board
-
-    def log_event(self, message: str, event_type: str = "info") -> None:
-        self._state.log_event(message, event_type)
+    def get_facilities_by_type(self, facility_type: FacilityType) -> list[Facility]: ...
+    def get_pigs_list(self) -> list[GuineaPig]: ...
+    def log_event(self, message: str, event_type: str = "info") -> None: ...
