@@ -1,4 +1,4 @@
-"""Tests for SaveManagerV2 (JSON blob) and CombinedSaveManager (v1 fallback)."""
+"""Tests for SaveManagerV2 (JSON blob) and CombinedSaveManager."""
 
 import sqlite3
 
@@ -7,7 +7,6 @@ import pytest
 from big_pig_farm.data.config import GameSpeed
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
-from big_pig_farm.game.save_manager import SaveManager
 from big_pig_farm.game.save_manager_v2 import SCHEMA_VERSION, CombinedSaveManager, SaveManagerV2
 from big_pig_farm.game.state import GameState
 
@@ -172,62 +171,11 @@ class TestCombinedSaveManager:
         assert loaded is not None
         assert loaded.pig_count == 1
 
-    def test_v1_fallback(self, tmp_save_path):
-        """Save with v1, load with Combined — should fall back to v1."""
-        v1 = SaveManager(save_path=tmp_save_path)
+    def test_delete_save(self, tmp_save_path):
+        mgr = CombinedSaveManager(tmp_save_path)
         state = GameState()
-        state.money = 777
-        pig = _make_pig()
-        state.add_guinea_pig(pig)
-        v1.save(state)
+        mgr.save(state)
+        assert tmp_save_path.exists()
 
-        combined = CombinedSaveManager(tmp_save_path)
-        loaded = combined.load()
-
-        assert loaded is not None
-        assert loaded.money == 777
-        assert loaded.pig_count == 1
-
-    def test_v2_preferred_over_v1(self, tmp_save_path):
-        """When both v1 and v2 data exist, v2 takes priority."""
-        # Save with v1 first
-        v1 = SaveManager(save_path=tmp_save_path)
-        state_v1 = GameState()
-        state_v1.money = 111
-        v1.save(state_v1)
-
-        # Save with v2 (different money)
-        v2 = SaveManagerV2(tmp_save_path)
-        state_v2 = GameState()
-        state_v2.money = 222
-        v2.save(state_v2)
-
-        # Combined should load v2
-        combined = CombinedSaveManager(tmp_save_path)
-        loaded = combined.load()
-        assert loaded.money == 222
-
-    def test_migration_roundtrip(self, tmp_save_path):
-        """Save v1 → load Combined → save Combined (v2) → load Combined (v2)."""
-        v1 = SaveManager(save_path=tmp_save_path)
-        state = GameState()
-        state.money = 555
-        pig = _make_pig()
-        state.add_guinea_pig(pig)
-        fac = Facility.create(FacilityType.WATER_BOTTLE, 10, 3)
-        state.add_facility(fac)
-        v1.save(state)
-
-        # Load via combined (falls back to v1)
-        combined = CombinedSaveManager(tmp_save_path)
-        loaded = combined.load()
-        assert loaded.money == 555
-
-        # Save via combined (writes v2)
-        combined.save(loaded)
-
-        # Load again — should now use v2
-        loaded2 = combined.load()
-        assert loaded2.money == 555
-        assert loaded2.pig_count == 1
-        assert len(loaded2.get_facilities_list()) == 1
+        mgr.delete_save()
+        assert not tmp_save_path.exists()

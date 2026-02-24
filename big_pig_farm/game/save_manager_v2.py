@@ -1,7 +1,6 @@
-"""Modernized save/load using Pydantic JSON serialization.
+"""Save/load using Pydantic JSON serialization.
 
-Stores the entire GameState as a single JSON blob in SQLite, replacing
-the manual 644-line column-by-column serialization of save_manager.py.
+Stores the entire GameState as a single JSON blob in SQLite.
 """
 
 import logging
@@ -10,11 +9,17 @@ import sqlite3
 from pathlib import Path
 
 from big_pig_farm.data.config import TIER_UPGRADES
-from big_pig_farm.game.save_manager import SaveManager, get_save_path
 from big_pig_farm.game.state import GameState
 from big_pig_farm.game.world import relayout_areas
 
 logger = logging.getLogger(__name__)
+
+
+def get_save_path() -> Path:
+    """Get the default save file path."""
+    save_dir = Path.home() / ".big_pig_farm"
+    save_dir.mkdir(exist_ok=True)
+    return save_dir / "savegame.db"
 
 # Schema version to detect future format changes
 SCHEMA_VERSION = 2
@@ -136,16 +141,14 @@ class SaveManagerV2:
 
 
 class CombinedSaveManager:
-    """Tries v2 load first, falls back to v1. Always saves as v2.
+    """Thin wrapper around SaveManagerV2 with default path resolution.
 
-    This allows seamless migration from the old save format to the new one.
-    After one save cycle, all future loads will use v2.
+    Kept for API compatibility with app.py and tests.
     """
 
     def __init__(self, save_path: Path | None = None):
         path = save_path or get_save_path()
         self.v2 = SaveManagerV2(path)
-        self.v1 = SaveManager(path)
         self.save_path = path
 
     def save(self, state: GameState) -> None:
@@ -157,19 +160,10 @@ class CombinedSaveManager:
         self.v2.save_blob(json_blob)
 
     def load(self) -> GameState | None:
-        """Load from v2 first, fall back to v1."""
-        # Try v2 first
-        state = self.v2.load()
-        if state:
-            return state
-        # Fall back to v1
-        return self.v1.load()
+        """Load game state."""
+        return self.v2.load()
 
     def delete_save(self) -> None:
-        """Delete the save file.
-
-        Unlinks the shared SQLite file directly — both v1 and v2 tables
-        live in the same database, so removing the file clears both.
-        """
+        """Delete the save file."""
         if self.save_path.exists():
             self.save_path.unlink()
