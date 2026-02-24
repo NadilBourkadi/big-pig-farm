@@ -463,8 +463,12 @@ class ShopScreen(Screen):
                 self.notify("All rooms built!", severity="warning")
                 return
             from big_pig_farm.ui.screens.biome_select import BiomeSelectScreen
+            existing_biomes = {area.biome for area in self.state.farm.areas}
             self.app.push_screen(
-                BiomeSelectScreen(farm_tier=self.state.farm_tier),
+                BiomeSelectScreen(
+                    farm_tier=self.state.farm_tier,
+                    existing_biomes=existing_biomes,
+                ),
                 callback=self._on_biome_selected,
             )
             return
