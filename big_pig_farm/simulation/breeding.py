@@ -4,7 +4,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from big_pig_farm.game.state import GameState
+    from big_pig_farm.game.facades import BreedingContext
 
 from big_pig_farm.data.config import BREEDING
 from big_pig_farm.entities.facilities import FacilityType
@@ -25,7 +25,7 @@ def _is_permanently_unbreedable(pig: GuineaPig) -> bool:
     return pig.breeding_locked or pig.is_senior
 
 
-def check_breeding_opportunities(game_state: "GameState", run_expensive: bool = True) -> int:
+def check_breeding_opportunities(game_state: "BreedingContext", run_expensive: bool = True) -> int:
     """Check for and process breeding opportunities. Returns number of births.
 
     When run_expensive is False, only births and manual pairs are processed
@@ -47,7 +47,7 @@ def check_breeding_opportunities(game_state: "GameState", run_expensive: bool = 
     return births
 
 
-def _check_manual_breeding(game_state: "GameState") -> None:
+def _check_manual_breeding(game_state: "BreedingContext") -> None:
     """Process the manually set breeding pair if conditions are met."""
     if game_state.breeding_pair is None:
         return
@@ -96,7 +96,7 @@ def _check_manual_breeding(game_state: "GameState") -> None:
     game_state.clear_breeding_pair()
 
 
-def _check_for_new_breeding(game_state: "GameState") -> None:
+def _check_for_new_breeding(game_state: "BreedingContext") -> None:
     """Check if any pigs should start breeding."""
     pigs = game_state.get_pigs_list()
     # Get eligible males and females; exclude pigs already courting
@@ -123,7 +123,7 @@ def _check_for_new_breeding(game_state: "GameState") -> None:
                     return  # One breeding per check
 
 
-def _can_breed_together(male: GuineaPig, female: GuineaPig, game_state: "GameState") -> bool:
+def _can_breed_together(male: GuineaPig, female: GuineaPig, game_state: "BreedingContext") -> bool:
     """Check if two guinea pigs can breed together."""
     # Both must be able to breed
     if not male.can_breed or not female.can_breed:
@@ -141,7 +141,7 @@ def _can_breed_together(male: GuineaPig, female: GuineaPig, game_state: "GameSta
     return True
 
 
-def _are_closely_related(pig1: GuineaPig, pig2: GuineaPig, game_state: "GameState") -> bool:
+def _are_closely_related(pig1: GuineaPig, pig2: GuineaPig, game_state: "BreedingContext") -> bool:
     """Check if two pigs are closely related (parent/child or siblings)."""
     # Same parents = siblings
     if pig1.mother_id and pig1.mother_id == pig2.mother_id:
@@ -158,7 +158,7 @@ def _are_closely_related(pig1: GuineaPig, pig2: GuineaPig, game_state: "GameStat
     return False
 
 
-def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state: "GameState") -> bool:
+def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state: "BreedingContext") -> bool:
     """Attempt to start a breeding event. Returns True if successful."""
     # Random chance based on conditions
     base_chance = BREEDING.BASE_BREEDING_CHANCE
@@ -191,7 +191,7 @@ def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state: "GameState
     return True
 
 
-def _initiate_courtship(male: GuineaPig, female: GuineaPig, game_state: "GameState") -> None:
+def _initiate_courtship(male: GuineaPig, female: GuineaPig, game_state: "BreedingContext") -> None:
     """Start physical courtship — male will pathfind to female."""
     male.behavior_state = BehaviorState.COURTING
     female.behavior_state = BehaviorState.COURTING
@@ -216,7 +216,7 @@ def _initiate_courtship(male: GuineaPig, female: GuineaPig, game_state: "GameSta
     )
 
 
-def start_pregnancy_from_courtship(male: GuineaPig, female: GuineaPig, game_state: "GameState") -> None:
+def start_pregnancy_from_courtship(male: GuineaPig, female: GuineaPig, game_state: "BreedingContext") -> None:
     """Called when courtship completes — starts the actual pregnancy."""
     female.is_pregnant = True
     female.pregnancy_days = 0.0
@@ -246,7 +246,7 @@ def clear_courtship(pig: GuineaPig) -> None:
 _last_breeding_warning_day: int = -1
 
 
-def _auto_pair_from_program(game_state: "GameState") -> None:
+def _auto_pair_from_program(game_state: "BreedingContext") -> None:
     """Auto-pair the best breeding pair based on the breeding program target."""
     global _last_breeding_warning_day
 
@@ -338,7 +338,7 @@ def _auto_pair_from_program(game_state: "GameState") -> None:
         )
 
 
-def _auto_pair_diversity(game_state: "GameState", males: list[GuineaPig], females: list[GuineaPig]) -> None:
+def _auto_pair_diversity(game_state: "BreedingContext", males: list[GuineaPig], females: list[GuineaPig]) -> None:
     """Pair pigs for maximum genetic distance and rare-color production."""
     all_pigs = game_state.get_pigs_list()
 
@@ -385,7 +385,7 @@ def _diversity_pair_score(
     male: GuineaPig,
     female: GuineaPig,
     underrepresented: set[BaseColor],
-    game_state: "GameState",
+    game_state: "BreedingContext",
 ) -> float:
     """Score a breeding pair for genetic distance and rare-color potential.
 
@@ -429,7 +429,7 @@ def _diversity_pair_score(
     return distance + rare_bonus + affinity_bonus
 
 
-def _derive_contract_targets(game_state: "GameState") -> tuple[set, set, set, set]:
+def _derive_contract_targets(game_state: "BreedingContext") -> tuple[set, set, set, set]:
     """Derive implicit breeding targets from active contracts."""
     colors: set[BaseColor] = set()
     patterns: set[Pattern] = set()

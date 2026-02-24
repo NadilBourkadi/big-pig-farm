@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 if TYPE_CHECKING:
-    from big_pig_farm.game.state import GameState
+    from big_pig_farm.game.facades import CullingContext
 
 from big_pig_farm.data.config import BREEDING
 from big_pig_farm.economy.market import sell_pig
@@ -25,7 +25,7 @@ from big_pig_farm.simulation.breeding_program import (
 _DIVERSITY_REPLACEMENT_GAP = 2.0
 
 
-def sell_marked_adults(game_state: "GameState") -> list[tuple[str, int, UUID]]:
+def sell_marked_adults(game_state: "CullingContext") -> list[tuple[str, int, UUID]]:
     """Auto-sell pigs that were marked for sale and have reached adulthood.
 
     Returns list of (name, sale_total, pig_id) for each pig sold.
@@ -40,7 +40,7 @@ def sell_marked_adults(game_state: "GameState") -> list[tuple[str, int, UUID]]:
     return sold
 
 
-def cull_surplus_breeders(game_state: "GameState") -> None:
+def cull_surplus_breeders(game_state: "CullingContext") -> None:
     """Mark surplus pigs for sale when over the program's stock limit.
 
     Also performs active replacement: when at or below the stock limit,
@@ -115,7 +115,7 @@ def _score_adults(
     adults: list[GuineaPig],
     program,
     has_lab: bool,
-    game_state: "GameState | None" = None,
+    game_state: "CullingContext | None" = None,
 ) -> list[tuple[GuineaPig, tuple]]:
     """Score adult pigs by strategy-appropriate value.
 
@@ -148,7 +148,7 @@ def _would_break_gender_balance(pig: GuineaPig, adults: list[GuineaPig]) -> bool
     return len(same_gender) == 0
 
 
-def _active_replacement(game_state: "GameState", adults: list[GuineaPig], program, has_lab: bool) -> None:
+def _active_replacement(game_state: "CullingContext", adults: list[GuineaPig], program, has_lab: bool) -> None:
     """Phase out the worst adult when at or below stock limit.
 
     Three modes:
