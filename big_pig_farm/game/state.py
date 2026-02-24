@@ -123,6 +123,9 @@ class GameState(BaseModel):
     # Progression
     farm_tier: int = 1
 
+    # Permanent upgrades (perk IDs purchased from the shop)
+    purchased_upgrades: set[str] = Field(default_factory=set)
+
     # Statistics
     total_pigs_born: int = 0
     total_pigs_sold: int = 0
@@ -243,6 +246,10 @@ class GameState(BaseModel):
         """Increment the socialization affinity between two pigs."""
         key = self._affinity_key(id1, id2)
         self.social_affinity[key] = min(self.social_affinity.get(key, 0) + 1, 10)
+
+    def has_upgrade(self, upgrade_id: str) -> bool:
+        """Check if a permanent upgrade has been purchased. O(1) set lookup."""
+        return upgrade_id in self.purchased_upgrades
 
     def get_pigs_list(self) -> list[GuineaPig]:
         """Get all guinea pigs as a list (cached, invalidated on add/remove)."""
