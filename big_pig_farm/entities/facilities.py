@@ -93,6 +93,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
         size=FacilitySize(width=2, height=2),
         base_cost=80,
         description="Entertainment and fitness, +5% health",
+        capacity=2,
         health_bonus=0.05,
     ),
     FacilityType.TUNNEL: FacilityInfo(
@@ -100,6 +101,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
         size=FacilitySize(width=3, height=1),
         base_cost=100,
         description="Exploration and play, +15% happiness",
+        capacity=3,
         happiness_bonus=0.15,
     ),
     FacilityType.PLAY_AREA: FacilityInfo(
@@ -107,6 +109,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
         size=FacilitySize(width=3, height=2),
         base_cost=150,
         description="Social activities, +social chance",
+        capacity=4,
         social_bonus=0.20,
     ),
     FacilityType.BREEDING_DEN: FacilityInfo(

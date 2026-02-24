@@ -335,6 +335,22 @@ class FacilityManager:
         start = pig.position.grid_pos()
         grid = self.collision.spatial_grid
 
+        # Early capacity check for play facilities — count pigs using OR
+        # heading to the facility so we don't over-dispatch. Without this,
+        # multiple pigs decide simultaneously and all pass the check because
+        # en-route pigs (WANDERING state) aren't counted as "using" yet.
+        # Hideout is excluded: its arrival handler allows overflow with a
+        # "sleep nearby" fallback, so we still want pigs to path there.
+        if facility.facility_type in (
+            FacilityType.EXERCISE_WHEEL,
+            FacilityType.TUNNEL, FacilityType.PLAY_AREA,
+        ):
+            capacity = facility.info.capacity
+            targeting = self.collision.get_pigs_targeting_facility(facility.id)
+            targeting_count = sum(1 for pid in targeting if pid != pig.id)
+            if targeting_count >= capacity:
+                return None
+
         # Use the facility-use blocking radius for occupancy checks so that
         # points marked "open" are genuinely reachable (consistent with the
         # actual blocking distance used against facility-using pigs)
@@ -582,12 +598,26 @@ class FacilityManager:
                         if successfully_using_facility:
                             return
                     elif facility.facility_type in (FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL, FacilityType.PLAY_AREA):
-                        pig.behavior_state = BehaviorState.PLAYING
-                        pig.target_position = None
-                        pig.target_description = f"playing at {facility.name}"
-                        pig.log_behavior(f"Arrived at {facility.name}, playing")
-                        self.clear_failed_facilities(pig.id)
-                        return
+                        capacity = facility.info.capacity
+                        pigs_using = self.count_pigs_using_facility(facility, pig)
+                        if pigs_using < capacity:
+                            pig.behavior_state = BehaviorState.PLAYING
+                            pig.target_position = None
+                            pig.target_description = f"playing at {facility.name}"
+                            pig.log_behavior(f"Arrived at {facility.name}, playing")
+                            self.clear_failed_facilities(pig.id)
+                            return
+                        else:
+                            # Full — go idle so next decision cycle disperses the pig
+                            # (seek_play will skip this facility via failed set and
+                            # either find an alternative or wander to a random spot)
+                            pig.log_behavior(f"{facility.name} is full, idling")
+                            self.add_failed_facility(pig.id, facility.id)
+                            pig.behavior_state = BehaviorState.IDLE
+                            pig.target_position = None
+                            pig.target_facility_id = None
+                            pig.target_description = None
+                            return
 
         # No suitable facility found or needs already satisfied - go idle
         # DON'T clear failed facilities - we want to remember them for next decision
