@@ -5,7 +5,13 @@ from unittest.mock import patch
 from big_pig_farm.data.config import NEEDS as NEEDS_CONFIG
 from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig, Position
 from big_pig_farm.game.state import GameState
-from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.behavior_controller import BehaviorController
+from big_pig_farm.simulation.behavior_decision import make_decision
+from big_pig_farm.simulation.behavior_movement import (
+    give_up_and_fallback,
+    start_wandering,
+    update_movement,
+)
 from big_pig_farm.simulation.needs import (
     calculate_overall_wellbeing,
     get_most_urgent_need,
@@ -260,25 +266,24 @@ class TestStuckTimer:
         state.guinea_pigs[blocker.id] = blocker
 
         fallback_called = False
-        original_fallback = controller._give_up_and_fallback
 
-        def tracking_fallback(p):
+        def tracking_fallback(ctrl, p):
             nonlocal fallback_called
             fallback_called = True
-            original_fallback(p)
+            give_up_and_fallback(ctrl, p)
 
-        # Patch _try_dodge to always fail (simulating a narrow corridor)
-        # and _try_alternative_facility to always "succeed" (resets _blocked_timers)
-        with patch.object(controller, '_try_dodge', return_value=False), \
+        # Patch try_dodge to always fail (simulating a narrow corridor)
+        # and try_alternative_facility to always "succeed" (resets _blocked_timers)
+        with patch('big_pig_farm.simulation.behavior_movement.try_dodge', return_value=False), \
              patch.object(controller.facility_manager, 'try_alternative_facility', return_value=True), \
-             patch.object(controller, '_give_up_and_fallback', side_effect=tracking_fallback):
+             patch('big_pig_farm.simulation.behavior_movement.give_up_and_fallback', side_effect=tracking_fallback):
 
             # Simulate 6 seconds of being blocked at the same position (in 0.1s steps)
             for _ in range(60):
                 if fallback_called:
                     break
                 controller.collision.rebuild_spatial_grid()
-                controller._update_movement(pig, 0.1)
+                update_movement(controller, pig, 0.1)
                 # _try_alternative_facility resets _blocked_timers but doesn't
                 # actually move the pig, so re-give a path for next iteration
                 if not pig.path:
@@ -316,11 +321,11 @@ class TestStuckTimer:
         state.guinea_pigs[blocker.id] = blocker
 
         # Simulate being blocked for 4 seconds (just under threshold)
-        with patch.object(controller, '_try_dodge', return_value=False), \
+        with patch('big_pig_farm.simulation.behavior_movement.try_dodge', return_value=False), \
              patch.object(controller.facility_manager, 'try_alternative_facility', return_value=True):
             for _ in range(40):
                 controller.collision.rebuild_spatial_grid()
-                controller._update_movement(pig, 0.1)
+                update_movement(controller, pig, 0.1)
                 if not pig.path:
                     pig.path = [(12, 10)]
                     pig.target_position = Position(x=12.0, y=10.0)
@@ -337,7 +342,7 @@ class TestStuckTimer:
 
         # Simulate movement succeeding (no blocker now)
         controller.collision.rebuild_spatial_grid()
-        controller._update_movement(pig, 0.1)
+        update_movement(controller, pig, 0.1)
 
         # Stuck timer should be cleared since pig actually moved
         assert pig.id not in controller._stuck_timers
@@ -482,7 +487,7 @@ class TestHappinessPriority:
         pig.behavior_state = BehaviorState.IDLE
         state.guinea_pigs[pig.id] = pig
 
-        controller._make_decision(pig)
+        make_decision(controller, pig)
 
         # Override sends to _seek_play which ends in WANDERING, PLAYING, or SOCIALIZING
         assert pig.behavior_state in (
@@ -511,7 +516,7 @@ class TestHappinessPriority:
         pig.behavior_state = BehaviorState.IDLE
         state.guinea_pigs[pig.id] = pig
 
-        controller._make_decision(pig)
+        make_decision(controller, pig)
 
         # Energy is critical — must sleep regardless of happiness
         assert pig.behavior_state == BehaviorState.SLEEPING
@@ -538,7 +543,7 @@ class TestHappinessPriority:
         pig.behavior_state = BehaviorState.IDLE
         state.guinea_pigs[pig.id] = pig
 
-        controller._make_decision(pig)
+        make_decision(controller, pig)
 
         # Happiness is fine — normal sleep behavior
         assert pig.behavior_state == BehaviorState.SLEEPING
@@ -588,7 +593,7 @@ class TestWanderDensityScoring:
             test_pig.position.x = 8.0
             test_pig.position.y = 5.0
             test_pig.path = []
-            controller._start_wandering(test_pig)
+            start_wandering(controller,test_pig)
             if test_pig.target_position:
                 new_dist = test_pig.target_position.distance_to(
                     Position(x=7.0, y=5.0)
@@ -617,7 +622,7 @@ class TestWanderDensityScoring:
         )
         state.guinea_pigs[pig.id] = pig
 
-        controller._start_wandering(pig)
+        start_wandering(controller, pig)
         assert pig.behavior_state == BehaviorState.WANDERING
 
 
@@ -664,10 +669,10 @@ class TestIdleDrift:
         # Force the pig to make a decision where it would normally idle
         # by patching random to return > WANDER_CHANCE
         controller.collision.rebuild_spatial_grid()
-        with patch('big_pig_farm.simulation.behavior.random') as mock_random:
+        with patch('big_pig_farm.simulation.behavior_decision.random') as mock_random:
             mock_random.random.return_value = 0.99  # > WANDER_CHANCE (0.8), would normally idle
             mock_random.uniform.return_value = 0.0
-            controller._make_decision(pig)
+            make_decision(controller, pig)
 
         # Should be wandering (drifted away) instead of idle
         assert pig.behavior_state == BehaviorState.WANDERING
@@ -709,10 +714,10 @@ class TestIdleDrift:
         far_pig.needs.social = 90
         state.guinea_pigs[far_pig.id] = far_pig
 
-        with patch('big_pig_farm.simulation.behavior.random') as mock_random:
+        with patch('big_pig_farm.simulation.behavior_decision.random') as mock_random:
             mock_random.random.return_value = 0.99
             mock_random.uniform.return_value = 0.0
-            controller._make_decision(pig)
+            make_decision(controller, pig)
 
         assert pig.behavior_state == BehaviorState.IDLE
 

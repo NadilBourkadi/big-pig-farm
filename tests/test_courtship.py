@@ -6,7 +6,8 @@ from big_pig_farm.data.config import BEHAVIOR
 from big_pig_farm.entities.genetics import BaseColor
 from big_pig_farm.entities.guinea_pig import BehaviorState, Gender, GuineaPig, Position
 from big_pig_farm.game.state import GameState
-from big_pig_farm.simulation.behavior import BehaviorController
+from big_pig_farm.simulation.behavior_controller import BehaviorController
+from big_pig_farm.simulation.behavior_decision import make_decision
 from big_pig_farm.simulation.breeding import (
     _initiate_courtship,
     check_breeding_opportunities,
@@ -159,7 +160,7 @@ class TestCourtshipInterruption:
 
         controller = BehaviorController(state)
         controller.collision.rebuild_spatial_grid()
-        controller._make_decision(male)
+        make_decision(controller,male)
 
         assert male.behavior_state != BehaviorState.COURTING
         assert female.behavior_state != BehaviorState.COURTING
@@ -175,7 +176,7 @@ class TestCourtshipInterruption:
 
         controller = BehaviorController(state)
         controller.collision.rebuild_spatial_grid()
-        controller._make_decision(male)
+        make_decision(controller,male)
 
         assert male.behavior_state != BehaviorState.COURTING
         assert female.behavior_state != BehaviorState.COURTING
@@ -203,7 +204,7 @@ class TestCourtshipInterruption:
 
         controller = BehaviorController(state)
         controller.collision.rebuild_spatial_grid()
-        controller._make_decision(male)
+        make_decision(controller,male)
 
         assert male.behavior_state != BehaviorState.COURTING
         assert male.courting_partner_id is None
@@ -293,7 +294,7 @@ class TestSocialAffinity:
         # Affinity only increments from the pig with smaller UUID (dedup guard)
         finisher = pig1 if pig1.id < pig2.id else pig2
         finisher.needs.social = 95
-        controller._make_decision(finisher)
+        make_decision(controller,finisher)
 
         assert state.get_affinity(pig1.id, pig2.id) >= 1
 
