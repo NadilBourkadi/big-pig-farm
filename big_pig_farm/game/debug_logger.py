@@ -1,13 +1,15 @@
 """Debug logger that writes periodic game state snapshots to a file."""
 
+from __future__ import annotations
+
 import time
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
 from big_pig_farm.data.config import SPEED_DISPLAY
+from big_pig_farm.economy.contracts import ContractDifficulty
 from big_pig_farm.entities.guinea_pig import Gender
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.behavior_controller import BehaviorController
@@ -41,7 +43,7 @@ class DebugLogger:
         state: GameState,
         controller: BehaviorController,
         tick_ms: float = 0.0,
-        phase_times: Optional[dict[str, float]] = None,
+        phase_times: dict[str, float] | None = None,
     ) -> None:
         """Called every simulation tick. Writes a snapshot every SNAPSHOT_INTERVAL ticks."""
         self._total_ticks += 1
@@ -144,6 +146,27 @@ class DebugLogger:
             prog = state.breeding_program
             marked = sum(1 for p in pigs if p.marked_for_sale)
             lines.append(f"  PROGRAM: stock_limit={prog.stock_limit} | marked_for_sale={marked}")
+
+        # Economy & contracts
+        board = state.contract_board
+        active_by_diff = Counter(
+            c.difficulty.value for c in board.active_contracts if not c.fulfilled
+        )
+        diff_str = " ".join(
+            f"{d}={active_by_diff.get(d.value, 0)}"
+            for d in ContractDifficulty
+        )
+        pigdex = state.pigdex
+        lines.append(
+            f"  ECON: {state.money} Sq (earned {state.total_earnings})"
+            f" | contracts {board.completed_contracts} done,"
+            f" {board.total_contract_earnings} Sq earned"
+            f" | active: {diff_str}"
+        )
+        lines.append(
+            f"  PIGDEX: {pigdex.discovered_count}/{pigdex.total_possible}"
+            f" ({pigdex.completion_percent:.0f}%)"
+        )
 
         # Recent game events since last snapshot
         all_events = state.events
