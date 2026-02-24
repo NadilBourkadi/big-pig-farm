@@ -175,9 +175,14 @@ class BigPigFarmApp(App):
         # Save on exit
         self.save_manager.save(self.state)
 
-    def _on_pig_auto_sold(self, pig_name: str, total: int, pig_id: UUID) -> None:
+    def _on_pig_auto_sold(self, pig_name: str, total: int, contract_bonus: int, pig_id: UUID) -> None:
         """Callback when a pig is auto-sold by the simulation runner."""
         self.notify(f"{pig_name} grew up and was auto-sold for {format_currency(total)}!")
+        if contract_bonus > 0:
+            self.notify(
+                f"Contract fulfilled! +{format_currency(contract_bonus)} bonus",
+                severity="warning",
+            )
 
     def _on_pregnancy(self, male_name: str, female_name: str) -> None:
         """Callback when a courtship completes and pregnancy begins."""

@@ -38,7 +38,7 @@ class SimulationRunner:
         behavior_controller: BehaviorController,
         save_manager: SaveProtocol,
         debug_logger: DebugLogger | None = None,
-        on_pig_sold: Callable[[str, int, UUID], None] | None = None,
+        on_pig_sold: Callable[[str, int, int, UUID], None] | None = None,
         on_pregnancy: Callable[[str, str], None] | None = None,
         on_birth: Callable[[str], None] | None = None,
     ):
@@ -152,10 +152,10 @@ class SimulationRunner:
 
         # 9. Auto-sell marked pigs that reached adulthood
         sold_pigs = sell_marked_adults(state)
-        for pig_name, total, pig_id in sold_pigs:
+        for pig_name, total, contract_bonus, pig_id in sold_pigs:
             controller.cleanup_dead_pig(pig_id)
             if self.on_pig_sold:
-                self.on_pig_sold(pig_name, total, pig_id)
+                self.on_pig_sold(pig_name, total, contract_bonus, pig_id)
 
         # 10. Check for breeding (throttle expensive O(m*f) scans)
         self._breeding_check_counter += 1

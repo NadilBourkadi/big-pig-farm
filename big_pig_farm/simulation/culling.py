@@ -25,10 +25,12 @@ from big_pig_farm.simulation.breeding_program import (
 _DIVERSITY_REPLACEMENT_GAP = 2.0
 
 
-def sell_marked_adults(game_state: "CullingContext") -> list[tuple[str, int, UUID]]:
+def sell_marked_adults(
+    game_state: "CullingContext",
+) -> list[tuple[str, int, int, UUID]]:
     """Auto-sell pigs that were marked for sale and have reached adulthood.
 
-    Returns list of (name, sale_total, pig_id) for each pig sold.
+    Returns list of (name, sale_total, contract_bonus, pig_id) for each pig sold.
     """
     sold = []
     for pig in game_state.get_pigs_list():
@@ -36,7 +38,7 @@ def sell_marked_adults(game_state: "CullingContext") -> list[tuple[str, int, UUI
             name = pig.name
             pig_id = pig.id
             result = sell_pig(game_state, pig)
-            sold.append((name, result.total, pig_id))
+            sold.append((name, result.total, result.contract_bonus, pig_id))
     return sold
 
 

@@ -1,19 +1,18 @@
 """Guinea pig list/browser screen with split detail view."""
 
-from typing import Optional
 from uuid import UUID
 
 from textual.app import ComposeResult
-from textual.screen import Screen
 from textual.containers import Container
-from textual.widgets import Static, DataTable, Footer
+from textual.screen import Screen
+from textual.widgets import DataTable, Footer, Static
 
 from big_pig_farm.economy.currency import format_currency
 from big_pig_farm.economy.market import calculate_pig_value, sell_pig
 from big_pig_farm.game.state import GameState
 from big_pig_farm.ui.screens.confirm import ConfirmScreen
 from big_pig_farm.ui.screens.pig_detail import PigDetailPanel
-from big_pig_farm.ui.utils import format_needs_bar, format_breeding_status
+from big_pig_farm.ui.utils import format_breeding_status, format_needs_bar
 
 
 class PigListScreen(Screen):
@@ -176,13 +175,15 @@ class PigListScreen(Screen):
             if not sell_pig_obj:
                 return
             result = sell_pig(self.state, sell_pig_obj)
+            self.notify(
+                f"Sold {sell_pig_obj.name} for {format_currency(result.total)}!",
+                severity="information",
+            )
             if result.contract_bonus > 0:
                 self.notify(
-                    f"Sold {sell_pig_obj.name} for {format_currency(result.base_value)} + {format_currency(result.contract_bonus)} contract bonus!",
-                    severity="information",
+                    f"Contract fulfilled! +{format_currency(result.contract_bonus)} bonus",
+                    severity="warning",
                 )
-            else:
-                self.notify(f"Sold {sell_pig_obj.name} for {format_currency(result.total)}!", severity="information")
             self._refresh_table()
             self._update_header()
 
