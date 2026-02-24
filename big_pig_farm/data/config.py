@@ -358,7 +358,7 @@ class BehaviorConfig:
     PLAYFUL_PLAY_CHANCE: float = 0.4
     SOCIAL_SOCIALIZE_CHANCE: float = 0.3
     WANDER_CHANCE: float = 0.8             # Wander vs idle when nothing to do
-    NO_PLAY_FACILITY_PLAY_CHANCE: float = 0.5  # Play vs wander when no facility
+    NO_PLAY_FACILITY_PLAY_CHANCE: float = 0.1  # Play vs wander when no facility
 
     # Wandering
     WANDER_ATTEMPTS: int = 8               # Random positions to try when wandering
