@@ -1,8 +1,7 @@
 """Facility definitions for the farm."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
@@ -167,7 +166,7 @@ class Facility(BaseModel):
     auto_refill: bool = False
 
     # Area tracking — auto-assigned on placement based on position
-    area_id: Optional[UUID] = None
+    area_id: UUID | None = None
 
     @property
     def info(self) -> FacilityInfo:
@@ -264,11 +263,12 @@ class Facility(BaseModel):
         self.current_amount -= actual
         return actual
 
-    def refill(self, amount: Optional[float] = None) -> None:
+    def refill(self, amount: float | None = None) -> None:
         """Refill the facility."""
-        # Always sync max_amount with configured capacity
+        # Sync max_amount upward if config increased, but never decrease
+        # (perks like Bulk Feeders may have raised capacity above base)
         configured_capacity = self.info.capacity
-        if self.max_amount != configured_capacity:
+        if self.max_amount < configured_capacity:
             self.max_amount = configured_capacity
 
         if amount is None:
