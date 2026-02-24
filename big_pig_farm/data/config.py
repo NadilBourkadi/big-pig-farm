@@ -177,6 +177,8 @@ ROOM_TIERS: list[RoomTier] = [
     RoomTier("Guinea Grove",    78, 45, 14,   8000, 4),
     RoomTier("Piggy Paradise",  86, 50, 18,  25000, 5),
     RoomTier("Ultimate Farm",   96, 54, 24, 100000, 6),
+    RoomTier("Grand Estate",   104, 58, 28, 300000, 7),
+    RoomTier("Pig Empire",     112, 62, 32, 800000, 8),
 ]
 
 
@@ -197,8 +199,8 @@ TIER_UPGRADES: list[TierUpgrade] = [
     TierUpgrade("Starter",       1,     0,  0,  0, 0, 1),
     TierUpgrade("Apprentice",    2,   300,  3,  2, 0, 2),
     TierUpgrade("Expert",        3,  1500, 10,  8, 2, 3),
-    TierUpgrade("Master",        4,  5000, 25, 18, 5, 5),
-    TierUpgrade("Grand Master",  5, 15000, 50, 30, 10, 6),
+    TierUpgrade("Master",        4,  5000, 25, 18, 5, 6),
+    TierUpgrade("Grand Master",  5, 15000, 50, 30, 10, 8),
 ]
 
 
@@ -207,7 +209,7 @@ class BiomeConfig:
     """Configuration for biome effects."""
     PREFERRED_BIOME_HAPPINESS_BONUS: float = 1.5  # per game hour
     BIOME_MUTATION_BOOST: float = 0.08             # 8% per-locus boost in matching biome
-    BIOME_CONTRACT_REWARD_BONUS: float = 0.25      # 25% reward bonus for biome contracts
+    BIOME_CONTRACT_REWARD_BONUS: float = 0.50      # 50% reward bonus for biome contracts
     BIOME_CONTRACT_CHANCE: float = 0.3             # 30% chance for biome requirement on hard+
     ACCLIMATION_DAYS: float = 3.0                  # game-days to adopt a new biome
     COLOR_MATCH_AFFINITY_REDUCTION: float = 0.6    # 60% reduction in penalty when pig color matches biome
@@ -281,14 +283,14 @@ class ContractConfig:
     REFRESH_INTERVAL_DAYS: int = 10
     EXPIRY_DAYS: int = 20
     # Reward ranges by difficulty
-    EASY_REWARD_MIN: int = 50
-    EASY_REWARD_MAX: int = 100
-    MEDIUM_REWARD_MIN: int = 100
-    MEDIUM_REWARD_MAX: int = 200
-    HARD_REWARD_MIN: int = 200
-    HARD_REWARD_MAX: int = 500
-    EXPERT_REWARD_MIN: int = 500
-    EXPERT_REWARD_MAX: int = 1000
+    EASY_REWARD_MIN: int = 500
+    EASY_REWARD_MAX: int = 1000
+    MEDIUM_REWARD_MIN: int = 2000
+    MEDIUM_REWARD_MAX: int = 4000
+    HARD_REWARD_MIN: int = 5000
+    HARD_REWARD_MAX: int = 10000
+    EXPERT_REWARD_MIN: int = 12000
+    EXPERT_REWARD_MAX: int = 20000
 
 
 @dataclass(frozen=True)
