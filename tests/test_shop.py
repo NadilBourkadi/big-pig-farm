@@ -5,16 +5,23 @@ from big_pig_farm.data.config import ECONOMY
 from big_pig_farm.economy.shop import (
     SHOP_ITEMS,
     check_tier_requirements,
+    get_available_perks,
     get_facility_cost,
     get_farm_upgrade_info,
     get_next_tier_upgrade,
     get_shop_items,
     purchase_item,
+    purchase_perk,
     purchase_tier_upgrade,
     sell_facility,
 )
+from big_pig_farm.economy.upgrades import UPGRADES
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.auto_resources import (
+    tick_auto_resources,
+    tick_veggie_gardens,
+)
 
 
 class TestShopItems:
@@ -219,3 +226,121 @@ class TestRoomCap:
         state.farm.add_room(BiomeType.MEADOW)
         # Now has 2 rooms, tier 2 cap is 2
         assert get_farm_upgrade_info(state) is None
+
+
+class TestPerks:
+    """Tests for the permanent upgrade (perk) system."""
+
+    def test_purchase_perk_success(self):
+        state = GameState()
+        state.money = 10000
+        state.farm_tier = 2
+        assert purchase_perk(state, "bulk_feeders")
+        assert state.has_upgrade("bulk_feeders")
+        assert state.money == 10000 - 150
+
+    def test_purchase_perk_already_owned(self):
+        state = GameState()
+        state.money = 10000
+        state.farm_tier = 2
+        assert purchase_perk(state, "bulk_feeders")
+        money_after = state.money
+        assert not purchase_perk(state, "bulk_feeders")
+        assert state.money == money_after
+
+    def test_purchase_perk_insufficient_tier(self):
+        state = GameState()
+        state.money = 10000
+        state.farm_tier = 1  # drip_system requires tier 3
+        assert not purchase_perk(state, "drip_system")
+        assert not state.has_upgrade("drip_system")
+
+    def test_purchase_perk_insufficient_money(self):
+        state = GameState()
+        state.money = 10
+        state.farm_tier = 2
+        assert not purchase_perk(state, "bulk_feeders")
+        assert not state.has_upgrade("bulk_feeders")
+
+    def test_get_available_perks_tier_filtering(self):
+        perks_t1 = get_available_perks(1, set())
+        perks_t2 = get_available_perks(2, set())
+        assert len(perks_t2) > len(perks_t1)
+
+    def test_has_upgrade_returns_false_for_missing(self):
+        state = GameState()
+        assert not state.has_upgrade("nonexistent")
+
+    def test_all_upgrades_have_required_fields(self):
+        for upgrade_id, upgrade in UPGRADES.items():
+            assert upgrade.id == upgrade_id
+            assert upgrade.name
+            assert upgrade.description
+            assert upgrade.cost > 0
+            assert 1 <= upgrade.required_tier <= 5
+            assert upgrade.category
+
+
+class TestAutoResources:
+    """Tests for auto-resource systems."""
+
+    def test_drip_system_regens_facilities(self):
+        state = GameState()
+        state.purchased_upgrades.add("drip_system")
+        bowl = Facility.create(FacilityType.FOOD_BOWL, 3, 3)
+        bowl.current_amount = 50.0
+        state.add_facility(bowl)
+
+        tick_auto_resources(state, game_hours=1.0)
+        assert bowl.current_amount == 52.0  # +2 per hour
+
+    def test_auto_feeders_refills_below_threshold(self):
+        state = GameState()
+        state.purchased_upgrades.add("auto_feeders")
+        bowl = Facility.create(FacilityType.FOOD_BOWL, 3, 3)
+        bowl.current_amount = 10.0  # 5% of 200 — below 25%
+        state.add_facility(bowl)
+
+        tick_auto_resources(state, game_hours=1.0)
+        assert bowl.current_amount == bowl.max_amount
+
+    def test_auto_feeders_ignores_above_threshold(self):
+        state = GameState()
+        state.purchased_upgrades.add("auto_feeders")
+        bowl = Facility.create(FacilityType.FOOD_BOWL, 3, 3)
+        bowl.current_amount = 150.0  # 75% — above 25%
+        state.add_facility(bowl)
+
+        tick_auto_resources(state, game_hours=1.0)
+        assert bowl.current_amount == 150.0
+
+    def test_bulk_feeders_doubles_capacity(self):
+        state = GameState()
+        state.money = 10000
+        state.farm_tier = 2
+        bowl = Facility.create(FacilityType.FOOD_BOWL, 3, 3)
+        original_max = bowl.max_amount
+        state.add_facility(bowl)
+
+        purchase_perk(state, "bulk_feeders")
+        assert bowl.max_amount == original_max * 2
+
+    def test_veggie_garden_distributes_food(self):
+        state = GameState()
+        garden = Facility.create(FacilityType.VEGGIE_GARDEN, 5, 5)
+        state.add_facility(garden)
+        bowl = Facility.create(FacilityType.FOOD_BOWL, 3, 3)
+        bowl.current_amount = 100.0
+        state.add_facility(bowl)
+
+        tick_veggie_gardens(state, game_hours=1.0)
+        assert bowl.current_amount > 100.0  # Should have received food
+
+    def test_no_auto_resources_without_perks(self):
+        state = GameState()
+        bowl = Facility.create(FacilityType.FOOD_BOWL, 3, 3)
+        bowl.current_amount = 10.0
+        state.add_facility(bowl)
+
+        tick_auto_resources(state, game_hours=1.0)
+        assert bowl.current_amount == 10.0  # Unchanged
