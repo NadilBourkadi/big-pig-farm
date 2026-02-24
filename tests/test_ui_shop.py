@@ -25,7 +25,7 @@ async def test_shop_category_switching():
         screen = app.query_one(ShopScreen)
 
         await pilot.press("d")
-        assert screen.current_category == ShopCategory.FOOD
+        assert screen.current_category == ShopCategory.PERKS
 
         await pilot.press("u")
         assert screen.current_category == ShopCategory.UPGRADES

@@ -14,6 +14,7 @@ from big_pig_farm.economy.shop import (
     ShopCategory,
     ShopItem,
     check_tier_requirements,
+    get_available_perks,
     get_current_tier_upgrade,
     get_farm_upgrade_info,
     get_next_tier_upgrade,
@@ -21,8 +22,10 @@ from big_pig_farm.economy.shop import (
     get_shop_items,
     purchase_item,
     purchase_new_room,
+    purchase_perk,
     purchase_tier_upgrade,
 )
+from big_pig_farm.economy.upgrades import UpgradeDefinition
 from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.entities.bloodlines import BLOODLINES
 from big_pig_farm.entities.facilities import FACILITY_INFO
@@ -66,6 +69,23 @@ class AdoptionPigWidget(ListItem):
         self.can_afford = can_afford
 
 
+class PerkWidget(ListItem):
+    """Widget displaying a permanent upgrade (perk) in the shop."""
+
+    def __init__(self, upgrade: UpgradeDefinition, purchased: bool, can_afford: bool):
+        cost_str = format_currency(upgrade.cost)
+        if purchased:
+            label = f"[dim]✓ {upgrade.name:20} {cost_str:>8}  (owned)[/dim]"
+        else:
+            afford_str = "" if can_afford else " (!)"
+            label = f"  {upgrade.name:20} {cost_str:>8}{afford_str}"
+
+        super().__init__(Label(label, markup=True))
+        self.upgrade = upgrade
+        self.purchased = purchased
+        self.can_afford = can_afford
+
+
 class ShopScreen(Screen):
     """Screen for the in-game shop and adoption center."""
 
@@ -73,7 +93,7 @@ class ShopScreen(Screen):
         ("escape", "go_back", "Back"),
         ("q", "go_back", None),
         ("f", "category_facilities", "Facilities"),
-        ("d", "category_food", "Food"),
+        ("d", "category_perks", "Perks"),
         ("u", "category_upgrades", "Upgrades"),
         ("a", "category_adoption", "Adopt"),
         ("r", "refresh_adoption", "Refresh"),
@@ -146,6 +166,7 @@ class ShopScreen(Screen):
         self._is_tier_upgrade_selected = False
         self._available_pigs: list[GuineaPig] = []
         self._selected_pig: GuineaPig | None = None
+        self._selected_perk: UpgradeDefinition | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the shop screen."""
@@ -154,7 +175,7 @@ class ShopScreen(Screen):
         with Container(id="shop-content"):
             with Horizontal(id="category-bar"):
                 yield Button("Facilities [F]", id="cat-facilities", classes="category-btn")
-                yield Button("Food [D]", id="cat-food", classes="category-btn")
+                yield Button("Perks [D]", id="cat-perks", classes="category-btn")
                 yield Button("Upgrades [U]", id="cat-upgrades", classes="category-btn")
                 yield Button("Adopt [A]", id="cat-adoption", classes="category-btn")
 
@@ -187,8 +208,15 @@ class ShopScreen(Screen):
         self._is_upgrade_selected = False
         self._is_tier_upgrade_selected = False
         self._selected_pig = None
+        self._selected_perk = None
 
-        if self.current_category == ShopCategory.ADOPTION:
+        if self.current_category == ShopCategory.PERKS:
+            perks = get_available_perks(self.state.farm_tier, self.state.purchased_upgrades)
+            for perk in perks:
+                purchased = perk.id in self.state.purchased_upgrades
+                can_afford = self.state.money >= perk.cost
+                list_view.append(PerkWidget(perk, purchased, can_afford))
+        elif self.current_category == ShopCategory.ADOPTION:
             if not self._available_pigs:
                 self._generate_available_pigs()
             for pig in self._available_pigs:
@@ -241,15 +269,24 @@ class ShopScreen(Screen):
 
     def on_list_view_highlighted(self, event: ListView.Highlighted) -> None:
         """Handle item highlight (when navigating with arrows)."""
-        if isinstance(event.item, AdoptionPigWidget):
+        if isinstance(event.item, PerkWidget):
+            self._selected_perk = event.item.upgrade
+            self.selected_item = None
+            self._selected_pig = None
+            self._is_upgrade_selected = False
+            self._is_tier_upgrade_selected = False
+            self._update_detail()
+        elif isinstance(event.item, AdoptionPigWidget):
             self._selected_pig = event.item.pig
             self.selected_item = None
+            self._selected_perk = None
             self._is_upgrade_selected = False
             self._is_tier_upgrade_selected = False
             self._update_detail()
         elif isinstance(event.item, ShopItemWidget):
             self.selected_item = event.item.item
             self._selected_pig = None
+            self._selected_perk = None
             self._is_upgrade_selected = False
             self._is_tier_upgrade_selected = False
             self._update_detail()
@@ -257,13 +294,17 @@ class ShopScreen(Screen):
             item_id = event.item.id
             self.selected_item = None
             self._selected_pig = None
+            self._selected_perk = None
             self._is_tier_upgrade_selected = item_id == "tier-upgrade"
             self._is_upgrade_selected = item_id == "farm-upgrade"
             self._update_detail()
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         """Handle item selection (when pressing enter)."""
-        if isinstance(event.item, AdoptionPigWidget):
+        if isinstance(event.item, PerkWidget):
+            self._selected_perk = event.item.upgrade
+            self._update_detail()
+        elif isinstance(event.item, AdoptionPigWidget):
             self._selected_pig = event.item.pig
             self._update_detail()
         elif isinstance(event.item, ShopItemWidget):
@@ -300,6 +341,24 @@ class ShopScreen(Screen):
                 detail.update("\n".join(lines))
             else:
                 detail.update("Max tier reached!")
+            return
+
+        if self._selected_perk:
+            perk = self._selected_perk
+            purchased = perk.id in self.state.purchased_upgrades
+            if purchased:
+                detail.update(
+                    f"{perk.name} — OWNED\n"
+                    f"{perk.description}\n"
+                    f"Category: {perk.category}"
+                )
+            else:
+                can_afford = "Yes" if self.state.money >= perk.cost else "No"
+                detail.update(
+                    f"{perk.name} — {format_currency(perk.cost)}\n"
+                    f"{perk.description}\n"
+                    f"Category: {perk.category} | Can afford: {can_afford}"
+                )
             return
 
         if self._selected_pig:
@@ -367,8 +426,8 @@ class ShopScreen(Screen):
         """Handle button presses."""
         if event.button.id == "cat-facilities":
             self.action_category_facilities()
-        elif event.button.id == "cat-food":
-            self.action_category_food()
+        elif event.button.id == "cat-perks":
+            self.action_category_perks()
         elif event.button.id == "cat-upgrades":
             self.action_category_upgrades()
         elif event.button.id == "cat-adoption":
@@ -382,12 +441,12 @@ class ShopScreen(Screen):
         self.notify("Facilities")
         self.query_one("#item-list", ListView).focus()
 
-    def action_category_food(self) -> None:
-        """Switch to food category."""
-        self.current_category = ShopCategory.FOOD
+    def action_category_perks(self) -> None:
+        """Switch to perks category."""
+        self.current_category = ShopCategory.PERKS
         self._refresh_items()
         self._refresh_footer()
-        self.notify("Food & Supplies")
+        self.notify("Permanent Perks")
         self.query_one("#item-list", ListView).focus()
 
     def action_category_upgrades(self) -> None:
@@ -410,7 +469,7 @@ class ShopScreen(Screen):
         """Cycle through categories."""
         cycle = [
             ShopCategory.FACILITIES,
-            ShopCategory.FOOD,
+            ShopCategory.PERKS,
             ShopCategory.UPGRADES,
             ShopCategory.ADOPTION,
         ]
@@ -436,6 +495,11 @@ class ShopScreen(Screen):
         # Handle adoption
         if self.current_category == ShopCategory.ADOPTION:
             self._adopt_pig()
+            return
+
+        # Handle perk purchase
+        if self.current_category == ShopCategory.PERKS:
+            self._purchase_perk()
             return
 
         # Handle tier upgrade
@@ -502,6 +566,27 @@ class ShopScreen(Screen):
                 self.notify(f"Purchased {item.name}!", severity="information")
                 self._refresh_items()
                 self._update_header()
+
+    def _purchase_perk(self) -> None:
+        """Purchase the selected perk."""
+        if not self._selected_perk:
+            self.notify("Select a perk first!", severity="warning")
+            return
+
+        perk = self._selected_perk
+        if perk.id in self.state.purchased_upgrades:
+            self.notify("Already owned!", severity="warning")
+            return
+
+        if self.state.money < perk.cost:
+            self.notify("Not enough money!", severity="error")
+            return
+
+        if purchase_perk(self.state, perk.id):
+            self.notify(f"Purchased {perk.name}!")
+            self._refresh_items()
+            self._update_header()
+            self._update_detail()
 
     def _adopt_pig(self) -> None:
         """Adopt the selected pig."""

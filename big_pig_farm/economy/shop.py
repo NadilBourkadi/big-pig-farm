@@ -5,16 +5,18 @@ from enum import Enum
 
 from big_pig_farm.data.config import ECONOMY, TIER_UPGRADES, TierUpgrade
 from big_pig_farm.economy.currency import add_money, spend_money
+from big_pig_farm.economy.upgrades import UPGRADES, UpgradeDefinition
 from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.game.state import GameState
+from big_pig_farm.simulation.auto_resources import FOOD_WATER_TYPES, apply_bulk_feeders
 
 
 class ShopCategory(str, Enum):
     """Shop item categories."""
     FACILITIES = "facilities"
+    PERKS = "perks"
     UPGRADES = "upgrades"
-    FOOD = "food"
     DECORATIONS = "decorations"
     ADOPTION = "adoption"
 
@@ -146,31 +148,6 @@ SHOP_ITEMS: list[ShopItem] = [
         facility_type=FacilityType.GENETICS_LAB,
         required_tier=3,
     ),
-    # Food items
-    ShopItem(
-        id="food_refill",
-        name="Food Refill",
-        description="Refills all food bowls and hay racks to max capacity instantly.",
-        cost=10,
-        category=ShopCategory.FOOD,
-        required_tier=1,
-    ),
-    ShopItem(
-        id="water_refill",
-        name="Water Refill",
-        description="Refills all water bottles to max capacity instantly.",
-        cost=5,
-        category=ShopCategory.FOOD,
-        required_tier=1,
-    ),
-    ShopItem(
-        id="premium_food",
-        name="Premium Food Pack",
-        description="Instantly boosts happiness by +20 for all pigs on the farm.",
-        cost=25,
-        category=ShopCategory.FOOD,
-        required_tier=2,
-    ),
 ]
 
 
@@ -210,6 +187,11 @@ def purchase_item(state: GameState, item: ShopItem, position: tuple[int, int] | 
     # Handle facility placement
     if item.facility_type and position:
         facility = Facility.create(item.facility_type, position[0], position[1])
+        # Apply Bulk Feeders capacity doubling to new food/water facilities
+        if state.has_upgrade("bulk_feeders"):
+            if facility.facility_type in FOOD_WATER_TYPES:
+                facility.max_amount *= 2
+                facility.current_amount *= 2
         if not state.add_facility(facility):
             return False  # Couldn't place facility
 
@@ -217,29 +199,45 @@ def purchase_item(state: GameState, item: ShopItem, position: tuple[int, int] | 
     if not spend_money(state, item.cost, f"Purchased {item.name}"):
         return False
 
-    # Handle special items
-    if item.id == "food_refill":
-        _refill_all_facilities(state, FacilityType.FOOD_BOWL)
-        _refill_all_facilities(state, FacilityType.HAY_RACK)
-    elif item.id == "water_refill":
-        _refill_all_facilities(state, FacilityType.WATER_BOTTLE)
-    elif item.id == "premium_food":
-        _boost_all_happiness(state, 20.0)
+    return True
+
+
+def get_available_perks(farm_tier: int, purchased: set[str]) -> list[UpgradeDefinition]:
+    """Get implemented perks available at the current tier."""
+    return [
+        upgrade for upgrade in UPGRADES.values()
+        if upgrade.implemented and upgrade.required_tier <= farm_tier
+    ]
+
+
+def purchase_perk(state: GameState, upgrade_id: str) -> bool:
+    """Purchase a permanent upgrade. Returns True if successful."""
+    if upgrade_id in state.purchased_upgrades:
+        return False
+
+    upgrade = UPGRADES.get(upgrade_id)
+    if upgrade is None:
+        return False
+
+    if upgrade.required_tier > state.farm_tier:
+        return False
+
+    if not spend_money(state, upgrade.cost, f"Purchased {upgrade.name}"):
+        return False
+
+    state.purchased_upgrades.add(upgrade_id)
+    state.log_event(f"Purchased perk: {upgrade.name}!", "purchase")
+
+    # Apply one-time effects
+    _apply_perk_effect(state, upgrade_id)
 
     return True
 
 
-def _refill_all_facilities(state: GameState, facility_type: FacilityType) -> None:
-    """Refill all facilities of a given type."""
-    for facility in state.get_facilities_by_type(facility_type):
-        facility.refill()
-
-
-def _boost_all_happiness(state: GameState, amount: float) -> None:
-    """Boost happiness for all pigs on the farm."""
-    for pig in state.get_pigs_list():
-        pig.needs.happiness = min(100.0, pig.needs.happiness + amount)
-        pig.needs.clamp_all()
+def _apply_perk_effect(state: GameState, upgrade_id: str) -> None:
+    """Apply one-time effects for perks that modify existing state."""
+    if upgrade_id == "bulk_feeders":
+        apply_bulk_feeders(state)
 
 
 def get_facility_cost(facility_type: FacilityType) -> int:
