@@ -1,24 +1,27 @@
 """Journal screen - tabbed view combining Pigdex, Contracts, and Event Log."""
 
 from textual.app import ComposeResult
-from textual.screen import Screen
 from textual.containers import VerticalScroll
-from textual.widgets import Static, Footer, TabbedContent, TabPane
+from textual.screen import Screen
+from textual.widgets import Footer, Static, TabbedContent, TabPane
 
 from big_pig_farm.economy.contracts import BreedingContract, ContractDifficulty
 from big_pig_farm.entities.genetics import (
-    BaseColor, Pattern, ColorIntensity, RoanType, Rarity,
+    BaseColor,
+    ColorIntensity,
+    Pattern,
+    Rarity,
+    RoanType,
 )
 from big_pig_farm.entities.pigdex import (
-    phenotype_key_from_parts,
-    key_to_rarity,
     ALL_BASE_COLORS,
-    ALL_PATTERNS,
     ALL_INTENSITIES,
+    ALL_PATTERNS,
     ALL_ROAN_TYPES,
+    key_to_rarity,
+    phenotype_key_from_parts,
 )
 from big_pig_farm.game.state import GameState
-
 
 # Pigdex grid labels
 _COLOR_HEADERS = {
@@ -54,6 +57,7 @@ DIFFICULTY_LABELS = {
     ContractDifficulty.MEDIUM: "Medium",
     ContractDifficulty.HARD: "Hard",
     ContractDifficulty.EXPERT: "Expert",
+    ContractDifficulty.LEGENDARY: "Legendary",
 }
 
 EVENT_ICONS = {

@@ -301,6 +301,8 @@ class ContractConfig:
     HARD_REWARD_MAX: int = 10000
     EXPERT_REWARD_MIN: int = 12000
     EXPERT_REWARD_MAX: int = 20000
+    LEGENDARY_REWARD_MIN: int = 20000
+    LEGENDARY_REWARD_MAX: int = 40000
 
 
 @dataclass(frozen=True)

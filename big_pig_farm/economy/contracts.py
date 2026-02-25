@@ -2,15 +2,18 @@
 
 import random
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
 from big_pig_farm.data.config import BIOME, CONTRACTS
 from big_pig_farm.entities.biomes import BiomeType
-from big_pig_farm.entities.genetics import BaseColor, Pattern, ColorIntensity, RoanType
+from big_pig_farm.entities.genetics import BaseColor, ColorIntensity, Pattern, RoanType
 from big_pig_farm.entities.guinea_pig import GuineaPig
+
+if TYPE_CHECKING:
+    from big_pig_farm.game.state import GameState
 
 
 class ContractDifficulty(str, Enum):
@@ -19,17 +22,18 @@ class ContractDifficulty(str, Enum):
     MEDIUM = "medium"    # Color + pattern
     HARD = "hard"        # Color + pattern + intensity
     EXPERT = "expert"    # All 4 traits
+    LEGENDARY = "legendary"  # All 4 traits + roan (requires VIP perk)
 
 
 class BreedingContract(BaseModel):
     """A breeding contract requesting a specific phenotype."""
     id: UUID = Field(default_factory=uuid4)
     description: str = ""
-    required_color: Optional[BaseColor] = None
-    required_pattern: Optional[Pattern] = None
-    required_intensity: Optional[ColorIntensity] = None
-    required_roan: Optional[RoanType] = None
-    required_biome: Optional[BiomeType] = None
+    required_color: BaseColor | None = None
+    required_pattern: Pattern | None = None
+    required_intensity: ColorIntensity | None = None
+    required_roan: RoanType | None = None
+    required_biome: BiomeType | None = None
     difficulty: ContractDifficulty = ContractDifficulty.EASY
     reward: int = 50
     deadline_day: int = 0
@@ -131,7 +135,7 @@ class ContractBoard(BaseModel):
     total_contract_earnings: int = 0
     last_refresh_day: int = 0
 
-    def check_and_fulfill(self, pig: GuineaPig, farm=None) -> Optional[BreedingContract]:
+    def check_and_fulfill(self, pig: GuineaPig, farm=None) -> BreedingContract | None:
         """Check if a pig matches any active contract. Returns matched contract or None."""
         for contract in self.active_contracts:
             if contract.matches_pig(pig, farm=farm):
@@ -160,10 +164,15 @@ def generate_contracts(
     farm_tier: int,
     game_day: int,
     available_biomes: list[BiomeType] | None = None,
+    game_state: "GameState | None" = None,
 ) -> list[BreedingContract]:
     """Generate a set of contracts appropriate for the farm tier."""
     contracts = []
-    num_contracts = min(CONTRACTS.MAX_ACTIVE_CONTRACTS, max(2, farm_tier))
+    max_contracts = CONTRACTS.MAX_ACTIVE_CONTRACTS
+    # Contract Negotiator perk: +1 max active contract slot
+    if game_state and game_state.has_upgrade("contract_negotiator"):
+        max_contracts += 1
+    num_contracts = min(max_contracts, max(2, farm_tier))
 
     # Determine available difficulties by tier
     available_difficulties = []
@@ -175,6 +184,9 @@ def generate_contracts(
         available_difficulties.append(ContractDifficulty.HARD)
     if farm_tier >= 4:
         available_difficulties.append(ContractDifficulty.EXPERT)
+    # VIP Contracts perk: unlock LEGENDARY difficulty at tier 5
+    if farm_tier >= 5 and game_state and game_state.has_upgrade("vip_contracts"):
+        available_difficulties.append(ContractDifficulty.LEGENDARY)
 
     for _ in range(num_contracts):
         difficulty = random.choice(available_difficulties)
@@ -233,25 +245,32 @@ def _generate_single_contract(
     required_roan = None
     required_biome = None
 
-    if difficulty in (ContractDifficulty.MEDIUM, ContractDifficulty.HARD, ContractDifficulty.EXPERT):
+    if difficulty in (ContractDifficulty.MEDIUM, ContractDifficulty.HARD,
+                      ContractDifficulty.EXPERT, ContractDifficulty.LEGENDARY):
         available_patterns = _filter_by_tier(list(Pattern), PATTERN_TIER_REQUIREMENTS, farm_tier)
         required_pattern = random.choice(available_patterns)
 
-    if difficulty in (ContractDifficulty.HARD, ContractDifficulty.EXPERT):
+    if difficulty in (ContractDifficulty.HARD, ContractDifficulty.EXPERT,
+                      ContractDifficulty.LEGENDARY):
         available_intensities = _filter_by_tier(
             list(ColorIntensity), INTENSITY_TIER_REQUIREMENTS, farm_tier
         )
         required_intensity = random.choice(available_intensities)
 
-    if difficulty == ContractDifficulty.EXPERT:
+    if difficulty in (ContractDifficulty.EXPERT, ContractDifficulty.LEGENDARY):
         available_roans = _filter_by_tier(list(RoanType), ROAN_TIER_REQUIREMENTS, farm_tier)
         required_roan = random.choice(available_roans)
 
-    # Biome requirement: tier 3+, HARD/EXPERT, 30% chance
+    # LEGENDARY forces roan requirement
+    if difficulty == ContractDifficulty.LEGENDARY:
+        required_roan = RoanType.ROAN
+
+    # Biome requirement: tier 3+, HARD/EXPERT/LEGENDARY, 30% chance
     if (farm_tier >= 3
             and available_biomes
             and len(available_biomes) > 1
-            and difficulty in (ContractDifficulty.HARD, ContractDifficulty.EXPERT)
+            and difficulty in (ContractDifficulty.HARD, ContractDifficulty.EXPERT,
+                              ContractDifficulty.LEGENDARY)
             and random.random() < BIOME.BIOME_CONTRACT_CHANCE):
         required_biome = random.choice(available_biomes)
 
@@ -261,6 +280,7 @@ def _generate_single_contract(
         ContractDifficulty.MEDIUM: (CONTRACTS.MEDIUM_REWARD_MIN, CONTRACTS.MEDIUM_REWARD_MAX),
         ContractDifficulty.HARD: (CONTRACTS.HARD_REWARD_MIN, CONTRACTS.HARD_REWARD_MAX),
         ContractDifficulty.EXPERT: (CONTRACTS.EXPERT_REWARD_MIN, CONTRACTS.EXPERT_REWARD_MAX),
+        ContractDifficulty.LEGENDARY: (CONTRACTS.LEGENDARY_REWARD_MIN, CONTRACTS.LEGENDARY_REWARD_MAX),
     }
     min_reward, max_reward = reward_ranges[difficulty]
     reward = random.randint(min_reward, max_reward)
