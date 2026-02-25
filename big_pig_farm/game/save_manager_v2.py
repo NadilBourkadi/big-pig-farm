@@ -10,7 +10,7 @@ from pathlib import Path
 
 from big_pig_farm.data.config import TIER_UPGRADES
 from big_pig_farm.game.state import GameState
-from big_pig_farm.game.world import relayout_areas
+from big_pig_farm.game.world import relayout_areas, resize_all_rooms
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,11 @@ class SaveManagerV2:
                 # only run repair + tunnel rebuild when it was a no-op
                 state.farm.repair_area_cells()
                 state.farm.rebuild_tunnels()
+
+            # Sync farm.tier and resize rooms to match current tier dimensions.
+            # No-op if dimensions already match (new saves).
+            state.farm.tier = state.farm_tier
+            resize_all_rooms(state, state.farm_tier)
 
             return state
         except Exception as e:
