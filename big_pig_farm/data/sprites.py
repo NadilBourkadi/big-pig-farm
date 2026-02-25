@@ -234,6 +234,38 @@ FACILITY_SPRITES = {
         "│ ◊  ◊  ◊│",
         "└─────────┘",
     ],
+    "feast_table": [
+        "┌─FEAST──┐",
+        "│ ●●●●●●│",
+        "│ ○  ○  ○│",
+        "└────────┘",
+    ],
+    "campfire": [
+        "╭─FIRE─╮",
+        "│ ♨♨♨ │",
+        "│  ♨♨  │",
+        "╰──────╯",
+    ],
+    "therapy_garden": [
+        "╭─HEAL─╮",
+        "│ ♣✿♣ │",
+        "│ ✿♣✿ │",
+        "╰──────╯",
+    ],
+    "hot_spring": [
+        "╭──SPA───╮",
+        "│ ≈≈≈≈≈ │",
+        "│ ≈♨≈♨≈ │",
+        "│ ≈≈≈≈≈ │",
+        "╰────────╯",
+    ],
+    "stage": [
+        "┌─STAGE──┐",
+        "│ ♪  ♫  │",
+        "│  ★    │",
+        "│ ♫  ♪  │",
+        "└────────┘",
+    ],
 }
 
 # Far-zoom facility icons — compact distinguishable per-type icons
@@ -250,6 +282,11 @@ FAR_FACILITY_SPRITES: dict[str, str] = {
     "veggie_garden": "♣♣",
     "grooming_station": "✂",
     "genetics_lab": "⚗",
+    "feast_table": "●○",
+    "campfire": "♨",
+    "therapy_garden": "✿",
+    "hot_spring": "≈♨",
+    "stage": "♪★",
 }
 
 # Terrain characters

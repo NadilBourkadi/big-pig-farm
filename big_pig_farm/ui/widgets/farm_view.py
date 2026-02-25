@@ -55,6 +55,11 @@ _FACILITY_LABELS: dict[str, str] = {
     "veggie_garden": "Garden",
     "grooming_station": "Groom",
     "genetics_lab": "Gen. Lab",
+    "feast_table": "Feast",
+    "campfire": "Campfire",
+    "therapy_garden": "Therapy",
+    "hot_spring": "Hot Spring",
+    "stage": "Stage",
 }
 
 

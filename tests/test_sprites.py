@@ -184,8 +184,8 @@ class TestParseFacilityCloseSource:
         source = (Path(__file__).parent.parent / "big_pig_farm" / "data" / "facility_pixels_close.py").read_text()
         return _parse_facility_close_source(source)
 
-    def test_finds_all_12_facilities(self, facilities):
-        assert len(facilities) == 12
+    def test_finds_all_17_facilities(self, facilities):
+        assert len(facilities) == 17
 
     def test_first_is_food_bowl(self, facilities):
         assert facilities[0]["char_var"] == "_FOOD_BOWL_CHAR"

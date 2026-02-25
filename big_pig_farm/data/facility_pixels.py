@@ -105,6 +105,48 @@ FACILITY_PALETTES: dict[str, dict[str, str]] = {
         "glow":   "#7FFFD4",     # aquamarine glow
         "base":   "#2F0052",     # very dark purple base
     },
+    "feast_table": {
+        "frame":  "#7A5838",     # warm brown frame
+        "table":  "#A0522D",     # sienna wood table
+        "plank":  "#CD853F",     # peru planks
+        "food":   "#DAA520",     # goldenrod food
+        "plate":  "#E8E0D0",     # cream plate
+        "leg":    "#5C4033",     # dark brown leg
+    },
+    "campfire": {
+        "frame":  "#808080",     # grey stone ring
+        "stone":  "#696969",     # dim grey stones
+        "fire":   "#FF4500",     # orange-red fire
+        "flame":  "#FFD700",     # gold flame tips
+        "ember":  "#FF6347",     # tomato embers
+        "log":    "#5C4033",     # dark brown log
+        "ash":    "#A9A9A9",     # dark grey ash
+    },
+    "therapy_garden": {
+        "frame":  "#8B7355",     # khaki brown border
+        "grass":  "#228B22",     # forest green grass
+        "flower": "#FF69B4",     # hot pink flowers
+        "petal":  "#DDA0DD",     # plum petals
+        "leaf":   "#2E8B57",     # sea green leaves
+        "path":   "#D2B48C",     # tan path
+        "water":  "#87CEEB",     # sky blue water feature
+    },
+    "hot_spring": {
+        "frame":  "#808080",     # grey stone rim
+        "stone":  "#696969",     # dim grey stones
+        "water":  "#4682B4",     # steel blue water
+        "steam":  "#B0C4DE",     # light steel blue steam
+        "pool":   "#5F9EA0",     # cadet blue pool
+        "rock":   "#A9A9A9",     # dark grey rocks
+    },
+    "stage": {
+        "frame":  "#8B4513",     # saddle brown frame
+        "floor":  "#CD853F",     # peru wood floor
+        "curtain":"#8B0000",     # dark red curtain
+        "light":  "#FFD700",     # gold spotlight
+        "star":   "#FFFFFF",     # white star accent
+        "base":   "#5C4033",     # dark brown base
+    },
 }
 
 
@@ -344,6 +386,146 @@ FACILITY_PIXELS: dict[str, PixelGrid] = {
         ["frame","base","glow","base","base","dna","base","base","glow","base","frame"],
         ["frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame"],
     ],
+
+    # -----------------------------------------------------------------------
+    # FEAST TABLE  (14w x 14h)  —  large communal banquet table with plates
+    # -----------------------------------------------------------------------
+    "feast_table": [
+        ["frame","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","frame"],
+        ["frame","table","table","plate","food","plate","food","plate","food","plate","food","plate","table","frame"],
+        ["frame","table","plate","food","plate","food","plate","food","plate","food","plate","food","table","frame"],
+        ["frame","table","food","plate","food","plate","food","plate","food","plate","food","plate","table","frame"],
+        ["frame","table","plate","food","plate","food","plate","food","plate","food","plate","food","table","frame"],
+        ["frame","table","table","plate","food","plate","food","plate","food","plate","food","plate","table","frame"],
+        ["frame","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","frame"],
+        [ T,   "leg",   T,    T,    T,   "frame","frame","frame","frame", T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,   "frame","frame","frame","frame", T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "leg",   T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+    ],
+    "feast_table_empty": [
+        ["frame","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","frame"],
+        ["frame","table","table","plate","table","plate","table","plate","table","plate","table","plate","table","frame"],
+        ["frame","table","plate","table","plate","table","plate","table","plate","table","plate","table","table","frame"],
+        ["frame","table","table","plate","table","plate","table","plate","table","plate","table","plate","table","frame"],
+        ["frame","table","plate","table","plate","table","plate","table","plate","table","plate","table","table","frame"],
+        ["frame","table","table","plate","table","plate","table","plate","table","plate","table","plate","table","frame"],
+        ["frame","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","frame"],
+        [ T,   "leg",   T,    T,    T,   "frame","frame","frame","frame", T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,   "frame","frame","frame","frame", T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "leg",   T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+    ],
+    "feast_table_full": [
+        ["frame","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","frame"],
+        ["frame","table","food","food","food","food","food","food","food","food","food","food","table","frame"],
+        ["frame","table","food","food","food","food","food","food","food","food","food","food","table","frame"],
+        ["frame","table","food","food","food","food","food","food","food","food","food","food","table","frame"],
+        ["frame","table","food","food","food","food","food","food","food","food","food","food","table","frame"],
+        ["frame","table","food","food","food","food","food","food","food","food","food","food","table","frame"],
+        ["frame","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","plank","frame"],
+        [ T,   "leg",   T,    T,    T,   "frame","frame","frame","frame", T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,   "frame","frame","frame","frame", T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "leg",   T    ],
+        [ T,   "leg",   T,    T,    T,    T,    T,    T,    T,    T,    T,    T,   "leg",   T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+    ],
+
+    # -----------------------------------------------------------------------
+    # CAMPFIRE  (14w x 14h)  —  large stone ring with crackling fire
+    # -----------------------------------------------------------------------
+    "campfire": [
+        [ T,    T,    T,    T,   "flame","flame","flame","flame","flame", T,    T,    T,    T,    T    ],
+        [ T,    T,    T,   "flame","flame","fire","fire","fire","flame","flame", T,    T,    T,    T    ],
+        [ T,    T,   "flame","fire","fire","fire","fire","fire","fire","flame", T,    T,    T,    T    ],
+        [ T,    T,   "fire","fire","ember","fire","fire","ember","fire","fire",  T,    T,    T,    T    ],
+        [ T,   "stone","fire","ember","fire","ember","ember","fire","ember","fire","stone", T,    T,    T    ],
+        ["stone","stone","fire","fire","ember","ember","ember","ember","fire","fire","stone","stone", T,    T    ],
+        ["stone","log", "log", "log","ember","ember","ember","ember","log", "log", "log","stone", T,    T    ],
+        ["stone","log", "log", "log", "ash", "ash", "ash", "ash", "log", "log", "log","stone", T,    T    ],
+        ["frame","stone","stone","log", "ash", "ash", "ash", "ash", "log","stone","stone","frame", T,    T    ],
+        [ T,   "frame","stone","stone","stone","stone","stone","stone","stone","stone","frame", T,    T,    T    ],
+        [ T,    T,   "frame","frame","stone","stone","stone","stone","frame","frame", T,    T,    T,    T    ],
+        [ T,    T,    T,   "frame","frame","frame","frame","frame","frame", T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+    ],
+
+    # -----------------------------------------------------------------------
+    # THERAPY GARDEN  (14w x 14h)  —  lush flower garden with winding path
+    # -----------------------------------------------------------------------
+    "therapy_garden": [
+        ["frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame"],
+        ["frame","grass","grass","flower","grass","leaf","grass","grass","leaf","grass","petal","grass","grass","frame"],
+        ["frame","grass","flower","grass","petal","grass","flower","grass","petal","grass","flower","grass","leaf","frame"],
+        ["frame","leaf","grass","petal","grass","path","path","path","grass","flower","grass","leaf","grass","frame"],
+        ["frame","grass","petal","grass","path","path","path","path","path","grass","petal","grass","flower","frame"],
+        ["frame","flower","grass","path","path","water","water","water","path","path","grass","flower","grass","frame"],
+        ["frame","grass","leaf","path","water","water","water","water","water","path","leaf","grass","petal","frame"],
+        ["frame","petal","grass","path","water","water","water","water","water","path","grass","petal","grass","frame"],
+        ["frame","grass","flower","path","path","water","water","water","path","path","flower","grass","leaf","frame"],
+        ["frame","leaf","grass","petal","path","path","path","path","path","grass","leaf","grass","flower","frame"],
+        ["frame","grass","petal","grass","leaf","path","path","path","leaf","grass","petal","flower","grass","frame"],
+        ["frame","flower","grass","leaf","grass","flower","grass","flower","grass","leaf","grass","leaf","petal","frame"],
+        ["frame","grass","leaf","grass","petal","grass","leaf","grass","petal","grass","flower","grass","grass","frame"],
+        ["frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame","frame"],
+    ],
+
+    # -----------------------------------------------------------------------
+    # HOT SPRING  (18w x 18h)  —  large stone-rimmed pool with steam wisps
+    # -----------------------------------------------------------------------
+    "hot_spring": [
+        [ T,    T,   "steam", T,    T,   "steam", T,    T,   "steam", T,    T,   "steam", T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,   "steam", T,    T,   "steam", T,    T,   "steam", T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,   "steam", T,    T,   "steam", T,    T,   "steam", T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,   "frame","stone","stone","stone","stone","stone","stone","stone","stone","stone","stone","frame", T,    T,    T,    T    ],
+        [ T,   "frame","stone","pool","pool","pool","pool","pool","pool","pool","pool","pool","pool","stone","frame", T,    T,    T    ],
+        ["frame","stone","pool","pool","water","water","water","water","water","water","water","pool","pool","pool","stone","frame", T,    T    ],
+        ["frame","stone","pool","water","water","water","water","water","water","water","water","water","pool","pool","stone","frame", T,    T    ],
+        ["frame","stone","pool","water","water","pool","pool","pool","pool","water","water","water","water","pool","stone","frame", T,    T    ],
+        ["frame","stone","water","water","pool","pool","pool","pool","pool","pool","water","water","water","water","stone","frame", T,    T    ],
+        ["frame","stone","water","water","pool","pool","pool","pool","pool","pool","water","water","water","water","stone","frame", T,    T    ],
+        ["frame","stone","pool","water","water","pool","pool","pool","pool","water","water","water","water","pool","stone","frame", T,    T    ],
+        ["frame","stone","pool","water","water","water","water","water","water","water","water","water","pool","pool","stone","frame", T,    T    ],
+        ["frame","stone","pool","pool","water","water","water","water","water","water","water","pool","pool","pool","stone","frame", T,    T    ],
+        [ T,   "frame","stone","pool","pool","pool","pool","pool","pool","pool","pool","pool","pool","stone","frame", T,    T,    T    ],
+        [ T,    T,   "frame","stone","stone","stone","stone","stone","stone","stone","stone","stone","stone","frame", T,    T,    T,    T    ],
+        [ T,    T,    T,   "frame","frame","rock","frame","frame","frame","rock","frame","frame","frame", T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+    ],
+
+    # -----------------------------------------------------------------------
+    # STAGE  (18w x 18h)  —  large raised platform with curtains + spotlights
+    # -----------------------------------------------------------------------
+    "stage": [
+        ["curtain","curtain","curtain","light","curtain","curtain","curtain","star","curtain","curtain","curtain","curtain","light","curtain","curtain","curtain","curtain","curtain"],
+        ["curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,   "light", T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["curtain","curtain", T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,  "curtain","curtain"],
+        ["frame","frame","frame","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","frame","frame","frame"],
+        ["frame","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","frame"],
+        ["frame","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","floor","frame"],
+        [ T,   "base","base","base","base","base","base","base","base","base","base","base","base","base","base","base","base", T    ],
+        [ T,   "base","base","base","base","base","base","base","base","base","base","base","base","base","base","base","base", T    ],
+        [ T,    T,   "base", T,    T,    T,   "base", T,    T,    T,    T,   "base", T,    T,    T,   "base", T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+        [ T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T,    T    ],
+    ],
 }
 
 
@@ -439,6 +621,49 @@ FACILITY_PIXELS_FAR: dict[str, PixelGrid] = {
         ["base","flask","dna","flask","base" ],
         ["base","liquid","glow","liquid","base" ],
         ["frame","frame","frame","frame","frame"],
+    ],
+    # FEAST TABLE (6w x 4h -> 6x2)
+    "feast_table": [
+        ["frame","plank","plank","plank","plank","frame"],
+        ["table","food","plate","food","plate","table"],
+        ["table","plate","food","plate","food","table"],
+        [ T,   "leg","frame","frame","leg",  T    ],
+    ],
+    # CAMPFIRE (6w x 6h -> 6x3)
+    "campfire": [
+        [ T,   "flame","flame","flame","flame", T    ],
+        ["flame","fire","ember","ember","fire","flame"],
+        ["stone","fire","ember","ember","fire","stone"],
+        ["stone","log", "ash", "ash", "log","stone"],
+        [ T,   "stone","stone","stone","stone", T    ],
+        [ T,    T,   "frame","frame", T,    T    ],
+    ],
+    # THERAPY GARDEN (6w x 6h -> 6x3)
+    "therapy_garden": [
+        ["frame","frame","frame","frame","frame","frame"],
+        ["grass","flower","leaf","petal","flower","grass"],
+        ["leaf","path","path","path","path","leaf"],
+        ["petal","path","water","water","path","petal"],
+        ["flower","leaf","petal","flower","leaf","flower"],
+        ["frame","frame","frame","frame","frame","frame"],
+    ],
+    # HOT SPRING (6w x 6h -> 6x3)
+    "hot_spring": [
+        [ T,   "steam", T,   "steam", T,    T    ],
+        ["stone","stone","stone","stone","stone","stone"],
+        ["stone","pool","water","water","pool","stone"],
+        ["stone","water","pool","pool","water","stone"],
+        ["stone","pool","water","water","pool","stone"],
+        [ T,   "stone","stone","stone","stone", T    ],
+    ],
+    # STAGE (6w x 6h -> 6x3)
+    "stage": [
+        ["curtain","light","curtain","star","light","curtain"],
+        ["curtain","curtain","curtain","curtain","curtain","curtain"],
+        ["curtain", T,    T,    T,    T,  "curtain"],
+        ["frame","floor","floor","floor","floor","frame"],
+        ["frame","floor","floor","floor","floor","frame"],
+        [ T,   "base","base","base","base", T    ],
     ],
 }
 
