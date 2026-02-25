@@ -1,23 +1,27 @@
 """Adoption utilities for generating and pricing guinea pigs."""
 
 import random
+from typing import TYPE_CHECKING
 
 from big_pig_farm.data.config import BLOODLINE
 from big_pig_farm.data.names import generate_unique_name
 from big_pig_farm.economy.market import get_rarity_multiplier
-from big_pig_farm.entities.guinea_pig import GuineaPig, Gender
 from big_pig_farm.entities.bloodlines import (
     BLOODLINES,
-    pick_random_bloodline,
     generate_bloodline_pig_genotype,
+    pick_random_bloodline,
 )
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig
+
+if TYPE_CHECKING:
+    from big_pig_farm.game.state import GameState
 
 
 # Adoption costs are higher than sale prices to prevent buy/sell exploits
 ADOPTION_BASE_COST = 50  # Common pigs cost 50 (sell for 25)
 
 
-def calculate_adoption_cost(pig: GuineaPig) -> int:
+def calculate_adoption_cost(pig: GuineaPig, state: "GameState | None" = None) -> int:
     """Calculate the adoption cost for a guinea pig.
 
     Bloodline pigs have their cost multiplied by the bloodline cost_multiplier
@@ -32,6 +36,10 @@ def calculate_adoption_cost(pig: GuineaPig) -> int:
             if bloodline.display_name == pig.origin_tag:
                 base_cost = int(base_cost * bloodline.cost_multiplier)
                 break
+
+    # Adoption Discount perk: -15% adoption cost
+    if state and state.has_upgrade("adoption_discount"):
+        base_cost = int(base_cost * 0.85)
 
     return base_cost
 

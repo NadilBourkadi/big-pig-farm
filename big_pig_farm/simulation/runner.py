@@ -58,6 +58,8 @@ class SimulationRunner:
         # Throttle expensive O(m*f) breeding checks to every 10 ticks (~1s)
         self._breeding_check_counter = 0
         self._breeding_check_interval = 10
+        # Farm Bell perk: throttle to once per game-hour
+        self._last_farm_bell_hour: int = -1
 
     def tick(self, delta_seconds: float) -> None:
         """Process one simulation tick. delta_seconds is already speed-scaled."""
@@ -87,6 +89,24 @@ class SimulationRunner:
             update_all_needs(pig, game_minutes, state, nearby_count=nearby_counts.get(pig.id, 0))
         if profiling:
             needs_ms = (time.perf_counter() - phase_start) * 1000.0
+
+        # 2a. Farm Bell perk: notify when any pig is critically hungry/thirsty
+        if state.has_upgrade("farm_bell"):
+            current_hour = state.game_time.day * 24 + state.game_time.hour
+            if current_hour != self._last_farm_bell_hour:
+                critical_pigs = [
+                    pig for pig in pigs
+                    if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD
+                    or pig.needs.thirst < NEEDS.CRITICAL_THRESHOLD
+                ]
+                if critical_pigs:
+                    self._last_farm_bell_hour = current_hour
+                    names = ", ".join(p.name for p in critical_pigs[:3])
+                    suffix = f" (+{len(critical_pigs) - 3} more)" if len(critical_pigs) > 3 else ""
+                    state.log_event(
+                        f"Farm Bell: {names}{suffix} need food/water!",
+                        event_type="farm_bell",
+                    )
 
         # 2b. Automatic resource systems (drip, auto-feeders, veggie gardens)
         game_hours = game_minutes / 60.0
@@ -184,7 +204,7 @@ class SimulationRunner:
         board.check_expiry(game_day)
         if board.needs_refresh(game_day) or (not board.active_contracts and board.last_refresh_day == 0):
             player_biomes = [a.biome for a in state.farm.areas]
-            new_contracts = generate_contracts(state.farm_tier, game_day, player_biomes)
+            new_contracts = generate_contracts(state.farm_tier, game_day, player_biomes, game_state=state)
             board.active_contracts.extend(new_contracts)
             board.last_refresh_day = game_day
         if profiling:

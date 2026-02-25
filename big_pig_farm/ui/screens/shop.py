@@ -264,7 +264,7 @@ class ShopScreen(Screen):
             if not self._available_pigs:
                 self._generate_available_pigs()
             for pig in self._available_pigs:
-                cost = calculate_adoption_cost(pig)
+                cost = calculate_adoption_cost(pig, self.state)
                 can_afford = self.state.money >= cost
                 list_view.append(AdoptionPigWidget(pig, cost, can_afford))
         elif self.current_category == ShopCategory.UPGRADES:
@@ -408,7 +408,7 @@ class ShopScreen(Screen):
 
         if self._selected_pig:
             pig = self._selected_pig
-            cost = calculate_adoption_cost(pig)
+            cost = calculate_adoption_cost(pig, self.state)
             can_afford = "Yes" if self.state.money >= cost else "No"
             gender = "Male" if pig.gender == Gender.MALE else "Female"
             traits = ", ".join(t.value.title() for t in pig.personality)
@@ -647,7 +647,7 @@ class ShopScreen(Screen):
             return
 
         pig = self._selected_pig
-        cost = calculate_adoption_cost(pig)
+        cost = calculate_adoption_cost(pig, self.state)
 
         if self.state.money < cost:
             self.notify("Not enough money!", severity="error")
