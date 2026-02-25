@@ -230,18 +230,28 @@ class EconomyConfig:
     LEGENDARY_MULTIPLIER: float = 10.0
 
     # Facility costs
+    # Tier 1 — basic necessities (room = 500)
     FOOD_BOWL_COST: int = 20
     WATER_BOTTLE_COST: int = 20
-    HAY_RACK_COST: int = 40
     HIDEOUT_COST: int = 60
-    EXERCISE_WHEEL_COST: int = 80
-    TUNNEL_COST: int = 100
-    PLAY_AREA_COST: int = 150
-    BREEDING_DEN_COST: int = 200
-    NURSERY_COST: int = 250
-    VEGGIE_GARDEN_COST: int = 300
-    GROOMING_STATION_COST: int = 150
-    GENETICS_LAB_COST: int = 350
+    # Tier 2 — early enrichment (room = 500-2,000)
+    HAY_RACK_COST: int = 80
+    EXERCISE_WHEEL_COST: int = 150
+    TUNNEL_COST: int = 200
+    FEAST_TABLE_COST: int = 350
+    # Tier 3 — specialization (room = 2,000-8,000)
+    PLAY_AREA_COST: int = 600
+    GROOMING_STATION_COST: int = 500
+    GENETICS_LAB_COST: int = 1000
+    CAMPFIRE_COST: int = 1200
+    THERAPY_GARDEN_COST: int = 1500
+    # Tier 4 — breeding & premium (room = 8,000-25,000)
+    BREEDING_DEN_COST: int = 3000
+    NURSERY_COST: int = 5000
+    VEGGIE_GARDEN_COST: int = 5000
+    HOT_SPRING_COST: int = 15000
+    # Tier 5 — endgame (room = 25,000-800,000)
+    STAGE_COST: int = 150000
 
 
 @dataclass(frozen=True)

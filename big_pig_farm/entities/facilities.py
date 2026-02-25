@@ -21,6 +21,11 @@ class FacilityType(str, Enum):
     VEGGIE_GARDEN = "veggie_garden"
     GROOMING_STATION = "grooming_station"
     GENETICS_LAB = "genetics_lab"
+    FEAST_TABLE = "feast_table"
+    CAMPFIRE = "campfire"
+    THERAPY_GARDEN = "therapy_garden"
+    HOT_SPRING = "hot_spring"
+    STAGE = "stage"
 
     @property
     def display_name(self) -> str:
@@ -74,7 +79,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
     FacilityType.HAY_RACK: FacilityInfo(
         name="Hay Rack",
         size=FacilitySize(width=2, height=1),
-        base_cost=40,
+        base_cost=80,
         description="Fiber source, +5% health bonus",
         capacity=200,
         health_bonus=0.05,
@@ -90,7 +95,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
     FacilityType.EXERCISE_WHEEL: FacilityInfo(
         name="Exercise Wheel",
         size=FacilitySize(width=2, height=2),
-        base_cost=80,
+        base_cost=150,
         description="Entertainment and fitness, +5% health",
         capacity=2,
         health_bonus=0.05,
@@ -98,7 +103,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
     FacilityType.TUNNEL: FacilityInfo(
         name="Tunnel System",
         size=FacilitySize(width=3, height=1),
-        base_cost=100,
+        base_cost=200,
         description="Exploration and play, +15% happiness",
         capacity=3,
         happiness_bonus=0.15,
@@ -106,7 +111,7 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
     FacilityType.PLAY_AREA: FacilityInfo(
         name="Play Area",
         size=FacilitySize(width=3, height=2),
-        base_cost=150,
+        base_cost=600,
         description="Social activities, +social chance",
         capacity=4,
         social_bonus=0.20,
@@ -114,14 +119,14 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
     FacilityType.BREEDING_DEN: FacilityInfo(
         name="Breeding Den",
         size=FacilitySize(width=2, height=2),
-        base_cost=200,
+        base_cost=3000,
         description="Private space for mating",
         breeding_bonus=0.15,
     ),
     FacilityType.NURSERY: FacilityInfo(
         name="Nursery",
         size=FacilitySize(width=3, height=2),
-        base_cost=250,
+        base_cost=5000,
         description="Baby care, faster growth",
         growth_bonus=0.20,
         capacity=4,
@@ -129,22 +134,67 @@ FACILITY_INFO: dict[FacilityType, FacilityInfo] = {
     FacilityType.VEGGIE_GARDEN: FacilityInfo(
         name="Veggie Garden",
         size=FacilitySize(width=2, height=2),
-        base_cost=300,
+        base_cost=5000,
         description="Grows fresh vegetables",
         food_production=10,
     ),
     FacilityType.GROOMING_STATION: FacilityInfo(
         name="Grooming Station",
         size=FacilitySize(width=2, height=1),
-        base_cost=150,
+        base_cost=500,
         description="Health and appearance, +15% sale value",
         sale_bonus=0.15,
     ),
     FacilityType.GENETICS_LAB: FacilityInfo(
         name="Genetics Lab",
         size=FacilitySize(width=3, height=2),
-        base_cost=350,
+        base_cost=1000,
         description="Reveals carrier alleles and boosts mutation rate",
+    ),
+    FacilityType.FEAST_TABLE: FacilityInfo(
+        name="Feast Table",
+        size=FacilitySize(width=5, height=5),
+        base_cost=350,
+        description="Communal eating — co-diners get social recovery",
+        capacity=300,
+        happiness_bonus=0.05,
+    ),
+    FacilityType.CAMPFIRE: FacilityInfo(
+        name="Campfire",
+        size=FacilitySize(width=5, height=5),
+        base_cost=1200,
+        description="Nighttime social gathering — draws pigs after dark",
+        capacity=3,
+        social_bonus=0.15,
+        happiness_bonus=0.10,
+    ),
+    FacilityType.THERAPY_GARDEN: FacilityInfo(
+        name="Therapy Garden",
+        size=FacilitySize(width=5, height=5),
+        base_cost=1500,
+        description="Unhappy pigs recover happiness and health here",
+        capacity=2,
+        happiness_bonus=0.20,
+        health_bonus=0.08,
+    ),
+    FacilityType.HOT_SPRING: FacilityInfo(
+        name="Hot Spring",
+        size=FacilitySize(width=6, height=6),
+        base_cost=15000,
+        description="Multi-need sleep — energy, happiness, health, and social recovery",
+        capacity=4,
+        happiness_bonus=0.08,
+        health_bonus=0.05,
+        social_bonus=0.10,
+    ),
+    FacilityType.STAGE: FacilityInfo(
+        name="Stage",
+        size=FacilitySize(width=6, height=6),
+        base_cost=150000,
+        description="Performer entertains nearby pigs with AoE happiness and social",
+        capacity=1,
+        happiness_bonus=0.15,
+        social_bonus=0.20,
     ),
 }
 
