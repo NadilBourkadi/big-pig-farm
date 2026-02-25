@@ -192,15 +192,51 @@ class TierUpgrade:
     required_pigdex: int
     required_contracts: int
     max_rooms: int
+    room_width: int
+    room_height: int
+    capacity_per_room: int
 
 
 # Tier upgrade progression — hybrid milestones + cost
+# room_width/height/capacity_per_room apply uniformly to ALL rooms at that tier.
 TIER_UPGRADES: list[TierUpgrade] = [
-    TierUpgrade("Starter",       1,     0,  0,  0, 0, 1),
-    TierUpgrade("Apprentice",    2,   300,  3,  2, 0, 2),
-    TierUpgrade("Expert",        3,  1500, 10,  8, 2, 3),
-    TierUpgrade("Master",        4,  5000, 25, 18, 5, 6),
-    TierUpgrade("Grand Master",  5, 15000, 50, 30, 10, 8),
+    TierUpgrade("Starter",       1,     0,  0,  0, 0, 1, 62, 37,  8),
+    TierUpgrade("Apprentice",    2,   300,  3,  2, 0, 2, 68, 40, 10),
+    TierUpgrade("Expert",        3,  1500, 10,  8, 2, 3, 76, 44, 14),
+    TierUpgrade("Master",        4,  5000, 25, 18, 5, 6, 86, 50, 18),
+    TierUpgrade("Grand Master",  5, 15000, 50, 30, 10, 8, 96, 56, 24),
+]
+
+
+def get_tier_upgrade(tier: int) -> TierUpgrade:
+    """Get the TierUpgrade definition for the given tier.
+
+    Falls back to tier 1 if not found (should never happen in practice).
+    """
+    for upgrade in TIER_UPGRADES:
+        if upgrade.tier == tier:
+            return upgrade
+    return TIER_UPGRADES[0]
+
+
+@dataclass(frozen=True)
+class RoomCost:
+    """Room purchase cost definition (decoupled from dimensions)."""
+    name: str
+    cost: int
+
+
+# Room costs — indexed by room number (0 = free starter, 1+ = purchased).
+# Dimensions come from the farm's current tier, not from this list.
+ROOM_COSTS: list[RoomCost] = [
+    RoomCost("Starter Hutch",       0),
+    RoomCost("Cozy Enclosure",    500),
+    RoomCost("Family Pen",       2000),
+    RoomCost("Guinea Grove",     8000),
+    RoomCost("Piggy Paradise",  25000),
+    RoomCost("Ultimate Farm",  100000),
+    RoomCost("Grand Estate",   300000),
+    RoomCost("Pig Empire",     800000),
 ]
 
 

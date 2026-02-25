@@ -16,7 +16,14 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from big_pig_farm.data.config import FARM_TIERS, ROOM_TIERS, FarmTier, RoomTier
+from big_pig_farm.data.config import (
+    FARM_TIERS,
+    ROOM_COSTS,
+    TIER_UPGRADES,
+    FarmTier,
+    RoomCost,
+    get_tier_upgrade,
+)
 from big_pig_farm.entities.areas import FarmArea, TunnelConnection
 from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.entities.facilities import Facility
@@ -144,8 +151,8 @@ class FarmGrid(BaseModel):
     @classmethod
     def create_starter(cls) -> FarmGrid:
         """Create a starter farm grid with a MEADOW area."""
-        room = ROOM_TIERS[0]
-        grid = cls(width=room.room_width, height=room.room_height, tier=1)
+        tier_info = TIER_UPGRADES[0]
+        grid = cls(width=tier_info.room_width, height=tier_info.room_height, tier=tier_info.tier)
         grid.create_legacy_starter_area()
         return grid
 
@@ -246,19 +253,16 @@ class FarmGrid(BaseModel):
 
     @property
     def capacity(self) -> int:
-        """Get the pig capacity -- sum of all room capacities."""
-        total = 0
-        for i, _area in enumerate(self.areas):
-            tier_idx = min(i, len(ROOM_TIERS) - 1)
-            total += ROOM_TIERS[tier_idx].capacity_add
-        return total
+        """Get the pig capacity -- uniform capacity_per_room * number of rooms."""
+        tier_info = get_tier_upgrade(self.tier)
+        return len(self.areas) * tier_info.capacity_per_room
 
     @property
-    def next_room_tier(self) -> RoomTier | None:
-        """Get the tier info for the next room addition, or None if at max."""
+    def next_room_cost(self) -> RoomCost | None:
+        """Get the cost info for the next room addition, or None if at max."""
         next_idx = len(self.areas)
-        if next_idx < len(ROOM_TIERS):
-            return ROOM_TIERS[next_idx]
+        if next_idx < len(ROOM_COSTS):
+            return ROOM_COSTS[next_idx]
         return None
 
     @property
@@ -349,11 +353,10 @@ class FarmGrid(BaseModel):
         return self._biome_area_cache.get(biome_value, [])
 
     def get_area_capacity(self, area_id: UUID) -> int:
-        """Get the pig capacity for an area based on its position in the room list."""
-        for i, area in enumerate(self.areas):
+        """Get the pig capacity for an area (uniform across all rooms)."""
+        for area in self.areas:
             if area.id == area_id:
-                tier_idx = min(i, len(ROOM_TIERS) - 1)
-                return ROOM_TIERS[tier_idx].capacity_add
+                return get_tier_upgrade(self.tier).capacity_per_room
         return 0
 
     def get_biome_at(self, x: int, y: int) -> BiomeType | None:
@@ -482,3 +485,12 @@ def relayout_areas(state: GameState) -> bool:
     """
     from big_pig_farm.game.world_migration import relayout_areas as _relayout
     return _relayout(state)
+
+
+def resize_all_rooms(state: GameState, tier: int) -> bool:
+    """Resize all rooms to match the given tier's dimensions.
+
+    Delegates to world_migration.resize_all_rooms().
+    """
+    from big_pig_farm.game.world_migration import resize_all_rooms as _resize
+    return _resize(state, tier)
