@@ -54,7 +54,11 @@ def _process_birth(mother: GuineaPig, game_state: "BirthContext") -> bool:
         return False
 
     # Determine litter size
-    litter_size = random.randint(BREEDING.MIN_LITTER_SIZE, BREEDING.MAX_LITTER_SIZE)
+    max_litter = BREEDING.MAX_LITTER_SIZE
+    # Litter Boost perk: +1 max litter size
+    if game_state.has_upgrade("litter_boost"):
+        max_litter += 1
+    litter_size = random.randint(BREEDING.MIN_LITTER_SIZE, max_litter)
 
     # Don't exceed capacity
     available_space = game_state.capacity - game_state.pig_count
@@ -73,6 +77,11 @@ def _process_birth(mother: GuineaPig, game_state: "BirthContext") -> bool:
     has_lab = bool(genetics_labs)
     if has_lab:
         mutation_rate = GENETICS.MUTATION_RATE_WITH_LAB
+
+    # Genetic Accelerator perk: mutation rate doubled (stacks with lab)
+    has_accelerator = game_state.has_upgrade("genetic_accelerator")
+    if has_accelerator:
+        mutation_rate *= 2.0
 
     # Build per-locus rates (non-color boosts only) and directional targets
     mother_biome = game_state.farm.get_biome_at(int(mother.position.x), int(mother.position.y))
@@ -97,6 +106,9 @@ def _process_birth(mother: GuineaPig, game_state: "BirthContext") -> bool:
                 GENETICS.DIRECTIONAL_MUTATION_RATE_WITH_LAB if has_lab
                 else GENETICS.DIRECTIONAL_MUTATION_RATE
             )
+            # Genetic Accelerator perk: double directional rate too
+            if has_accelerator:
+                directional_rate *= 2.0
 
     # Determine birth area for babies
     birth_area = game_state.farm.get_area_at(int(mother.position.x), int(mother.position.y))
@@ -204,6 +216,9 @@ def _cancel_pregnancy(mother: GuineaPig, game_state: "BirthContext", reason: str
 def advance_pregnancies(game_state: "BirthContext", game_hours: float) -> None:
     """Advance pregnancy progress for all pregnant pigs."""
     game_days = game_hours / 24.0
+    # Speed Breeding perk: -25% pregnancy duration (1/0.75 = 1.333x accumulation)
+    if game_state.has_upgrade("speed_breeding"):
+        game_days *= 1.333
     for pig in game_state.get_pigs_list():
         if pig.is_pregnant:
             pig.pregnancy_days += game_days
@@ -265,6 +280,15 @@ def register_pig_in_pigdex(game_state: "BirthContext", pig: GuineaPig) -> None:
             f"Pigdex: New discovery! {pig.phenotype.display_name} ({rarity.value.title()}) +{reward} Squeaks",
             event_type="pigdex",
         )
+
+        # Lucky Clover perk: 10% chance of bonus 50-200 Squeaks on discovery
+        if game_state.has_upgrade("lucky_clover") and random.random() < 0.10:
+            bonus = random.randint(50, 200)
+            game_state.add_money(bonus)
+            game_state.log_event(
+                f"Lucky Clover! Bonus +{bonus} Squeaks for discovering {pig.phenotype.display_name}!",
+                event_type="pigdex",
+            )
 
         # Check milestones
         milestones = game_state.pigdex.check_milestones()
