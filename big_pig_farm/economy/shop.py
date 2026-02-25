@@ -3,12 +3,13 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from big_pig_farm.data.config import ECONOMY, TIER_UPGRADES, TierUpgrade
+from big_pig_farm.data.config import ECONOMY, TIER_UPGRADES, TierUpgrade, get_tier_upgrade
 from big_pig_farm.economy.currency import add_money, spend_money
 from big_pig_farm.economy.upgrades import UPGRADES, UpgradeDefinition
 from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.game.state import GameState
+from big_pig_farm.game.world import resize_all_rooms
 from big_pig_farm.simulation.auto_resources import FOOD_WATER_TYPES, apply_bulk_feeders
 
 
@@ -346,6 +347,8 @@ def purchase_tier_upgrade(state: GameState) -> bool:
         return False
 
     state.farm_tier = upgrade.tier
+    state.farm.tier = upgrade.tier
+    resize_all_rooms(state, upgrade.tier)
     state.log_event(f"Farm upgraded to Tier {upgrade.tier}: {upgrade.name}!", "purchase")
     return True
 
@@ -359,26 +362,26 @@ def get_farm_upgrade_info(state: GameState) -> dict | None:
     if len(state.farm.areas) >= current.max_rooms:
         return None
 
-    next_tier = state.farm.next_room_tier
-    if next_tier is None:
+    next_room = state.farm.next_room_cost
+    if next_room is None:
         return None
 
+    tier_info = get_tier_upgrade(state.farm_tier)
     return {
-        "name": next_tier.name,
-        "cost": next_tier.cost,
-        "width": next_tier.room_width,
-        "height": next_tier.room_height,
-        "capacity": next_tier.capacity_add,
-        "tier": next_tier.tier,
+        "name": next_room.name,
+        "cost": next_room.cost,
+        "width": tier_info.room_width,
+        "height": tier_info.room_height,
+        "capacity": tier_info.capacity_per_room,
     }
 
 
 def get_room_total_cost(state: GameState, biome: BiomeType) -> int:
     """Get the total cost for adding a room with the given biome."""
-    next_tier = state.farm.next_room_tier
-    if next_tier is None:
+    next_room = state.farm.next_room_cost
+    if next_room is None:
         return 0
-    return next_tier.cost + BIOMES[biome].cost
+    return next_room.cost + BIOMES[biome].cost
 
 
 def purchase_new_room(state: GameState, biome: BiomeType) -> bool:
