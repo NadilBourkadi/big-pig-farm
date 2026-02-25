@@ -237,7 +237,7 @@ class TestPerks:
         state.farm_tier = 2
         assert purchase_perk(state, "bulk_feeders")
         assert state.has_upgrade("bulk_feeders")
-        assert state.money == 10000 - 150
+        assert state.money == 10000 - 350
 
     def test_purchase_perk_already_owned(self):
         state = GameState()
