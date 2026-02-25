@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from big_pig_farm.data.config import ROOM_TIERS
+from big_pig_farm.data.config import ROOM_COSTS, get_tier_upgrade
 from big_pig_farm.entities.areas import FarmArea, TunnelConnection
 from big_pig_farm.entities.biomes import BIOMES, BiomeType
 from big_pig_farm.game.world import Cell, CellType
@@ -123,12 +123,12 @@ def add_room(
         farm.create_legacy_starter_area()
 
     room_idx = len(farm.areas)
-    if room_idx >= len(ROOM_TIERS):
+    if room_idx >= len(ROOM_COSTS):
         return None
 
-    room_tier = ROOM_TIERS[room_idx]
-    room_width = room_tier.room_width
-    room_height = room_tier.room_height
+    tier_info = get_tier_upgrade(farm.tier)
+    room_width = tier_info.room_width
+    room_height = tier_info.room_height
 
     if room_name is None:
         room_name = f"{BIOMES[biome].display_name} Room"
