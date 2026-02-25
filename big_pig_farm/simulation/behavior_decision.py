@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING
 
 from big_pig_farm.data.config import BEHAVIOR, NEEDS
 from big_pig_farm.entities.facilities import FacilityType
-from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality
+from big_pig_farm.entities.guinea_pig import BehaviorState, GuineaPig, Personality, Position
+from big_pig_farm.simulation.auto_resources import AOE_ATTRACTION_RADIUS
 from big_pig_farm.simulation.behavior_movement import start_wandering
 from big_pig_farm.simulation.behavior_seeking import (
     seek_courting_partner,
@@ -50,7 +51,7 @@ def make_decision(controller: "BehaviorController", pig: GuineaPig) -> None:
         target_facility = controller.game_state.get_facility(pig.target_facility_id)
         if target_facility:
             # Check if consumable facility became empty
-            if target_facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.WATER_BOTTLE, FacilityType.HAY_RACK):
+            if target_facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.WATER_BOTTLE, FacilityType.HAY_RACK, FacilityType.FEAST_TABLE):
                 if target_facility.is_empty:
                     pig.log_behavior(f"{target_facility.name} became empty, seeking alternative")
                     # Mark as failed and force new decision
@@ -238,6 +239,10 @@ def make_decision(controller: "BehaviorController", pig: GuineaPig) -> None:
         seek_social_interaction(controller, pig)
         return
 
+    # Nighttime campfire attraction — idle pigs near a campfire wander toward it
+    if not controller.game_state.game_time.is_daytime:
+        _try_campfire_attraction(controller, pig)
+
     # Random wandering or idle
     if random.random() < BEHAVIOR.WANDER_CHANCE:
         pig.log_behavior("Nothing urgent, wandering")
@@ -266,3 +271,42 @@ def make_decision(controller: "BehaviorController", pig: GuineaPig) -> None:
             pig.target_facility_id = None
             pig.target_description = None
             pig.path = []
+
+
+def _try_campfire_attraction(
+    controller: "BehaviorController", pig: GuineaPig,
+) -> None:
+    """At night, bias idle/wandering pigs to seek nearby campfires.
+
+    If a campfire is within 10 cells, the pig seeks it for socializing.
+    Only triggers if the pig isn't already heading somewhere.
+    """
+    if pig.target_facility_id or pig.path:
+        return
+
+    campfires = controller.game_state.get_facilities_by_type(FacilityType.CAMPFIRE)
+    if not campfires:
+        return
+
+    failed = controller.facility_manager.get_failed_facilities(pig.id)
+    radius_sq = AOE_ATTRACTION_RADIUS ** 2
+    for campfire in campfires:
+        if campfire.id in failed:
+            continue
+        center_x = campfire.position_x + campfire.width / 2.0
+        center_y = campfire.position_y + campfire.height / 2.0
+        dx = pig.position.x - center_x
+        dy = pig.position.y - center_y
+        if dx * dx + dy * dy <= radius_sq:
+            # Try to path to the campfire
+            result = controller.facility_manager.find_open_interaction_point(pig, campfire)
+            if result:
+                target, path = result
+                pig.path = path
+                if pig.path:
+                    pig.log_behavior(f"Drawn to {campfire.name} at night")
+                    pig.behavior_state = BehaviorState.WANDERING
+                    pig.target_facility_id = campfire.id
+                    pig.target_position = Position(x=float(target[0]), y=float(target[1]))
+                    pig.target_description = f"going to {campfire.name}"
+                    return

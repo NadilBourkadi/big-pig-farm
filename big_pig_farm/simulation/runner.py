@@ -13,7 +13,7 @@ from big_pig_farm.economy.contracts import generate_contracts
 from big_pig_farm.game.debug_logger import DebugLogger
 from big_pig_farm.game.state import GameState
 from big_pig_farm.simulation.acclimation import update_acclimation
-from big_pig_farm.simulation.auto_resources import tick_auto_resources, tick_veggie_gardens
+from big_pig_farm.simulation.auto_resources import tick_aoe_facilities, tick_auto_resources, tick_veggie_gardens
 from big_pig_farm.simulation.behavior_controller import BehaviorController
 from big_pig_farm.simulation.birth import advance_pregnancies, age_all_pigs
 from big_pig_farm.simulation.breeding import check_breeding_opportunities, start_pregnancy_from_courtship
@@ -92,6 +92,7 @@ class SimulationRunner:
         game_hours = game_minutes / 60.0
         tick_auto_resources(state, game_hours)
         tick_veggie_gardens(state, game_hours)
+        tick_aoe_facilities(state, game_hours)
 
         # 3. Update behaviors
         if profiling:

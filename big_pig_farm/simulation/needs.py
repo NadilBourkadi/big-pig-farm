@@ -189,7 +189,7 @@ def get_most_urgent_need(pig: GuineaPig) -> str:
 def get_target_facility_for_need(need: str) -> list[FacilityType] | None:
     """Get facility types that address a specific need (in priority order)."""
     need_to_facilities = {
-        "hunger": [FacilityType.HAY_RACK, FacilityType.FOOD_BOWL],  # Prefer hay (tier 2, has health bonus)
+        "hunger": [FacilityType.HAY_RACK, FacilityType.FEAST_TABLE, FacilityType.FOOD_BOWL],
         "thirst": [FacilityType.WATER_BOTTLE],
         "energy": [FacilityType.HIDEOUT],
         "happiness": [FacilityType.PLAY_AREA, FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL],
