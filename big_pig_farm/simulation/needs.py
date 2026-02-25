@@ -83,6 +83,10 @@ def update_all_needs(
         if current_biome and current_biome.value == pig.preferred_biome:
             pig.needs.happiness += BIOME.PREFERRED_BIOME_HAPPINESS_BONUS * hours
 
+    # Climate Control perk: all biomes grant +0.3 happiness/hr
+    if game_state and game_state.has_upgrade("climate_control"):
+        pig.needs.happiness += 0.3 * hours
+
     # Critical needs directly drain happiness
     if pig.needs.hunger < NEEDS.CRITICAL_THRESHOLD:
         pig.needs.happiness -= NEEDS.HUNGER_HAPPINESS_DRAIN * hours
@@ -90,6 +94,10 @@ def update_all_needs(
         pig.needs.happiness -= NEEDS.THIRST_HAPPINESS_DRAIN * hours
     if pig.needs.energy < NEEDS.CRITICAL_THRESHOLD:
         pig.needs.happiness -= NEEDS.ENERGY_HAPPINESS_DRAIN * hours
+
+    # Enrichment Program perk: boredom grows 20% slower
+    if game_state and game_state.has_upgrade("enrichment_program"):
+        boredom_modifier *= 0.8
 
     # Boredom increases over time
     pig.needs.boredom += NEEDS.BOREDOM_DECAY * hours * boredom_modifier
@@ -118,7 +126,11 @@ def update_all_needs(
     # Passive health recovery when no primary need is critical
     if (pig.needs.hunger >= NEEDS.CRITICAL_THRESHOLD
             and pig.needs.thirst >= NEEDS.CRITICAL_THRESHOLD):
-        pig.needs.health += NEEDS.HEALTH_PASSIVE_RECOVERY * hours
+        health_recovery = NEEDS.HEALTH_PASSIVE_RECOVERY
+        # Pig Spa perk: passive health recovery doubled
+        if game_state and game_state.has_upgrade("pig_spa"):
+            health_recovery *= 2.0
+        pig.needs.health += health_recovery * hours
 
     # Recovery from current behavior
     _apply_behavior_recovery(pig, game_minutes, game_state)
@@ -139,7 +151,11 @@ def _apply_behavior_recovery(pig: GuineaPig, game_minutes: float, game_state: "N
         pig.needs.thirst += NEEDS.WATER_RECOVERY * hours * 2
 
     elif pig.behavior_state == BehaviorState.SLEEPING:
-        pig.needs.energy += NEEDS.SLEEP_RECOVERY_PER_HOUR * hours
+        sleep_recovery = NEEDS.SLEEP_RECOVERY_PER_HOUR
+        # Premium Bedding perk: +25% sleep energy recovery
+        if game_state and game_state.has_upgrade("premium_bedding"):
+            sleep_recovery *= 1.25
+        pig.needs.energy += sleep_recovery * hours
         pig.needs.health += NEEDS.HEALTH_SLEEP_RECOVERY * hours
 
     elif pig.behavior_state == BehaviorState.PLAYING:
