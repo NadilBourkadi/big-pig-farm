@@ -148,6 +148,52 @@ SHOP_ITEMS: list[ShopItem] = [
         facility_type=FacilityType.GENETICS_LAB,
         required_tier=3,
     ),
+    # New facilities
+    ShopItem(
+        id="feast_table",
+        name="Feast Table",
+        description="Communal eating spot — pigs eating together get social recovery. Capacity: 300 food units. Size: 5x5.",
+        cost=ECONOMY.FEAST_TABLE_COST,
+        category=ShopCategory.FACILITIES,
+        facility_type=FacilityType.FEAST_TABLE,
+        required_tier=2,
+    ),
+    ShopItem(
+        id="campfire",
+        name="Campfire",
+        description="Nighttime gathering spot — idle pigs are drawn here after dark for social and happiness recovery. Size: 5x5.",
+        cost=ECONOMY.CAMPFIRE_COST,
+        category=ShopCategory.FACILITIES,
+        facility_type=FacilityType.CAMPFIRE,
+        required_tier=3,
+    ),
+    ShopItem(
+        id="therapy_garden",
+        name="Therapy Garden",
+        description="Only attracts unhappy pigs. 2x happiness recovery plus passive health regen. Size: 5x5.",
+        cost=ECONOMY.THERAPY_GARDEN_COST,
+        category=ShopCategory.FACILITIES,
+        facility_type=FacilityType.THERAPY_GARDEN,
+        required_tier=3,
+    ),
+    ShopItem(
+        id="hot_spring",
+        name="Hot Spring",
+        description="Multi-need sleep — pigs recover energy, happiness, health, and social simultaneously. Size: 6x6.",
+        cost=ECONOMY.HOT_SPRING_COST,
+        category=ShopCategory.FACILITIES,
+        facility_type=FacilityType.HOT_SPRING,
+        required_tier=4,
+    ),
+    ShopItem(
+        id="stage",
+        name="Stage",
+        description="Performer entertains nearby pigs — audience within 6 cells gets passive happiness and social. Size: 6x6.",
+        cost=ECONOMY.STAGE_COST,
+        category=ShopCategory.FACILITIES,
+        facility_type=FacilityType.STAGE,
+        required_tier=5,
+    ),
 ]
 
 
@@ -173,6 +219,7 @@ def get_shop_items(category: ShopCategory | None = None, farm_tier: int = 1) -> 
         )
         result.append(item_copy)
 
+    result.sort(key=lambda item: item.required_tier)
     return result
 
 
@@ -203,11 +250,13 @@ def purchase_item(state: GameState, item: ShopItem, position: tuple[int, int] | 
 
 
 def get_available_perks(farm_tier: int, purchased: set[str]) -> list[UpgradeDefinition]:
-    """Get implemented perks available at the current tier."""
-    return [
+    """Get all perks available at the current tier, sorted by tier."""
+    perks = [
         upgrade for upgrade in UPGRADES.values()
-        if upgrade.implemented and upgrade.required_tier <= farm_tier
+        if upgrade.required_tier <= farm_tier
     ]
+    perks.sort(key=lambda p: p.required_tier)
+    return perks
 
 
 def purchase_perk(state: GameState, upgrade_id: str) -> bool:
