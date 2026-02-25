@@ -73,10 +73,14 @@ def seek_facility_for_need(
 
 
 def seek_sleep(controller: "BehaviorController", pig: GuineaPig) -> None:
-    """Find a place to sleep."""
-    candidates = controller.facility_manager.get_candidate_facilities_ranked(pig, FacilityType.HIDEOUT)
+    """Find a place to sleep. Considers both hideouts and hot springs."""
+    # Collect sleep facilities: hideouts + hot springs
+    all_sleep: list[Facility] = []
+    for sleep_type in (FacilityType.HIDEOUT, FacilityType.HOT_SPRING):
+        candidates = controller.facility_manager.get_candidate_facilities_ranked(pig, sleep_type)
+        all_sleep.extend(candidates[:BEHAVIOR.MAX_FACILITY_CANDIDATES])
 
-    for hideout in candidates[:BEHAVIOR.MAX_FACILITY_CANDIDATES]:
+    for hideout in all_sleep:
         result = controller.facility_manager.find_open_interaction_point(pig, hideout)
         if result:
             target, path = result
@@ -103,11 +107,16 @@ def seek_sleep(controller: "BehaviorController", pig: GuineaPig) -> None:
 
 def seek_play(controller: "BehaviorController", pig: GuineaPig) -> None:
     """Find something to play with."""
-    play_types = [
+    play_types: list[FacilityType] = [
         FacilityType.EXERCISE_WHEEL,
         FacilityType.PLAY_AREA,
         FacilityType.TUNNEL,
+        FacilityType.STAGE,
     ]
+
+    # Therapy Garden: only attracts pigs with happiness < 50
+    if pig.needs.happiness < 50:
+        play_types.append(FacilityType.THERAPY_GARDEN)
 
     # Collect candidate play facilities per type (already ranked),
     # capping per type so we don't waste A* calls on distant options
@@ -157,7 +166,26 @@ def seek_social_interaction(
 
     SHY pigs don't initiate socializing (blocked in make_decision),
     but they can still be approached by non-shy pigs.
+
+    At night, tries campfires first for social recovery.
     """
+    # Try campfire first at night
+    if not controller.game_state.game_time.is_daytime:
+        campfires = controller.facility_manager.get_candidate_facilities_ranked(
+            pig, FacilityType.CAMPFIRE,
+        )
+        for campfire in campfires[:BEHAVIOR.MAX_FACILITY_CANDIDATES]:
+            result = controller.facility_manager.find_open_interaction_point(pig, campfire)
+            if result:
+                target, path = result
+                pig.path = path
+                if pig.path:
+                    pig.log_behavior(f"Going to {campfire.name} to socialize")
+                    pig.behavior_state = BehaviorState.WANDERING
+                    pig.target_facility_id = campfire.id
+                    pig.target_position = Position(x=float(target[0]), y=float(target[1]))
+                    pig.target_description = f"going to {campfire.name}"
+                    return
     nearest = None
     best_dist_sq = float('inf')
     px, py = pig.position.x, pig.position.y

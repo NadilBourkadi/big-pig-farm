@@ -240,7 +240,7 @@ class FacilityManager:
             return []
 
         # Filter out empty consumables
-        if facility_type in (FacilityType.FOOD_BOWL, FacilityType.WATER_BOTTLE, FacilityType.HAY_RACK):
+        if facility_type in (FacilityType.FOOD_BOWL, FacilityType.WATER_BOTTLE, FacilityType.HAY_RACK, FacilityType.FEAST_TABLE):
             facilities = [facility for facility in facilities if not facility.is_empty]
 
         # Filter out recently failed facilities for this pig
@@ -342,8 +342,9 @@ class FacilityManager:
         # Hideout is excluded: its arrival handler allows overflow with a
         # "sleep nearby" fallback, so we still want pigs to path there.
         if facility.facility_type in (
-            FacilityType.EXERCISE_WHEEL,
-            FacilityType.TUNNEL, FacilityType.PLAY_AREA,
+            FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL,
+            FacilityType.PLAY_AREA, FacilityType.THERAPY_GARDEN,
+            FacilityType.CAMPFIRE, FacilityType.STAGE,
         ):
             capacity = facility.info.capacity
             targeting = self.collision.get_pigs_targeting_facility(facility.id)
@@ -378,6 +379,7 @@ class FacilityManager:
                 is_using_facility = other_pig.behavior_state in (
                     BehaviorState.EATING, BehaviorState.DRINKING,
                     BehaviorState.SLEEPING, BehaviorState.PLAYING,
+                    BehaviorState.SOCIALIZING,
                 )
 
                 # Check if pig is within occupancy radius of this point
@@ -514,7 +516,8 @@ class FacilityManager:
         """Count how many pigs are currently using a facility (within interaction range)."""
         grid = self.collision.spatial_grid
         using_states = (BehaviorState.SLEEPING, BehaviorState.EATING,
-                        BehaviorState.DRINKING, BehaviorState.PLAYING)
+                        BehaviorState.DRINKING, BehaviorState.PLAYING,
+                        BehaviorState.SOCIALIZING)
         counted: set[UUID] = set()
         exclude_id = exclude_pig.id if exclude_pig else None
         for point in facility.interaction_points:
@@ -548,7 +551,7 @@ class FacilityManager:
                 # Allow same cell (0,0) or orthogonally adjacent (1,0) or (0,1)
                 if (dx + dy) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE:
                     # Found a nearby facility - check what type and set state
-                    if facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.HAY_RACK):
+                    if facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.HAY_RACK, FacilityType.FEAST_TABLE):
                         if not facility.is_empty and pig.needs.hunger < NEEDS.SATISFACTION_THRESHOLD:
                             pig.behavior_state = BehaviorState.EATING
                             pig.target_position = None
@@ -597,7 +600,20 @@ class FacilityManager:
                                 successfully_using_facility = True  # Still sleeping, counts as success
                         if successfully_using_facility:
                             return
-                    elif facility.facility_type in (FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL, FacilityType.PLAY_AREA):
+                    elif facility.facility_type in (
+                        FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL,
+                        FacilityType.PLAY_AREA, FacilityType.THERAPY_GARDEN,
+                        FacilityType.STAGE,
+                    ):
+                        # Therapy Garden: only for unhappy pigs (happiness < 50)
+                        if facility.facility_type == FacilityType.THERAPY_GARDEN and pig.needs.happiness >= 50:
+                            pig.log_behavior(f"Happiness recovered, skipping {facility.name}")
+                            self.add_failed_facility(pig.id, facility.id)
+                            pig.behavior_state = BehaviorState.IDLE
+                            pig.target_position = None
+                            pig.target_facility_id = None
+                            pig.target_description = None
+                            return
                         capacity = facility.info.capacity
                         pigs_using = self.count_pigs_using_facility(facility, pig)
                         if pigs_using < capacity:
@@ -608,9 +624,6 @@ class FacilityManager:
                             self.clear_failed_facilities(pig.id)
                             return
                         else:
-                            # Full — go idle so next decision cycle disperses the pig
-                            # (seek_play will skip this facility via failed set and
-                            # either find an alternative or wander to a random spot)
                             pig.log_behavior(f"{facility.name} is full, idling")
                             self.add_failed_facility(pig.id, facility.id)
                             pig.behavior_state = BehaviorState.IDLE
@@ -618,6 +631,43 @@ class FacilityManager:
                             pig.target_facility_id = None
                             pig.target_description = None
                             return
+                    elif facility.facility_type == FacilityType.CAMPFIRE:
+                        capacity = facility.info.capacity
+                        pigs_using = self.count_pigs_using_facility(facility, pig)
+                        if pigs_using < capacity:
+                            pig.behavior_state = BehaviorState.SOCIALIZING
+                            pig.target_position = None
+                            pig.target_description = f"socializing at {facility.name}"
+                            pig.log_behavior(f"Arrived at {facility.name}, socializing")
+                            self.clear_failed_facilities(pig.id)
+                            return
+                        else:
+                            pig.log_behavior(f"{facility.name} is full, idling")
+                            self.add_failed_facility(pig.id, facility.id)
+                            pig.behavior_state = BehaviorState.IDLE
+                            pig.target_position = None
+                            pig.target_facility_id = None
+                            pig.target_description = None
+                            return
+                    elif facility.facility_type == FacilityType.HOT_SPRING:
+                        if pig.needs.energy < NEEDS.SATISFACTION_THRESHOLD:
+                            capacity = facility.info.capacity
+                            pigs_using = self.count_pigs_using_facility(facility, pig)
+                            if pigs_using < capacity:
+                                pig.behavior_state = BehaviorState.SLEEPING
+                                pig.target_position = None
+                                pig.target_description = f"soaking in {facility.name}"
+                                pig.log_behavior(f"Arrived at {facility.name}, sleeping")
+                                self.clear_failed_facilities(pig.id)
+                                return
+                            else:
+                                pig.log_behavior(f"{facility.name} is full, idling")
+                                self.add_failed_facility(pig.id, facility.id)
+                                pig.behavior_state = BehaviorState.IDLE
+                                pig.target_position = None
+                                pig.target_facility_id = None
+                                pig.target_description = None
+                                return
 
         # No suitable facility found or needs already satisfied - go idle
         # DON'T clear failed facilities - we want to remember them for next decision
@@ -635,7 +685,7 @@ class FacilityManager:
             ix, iy = facility.interaction_point
             if abs(grid_pos[0] - ix) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE and abs(grid_pos[1] - iy) <= FACILITY_INTERACTION.ADJACENCY_DISTANCE:
                 if pig.behavior_state == BehaviorState.EATING:
-                    if facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.HAY_RACK):
+                    if facility.facility_type in (FacilityType.FOOD_BOWL, FacilityType.HAY_RACK, FacilityType.FEAST_TABLE):
                         consumed = facility.consume(delta_seconds * BEHAVIOR.RESOURCE_CONSUME_RATE)
                         if consumed <= 0:
                             # Bowl is empty, find another or stop
@@ -645,6 +695,16 @@ class FacilityManager:
                             if facility.facility_type == FacilityType.HAY_RACK:
                                 health_bonus = facility.info.health_bonus
                                 pig.needs.health = min(100, pig.needs.health + health_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
+                            # Feast Table: co-diners get social recovery and happiness
+                            elif facility.facility_type == FacilityType.FEAST_TABLE:
+                                co_diners = self._count_co_diners(pig, facility)
+                                if co_diners > 0:
+                                    game_hours = delta_seconds / 60.0
+                                    social_boost = min(co_diners, 3) * 5.0 * game_hours
+                                    pig.needs.social = min(100, pig.needs.social + social_boost)
+                                happiness_bonus = facility.info.happiness_bonus
+                                if happiness_bonus:
+                                    pig.needs.happiness = min(100, pig.needs.happiness + happiness_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         break
 
                 elif pig.behavior_state == BehaviorState.DRINKING:
@@ -661,9 +721,31 @@ class FacilityManager:
                         if happiness_bonus:
                             pig.needs.happiness = min(100, pig.needs.happiness + happiness_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         break
+                    elif facility.facility_type == FacilityType.HOT_SPRING:
+                        # Hot Spring: multi-need recovery — energy at 75% rate
+                        # plus happiness, health, and social bonuses
+                        info = facility.info
+                        game_hours = delta_seconds / 60.0
+                        # needs.py already applies full SLEEP_RECOVERY_PER_HOUR;
+                        # claw back 25% so the net effect is 75% (trade-off for multi-need)
+                        pig.needs.energy -= NEEDS.SLEEP_RECOVERY_PER_HOUR * 0.25 * game_hours
+                        if info.happiness_bonus:
+                            pig.needs.happiness = min(100, pig.needs.happiness + info.happiness_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
+                        if info.health_bonus:
+                            pig.needs.health = min(100, pig.needs.health + info.health_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
+                        # Social bonus scales with co-occupants
+                        if info.social_bonus:
+                            co_occupants = self.count_pigs_using_facility(facility, pig)
+                            social_scale = 1.0 + 0.5 * co_occupants
+                            pig.needs.social = min(100, pig.needs.social + info.social_bonus * social_scale * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
+                        break
 
                 elif pig.behavior_state == BehaviorState.PLAYING:
-                    if facility.facility_type in (FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL, FacilityType.PLAY_AREA):
+                    if facility.facility_type in (
+                        FacilityType.EXERCISE_WHEEL, FacilityType.TUNNEL,
+                        FacilityType.PLAY_AREA, FacilityType.THERAPY_GARDEN,
+                        FacilityType.STAGE,
+                    ):
                         # Apply facility-specific bonuses
                         health_bonus = facility.info.health_bonus
                         happiness_bonus = facility.info.happiness_bonus
@@ -676,6 +758,29 @@ class FacilityManager:
                         if social_bonus:
                             pig.needs.social = min(100, pig.needs.social + social_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
                         break
+
+                elif pig.behavior_state == BehaviorState.SOCIALIZING:
+                    if facility.facility_type == FacilityType.CAMPFIRE:
+                        # Campfire: social and happiness bonuses
+                        info = facility.info
+                        if info.social_bonus:
+                            pig.needs.social = min(100, pig.needs.social + info.social_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
+                        if info.happiness_bonus:
+                            pig.needs.happiness = min(100, pig.needs.happiness + info.happiness_bonus * delta_seconds * BEHAVIOR.FACILITY_BONUS_SCALE)
+                        break
+
+    def _count_co_diners(self, pig: GuineaPig, facility: Facility) -> int:
+        """Count other pigs currently EATING at the same facility."""
+        counted: set[UUID] = set()
+        grid = self.collision.spatial_grid
+        for point in facility.interaction_points:
+            for other_pig in grid.get_nearby(float(point[0]), float(point[1])):
+                if other_pig.id == pig.id or other_pig.id in counted:
+                    continue
+                if (other_pig.behavior_state == BehaviorState.EATING
+                        and other_pig.target_facility_id == facility.id):
+                    counted.add(other_pig.id)
+        return len(counted)
 
     def try_alternative_facility(self, pig: GuineaPig, blocked_target: Position) -> bool:
         """Try to find an alternative facility when blocked. Returns True if found."""
@@ -701,8 +806,8 @@ class FacilityManager:
         # Map facility names in description to facility types to try
         if "Exercise Wheel" in desc or "Tunnel" in desc or "Play Area" in desc:
             facility_types = [FacilityType.TUNNEL, FacilityType.PLAY_AREA, FacilityType.EXERCISE_WHEEL]
-        elif "Food Bowl" in desc or "Hay Rack" in desc:
-            facility_types = [FacilityType.HAY_RACK, FacilityType.FOOD_BOWL]
+        elif "Food Bowl" in desc or "Hay Rack" in desc or "Feast Table" in desc:
+            facility_types = [FacilityType.HAY_RACK, FacilityType.FEAST_TABLE, FacilityType.FOOD_BOWL]
         elif "Water Bottle" in desc:
             facility_types = [FacilityType.WATER_BOTTLE]
         elif "Hideout" in desc:
@@ -711,9 +816,9 @@ class FacilityManager:
             # Fall back to most urgent need
             urgent_need = get_most_urgent_need(pig)
             need_to_facilities = {
-                "hunger": [FacilityType.HAY_RACK, FacilityType.FOOD_BOWL],
+                "hunger": [FacilityType.HAY_RACK, FacilityType.FEAST_TABLE, FacilityType.FOOD_BOWL],
                 "thirst": [FacilityType.WATER_BOTTLE],
-                "energy": [FacilityType.HIDEOUT],
+                "energy": [FacilityType.HIDEOUT, FacilityType.HOT_SPRING],
                 "happiness": [FacilityType.EXERCISE_WHEEL, FacilityType.PLAY_AREA, FacilityType.TUNNEL],
                 "social": [FacilityType.PLAY_AREA],
             }
