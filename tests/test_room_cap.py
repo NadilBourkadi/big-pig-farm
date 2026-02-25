@@ -2,7 +2,7 @@
 
 from uuid import uuid4
 
-from big_pig_farm.data.config import BEHAVIOR, ROOM_TIERS
+from big_pig_farm.data.config import BEHAVIOR, TIER_UPGRADES, get_tier_upgrade
 from big_pig_farm.entities.biomes import BiomeType
 from big_pig_farm.entities.facilities import Facility, FacilityType
 from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
@@ -31,17 +31,18 @@ def _add_pig(state: GameState, x: float, y: float, name: str = "Pig") -> GuineaP
 
 class TestAreaCapacity:
     def test_get_area_capacity_first_room(self):
-        """First room uses ROOM_TIERS[0].capacity_add."""
+        """First room uses uniform capacity_per_room for tier 1."""
         state = GameState()
         state.farm = FarmGrid.create_starter()
         area = state.farm.areas[0]
-        assert state.farm.get_area_capacity(area.id) == ROOM_TIERS[0].capacity_add
+        assert state.farm.get_area_capacity(area.id) == TIER_UPGRADES[0].capacity_per_room
 
     def test_get_area_capacity_second_room(self):
-        """Second room uses ROOM_TIERS[1].capacity_add."""
+        """Second room uses the same uniform capacity_per_room as first."""
         state = _make_state_with_two_rooms()
         area = state.farm.areas[1]
-        assert state.farm.get_area_capacity(area.id) == ROOM_TIERS[1].capacity_add
+        # Both rooms have the same capacity at tier 1
+        assert state.farm.get_area_capacity(area.id) == TIER_UPGRADES[0].capacity_per_room
 
     def test_get_area_capacity_unknown(self):
         """Unknown area_id returns 0."""
@@ -114,7 +115,7 @@ class TestOvercrowdingScoring:
         facility_manager._area_populations[area_0.id] = capacity + 1
         facility_manager._area_capacities[area_0.id] = capacity
         facility_manager._area_populations[area_1.id] = 0
-        facility_manager._area_capacities[area_1.id] = ROOM_TIERS[1].capacity_add
+        facility_manager._area_capacities[area_1.id] = get_tier_upgrade(1).capacity_per_room
 
         # Create a pig in room 0
         pig = _add_pig(state, float(area_0.x1 + 3), float(area_0.y1 + 3), name="TestPig")

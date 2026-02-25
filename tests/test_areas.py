@@ -1,8 +1,12 @@
 """Tests for area layout, tunnels, and multi-room pathfinding."""
 
+from big_pig_farm.data.config import TIER_UPGRADES, get_tier_upgrade
 from big_pig_farm.entities.areas import FarmArea
 from big_pig_farm.entities.biomes import BiomeType
-from big_pig_farm.game.world import FarmGrid, relayout_areas
+from big_pig_farm.entities.facilities import Facility, FacilityType
+from big_pig_farm.entities.guinea_pig import Gender, GuineaPig, Position
+from big_pig_farm.game.state import GameState
+from big_pig_farm.game.world import FarmGrid, relayout_areas, resize_all_rooms
 
 
 class TestFarmArea:
@@ -151,16 +155,9 @@ class TestThirdRoomLayout:
         """Adding a 3rd room repositions existing areas; old cells must be cleared."""
         farm = FarmGrid.create_starter()
         farm.add_room(BiomeType.BURROW)
-
-        # Record room 0 position before 3rd room
-        old_x1 = farm.areas[0].x1
-
         farm.add_room(BiomeType.GARDEN)
 
-        # Room 0 should have shifted right (wider room 2 is in same column)
-        new_x1 = farm.areas[0].x1
-        assert new_x1 > old_x1, "Room 0 should shift right to center in wider column"
-
+        # With uniform room sizes, room 0 stays at x1=0 (no centering shift).
         # No cell outside any area or tunnel should have an area_id
         for y in range(farm.height):
             for x in range(farm.width):
@@ -237,7 +234,6 @@ class TestAdjacentPairs:
 class TestRelayout:
     def test_relayout_noop_for_new_layout(self):
         """relayout_areas should be a no-op when grid slots are already set."""
-        from big_pig_farm.game.state import GameState
         state = GameState()
         state.farm = FarmGrid.create_starter()
         state.farm.add_room(BiomeType.BURROW)
@@ -253,7 +249,6 @@ class TestRelayout:
 
     def test_relayout_assigns_grid_slots(self):
         """relayout_areas should assign grid_col/grid_row to legacy areas."""
-        from big_pig_farm.game.state import GameState
         state = GameState()
         state.farm = FarmGrid.create_starter()
 
@@ -271,3 +266,107 @@ class TestRelayout:
         assert state.farm.areas[0].grid_row == 0
         assert state.farm.areas[1].grid_col == 1
         assert state.farm.areas[1].grid_row == 0
+
+
+class TestUniformRoomSizes:
+    def test_all_rooms_same_size(self):
+        """All rooms should have the same dimensions at a given tier."""
+        farm = FarmGrid.create_starter()
+        farm.add_room(BiomeType.BURROW)
+        farm.add_room(BiomeType.GARDEN)
+
+        tier_info = get_tier_upgrade(farm.tier)
+        for area in farm.areas:
+            width = area.x2 - area.x1 + 1
+            height = area.y2 - area.y1 + 1
+            assert width == tier_info.room_width, (
+                f"{area.name} width {width} != tier width {tier_info.room_width}"
+            )
+            assert height == tier_info.room_height, (
+                f"{area.name} height {height} != tier height {tier_info.room_height}"
+            )
+
+    def test_tier_upgrade_resizes_all_rooms(self):
+        """Upgrading tier should resize all existing rooms to new dimensions."""
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+        state.farm.add_room(BiomeType.BURROW)
+
+        tier1 = TIER_UPGRADES[0]
+        tier2 = TIER_UPGRADES[1]
+
+        # Verify rooms start at tier 1 dimensions
+        for area in state.farm.areas:
+            assert area.x2 - area.x1 + 1 == tier1.room_width
+
+        # Resize to tier 2
+        state.farm.tier = 2
+        resized = resize_all_rooms(state, 2)
+        assert resized
+
+        # All rooms should now match tier 2 dimensions
+        for area in state.farm.areas:
+            width = area.x2 - area.x1 + 1
+            height = area.y2 - area.y1 + 1
+            assert width == tier2.room_width, f"Expected {tier2.room_width}, got {width}"
+            assert height == tier2.room_height, f"Expected {tier2.room_height}, got {height}"
+
+    def test_resize_noop_when_already_correct(self):
+        """resize_all_rooms should be a no-op when dimensions already match."""
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+        assert not resize_all_rooms(state, 1)
+
+    def test_resize_preserves_pigs(self):
+        """Pigs should remain in valid walkable cells after resize."""
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+
+        # Place a pig in the interior of the starter room
+        area = state.farm.areas[0]
+        pig = GuineaPig.create(
+            name="ResizePig", gender=Gender.MALE,
+            position=Position(x=float(area.center_x), y=float(area.center_y)),
+            age_days=5.0,
+        )
+        state.guinea_pigs[pig.id] = pig
+
+        # Resize to tier 2
+        state.farm.tier = 2
+        resize_all_rooms(state, 2)
+
+        # Pig should be on a walkable cell
+        pig_x, pig_y = int(pig.position.x), int(pig.position.y)
+        assert state.farm.is_walkable(pig_x, pig_y), (
+            f"Pig at ({pig_x},{pig_y}) is not on a walkable cell after resize"
+        )
+
+    def test_resize_preserves_facilities(self):
+        """Facilities should remain placed on the grid after resize."""
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+
+        # Place a food bowl in the starter room
+        area = state.farm.areas[0]
+        bowl = Facility.create(FacilityType.FOOD_BOWL, area.interior_x1 + 2, area.interior_y1 + 2)
+        state.add_facility(bowl)
+
+        # Resize to tier 2
+        state.farm.tier = 2
+        resize_all_rooms(state, 2)
+
+        # Facility should still be on the grid
+        cell = state.farm.get_cell(bowl.position_x, bowl.position_y)
+        assert cell is not None
+        assert cell.facility_id == bowl.id, "Facility should be placed on grid after resize"
+
+    def test_uniform_capacity(self):
+        """All rooms should report the same capacity at a given tier."""
+        state = GameState()
+        state.farm = FarmGrid.create_starter()
+        state.farm.add_room(BiomeType.BURROW)
+
+        cap_0 = state.farm.get_area_capacity(state.farm.areas[0].id)
+        cap_1 = state.farm.get_area_capacity(state.farm.areas[1].id)
+        assert cap_0 == cap_1
+        assert cap_0 == TIER_UPGRADES[0].capacity_per_room
