@@ -370,6 +370,13 @@ def update_movement(
     # Calculate movement speed
     speed = SIMULATION.BASE_MOVE_SPEED
 
+    # Movement perks: Express Lanes (+50%) supersedes Paved Paths (+20%)
+    game_state = controller.game_state
+    if game_state.has_upgrade("express_lanes"):
+        speed *= 1.5
+    elif game_state.has_upgrade("paved_paths"):
+        speed *= 1.2
+
     # Reduce speed if tired
     if pig.needs.energy < BEHAVIOR.ENERGY_SLEEP_THRESHOLD:
         speed *= BEHAVIOR.TIRED_SPEED_MULT
