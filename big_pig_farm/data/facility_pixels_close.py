@@ -451,4 +451,282 @@ FACILITY_PIXELS_CLOSE["genetics_lab"] = decode_sprite([
     "rrrrrrrrrrrrrrrrrrrrrr",
 ], _LAB_CHAR, width=22)
 
+# ---------------------------------------------------------------------------
+# FEAST TABLE (28w × 28h)  —  large communal banquet table with plates
+# ---------------------------------------------------------------------------
+
+_FEAST_CHAR = {
+    ".": None, "r": "frame", "t": "table", "p": "plank",
+    "f": "food", "a": "plate", "l": "leg",
+}
+
+FACILITY_PIXELS_CLOSE["feast_table"] = decode_sprite([
+    "rrpppppppppppppppppppppppppp",
+    "rrpppppppppppppppppppppppppp",
+    "rrttttaaffaaffaaffaaffaattrr",
+    "rrttttaaffaaffaaffaaffaattrr",
+    "rrttaaffaaffaaffaaffaaffaarr",
+    "rrttaaffaaffaaffaaffaaffaarr",
+    "rrttffaaffaaffaaffaaffaattrr",
+    "rrttffaaffaaffaaffaaffaattrr",
+    "rrttaaffaaffaaffaaffaaffaarr",
+    "rrttaaffaaffaaffaaffaaffaarr",
+    "rrttttaaffaaffaaffaaffaattrr",
+    "rrttttaaffaaffaaffaaffaattrr",
+    "rrpppppppppppppppppppppppppp",
+    "rrpppppppppppppppppppppppppp",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+], _FEAST_CHAR, width=28)
+
+FACILITY_PIXELS_CLOSE["feast_table_empty"] = decode_sprite([
+    "rrpppppppppppppppppppppppppp",
+    "rrpppppppppppppppppppppppppp",
+    "rrttttaattaattaattaattaattrr",
+    "rrttttaattaattaattaattaattrr",
+    "rrttaattaattaattaattaattaarr",
+    "rrttaattaattaattaattaattaarr",
+    "rrttttaattaattaattaattaattrr",
+    "rrttttaattaattaattaattaattrr",
+    "rrttaattaattaattaattaattaarr",
+    "rrttaattaattaattaattaattaarr",
+    "rrttttaattaattaattaattaattrr",
+    "rrttttaattaattaattaattaattrr",
+    "rrpppppppppppppppppppppppppp",
+    "rrpppppppppppppppppppppppppp",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+], _FEAST_CHAR, width=28)
+
+FACILITY_PIXELS_CLOSE["feast_table_full"] = decode_sprite([
+    "rrpppppppppppppppppppppppppp",
+    "rrpppppppppppppppppppppppppp",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrttffffffffffffffffffttttrr",
+    "rrpppppppppppppppppppppppppp",
+    "rrpppppppppppppppppppppppppp",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll......rrrrrr......llll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "..llll....................ll",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+], _FEAST_CHAR, width=28)
+
+# ---------------------------------------------------------------------------
+# CAMPFIRE (28w × 28h)  —  large stone ring with crackling fire
+# ---------------------------------------------------------------------------
+
+_CAMP_CHAR = {
+    ".": None, "r": "frame", "s": "stone", "f": "fire",
+    "m": "flame", "e": "ember", "l": "log", "a": "ash",
+}
+
+FACILITY_PIXELS_CLOSE["campfire"] = decode_sprite([
+    "........mmmmmmmm............",
+    "........mmmmmmmm............",
+    "......mmmmmmmmmmmm..........",
+    "......mmmmmmmmmmmm..........",
+    "....mmmmffffffmmmm..........",
+    "....mmmmffffffmmmm..........",
+    "....mmffffffffffffffmm......",
+    "....mmffffffffffffffmm......",
+    "..ssffffeefffeeeffffffff....",
+    "..ssffffeefffeeeffffffff....",
+    "ssssffffffeeeeeefffffffss...",
+    "ssssffffffeeeeeefffffffss...",
+    "sslllllleeeeeeeeellllllss...",
+    "sslllllleeeeeeeeellllllss...",
+    "ssllllllaaaaaaaaallllllss...",
+    "ssllllllaaaaaaaaallllllss...",
+    "rrssssllllaaaallllssssrr....",
+    "rrssssllllaaaallllssssrr....",
+    "..rrssssssssssssssssrr......",
+    "..rrssssssssssssssssrr......",
+    "....rrrrrrrrrrrrrrrr........",
+    "....rrrrrrrrrrrrrrrr........",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+    "............................",
+], _CAMP_CHAR, width=28)
+
+# ---------------------------------------------------------------------------
+# THERAPY GARDEN (28w × 28h)  —  lush flower garden with winding path
+# ---------------------------------------------------------------------------
+
+_THERAPY_CHAR = {
+    ".": None, "r": "frame", "g": "grass", "f": "flower",
+    "p": "petal", "l": "leaf", "t": "path", "w": "water",
+}
+
+FACILITY_PIXELS_CLOSE["therapy_garden"] = decode_sprite([
+    "rrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "rrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "rrggggffggllggllggppggggllrr",
+    "rrggggffggllggllggppggggllrr",
+    "rrggffggppggffggppggffggpprr",
+    "rrggffggppggffggppggffggpprr",
+    "rrllggppggttttttttggffgglgrr",
+    "rrllggppggttttttttggffgglgrr",
+    "rrggppggttttttttttttggppffrr",
+    "rrggppggttttttttttttggppffrr",
+    "rrffggtttttwwwwwwttttggffrr.",
+    "rrffggtttttwwwwwwttttggffrr.",
+    "rrgglltttwwwwwwwwwwtttllggrr",
+    "rrgglltttwwwwwwwwwwtttllggrr",
+    "rrppggtttwwwwwwwwwwtttggpprr",
+    "rrppggtttwwwwwwwwwwtttggpprr",
+    "rrggfftttttwwwwwwttttffggrr.",
+    "rrggfftttttwwwwwwttttffggrr.",
+    "rrllggppttttttttttttggllpprr",
+    "rrllggppttttttttttttggllpprr",
+    "rrggppggllttttttttppggffggrr",
+    "rrggppggllttttttttppggffggrr",
+    "rrffggllggppggffggllggppffrr",
+    "rrffggllggppggffggllggppffrr",
+    "rrggllggffggppggllggffggllrr",
+    "rrggllggffggppggllggffggllrr",
+    "rrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+    "rrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+], _THERAPY_CHAR, width=28)
+
+# ---------------------------------------------------------------------------
+# HOT SPRING (36w × 36h)  —  large stone-rimmed pool, steam, rocky edge
+# ---------------------------------------------------------------------------
+
+_SPRING_CHAR = {
+    ".": None, "r": "frame", "s": "stone", "w": "water",
+    "t": "steam", "p": "pool", "k": "rock",
+}
+
+FACILITY_PIXELS_CLOSE["hot_spring"] = decode_sprite([
+    "....tt....tt....tt....tt............",
+    "....tt....tt....tt....tt............",
+    "......tt....tt....tt....tt..........",
+    "......tt....tt....tt....tt..........",
+    "........tt....tt....tt....tt........",
+    "........tt....tt....tt....tt........",
+    "....rrssssssssssssssssssssssssrr....",
+    "....rrssssssssssssssssssssssssrr....",
+    "..rrssppppppppppppppppppppppppssrr..",
+    "..rrssppppppppppppppppppppppppssrr..",
+    "rrssppppppwwwwwwwwwwwwwwppppppppssrr",
+    "rrssppppppwwwwwwwwwwwwwwppppppppssrr",
+    "rrssppppwwwwwwwwwwwwwwwwwwppppppssrr",
+    "rrssppppwwwwwwwwwwwwwwwwwwppppppssrr",
+    "rrssppwwwwwwppppppppwwwwwwwwppppssrr",
+    "rrssppwwwwwwppppppppwwwwwwwwppppssrr",
+    "rrsswwwwwwppppppppppppwwwwwwwwwwssrr",
+    "rrsswwwwwwppppppppppppwwwwwwwwwwssrr",
+    "rrsswwwwwwppppppppppppwwwwwwwwwwssrr",
+    "rrsswwwwwwppppppppppppwwwwwwwwwwssrr",
+    "rrssppwwwwwwppppppppwwwwwwwwppppssrr",
+    "rrssppwwwwwwppppppppwwwwwwwwppppssrr",
+    "rrssppppwwwwwwwwwwwwwwwwwwppppppssrr",
+    "rrssppppwwwwwwwwwwwwwwwwwwppppppssrr",
+    "rrssppppppwwwwwwwwwwwwwwppppppppssrr",
+    "rrssppppppwwwwwwwwwwwwwwppppppppssrr",
+    "..rrssppppppppppppppppppppppppssrr..",
+    "..rrssppppppppppppppppppppppppssrr..",
+    "....rrssssssssssssssssssssssssrr....",
+    "....rrssssssssssssssssssssssssrr....",
+    "......rrrrrrkkkk....kkkkrrrrrr......",
+    "......rrrrrrkkkk....kkkkrrrrrr......",
+    "....................................",
+    "....................................",
+    "....................................",
+    "....................................",
+], _SPRING_CHAR, width=36)
+
+# ---------------------------------------------------------------------------
+# STAGE (36w × 36h)  —  large curtained stage with spotlight
+# ---------------------------------------------------------------------------
+
+_STAGE_CHAR = {
+    ".": None, "r": "frame", "f": "floor", "c": "curtain",
+    "l": "light", "s": "star", "b": "base",
+}
+
+FACILITY_PIXELS_CLOSE["stage"] = decode_sprite([
+    "ccccccllccccccccssccccccllcccccccccc",
+    "ccccccllccccccccssccccccllcccccccccc",
+    "cccccccccccccccccccccccccccccccccccc",
+    "cccccccccccccccccccccccccccccccccccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc..........llll..........cccc....",
+    "cccc..........llll..........cccc....",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "cccc............................cccc",
+    "rrrrrrffffffffffffffffffffffrrrrrrrr",
+    "rrrrrrffffffffffffffffffffffrrrrrrrr",
+    "rrffffffffffffffffffffffffffffffrrrr",
+    "rrffffffffffffffffffffffffffffffrrrr",
+    "rrffffffffffffffffffffffffffffffrrrr",
+    "rrffffffffffffffffffffffffffffffrrrr",
+    "..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
+    "..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
+    "..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
+    "..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
+    "....bbbb......bbbb......bbbb.......",
+    "....bbbb......bbbb......bbbb.......",
+    "....................................",
+    "....................................",
+    "....................................",
+    "....................................",
+], _STAGE_CHAR, width=36)
+
 # fmt: on
