@@ -8,13 +8,13 @@ interface is compatible.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING
 
 from big_pig_farm.data.config import ECONOMY
 from big_pig_farm.economy.currency import add_money
-from big_pig_farm.entities.guinea_pig import GuineaPig
-from big_pig_farm.entities.genetics import Rarity
 from big_pig_farm.entities.facilities import FacilityType
+from big_pig_farm.entities.genetics import Rarity
+from big_pig_farm.entities.guinea_pig import GuineaPig
 from big_pig_farm.game.state import GameState
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class SaleResult:
     """Result of selling a guinea pig."""
     base_value: int
     contract_bonus: int
-    matched_contract: Optional[object]
+    matched_contract: object | None
 
     @property
     def total(self) -> int:
@@ -45,12 +45,12 @@ def get_rarity_multiplier(rarity: Rarity) -> float:
     return multipliers.get(rarity, 1.0)
 
 
-def calculate_pig_value(pig: GuineaPig, state: Optional[Union[GameState, PopulationFacade]] = None) -> int:
+def calculate_pig_value(pig: GuineaPig, state: GameState | PopulationFacade | None = None) -> int:
     """Calculate the sale value of a guinea pig."""
     return calculate_pig_value_breakdown(pig, state)["total"]
 
 
-def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[Union[GameState, PopulationFacade]] = None) -> dict:
+def calculate_pig_value_breakdown(pig: GuineaPig, state: GameState | PopulationFacade | None = None) -> dict:
     """Calculate sale value with individual multiplier breakdown.
 
     Returns dict with: base, rarity_mult, age_mult, health_mult, grooming_mult, total
@@ -75,7 +75,22 @@ def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[Union[GameStat
         if grooming_stations:
             grooming_mult = 1.15
 
-    total = base_value * rarity_mult * age_mult * health_mult * grooming_mult
+    # Perk multipliers (stack multiplicatively — a legendary pig with all
+    # three perks gets 1.10 * 1.20 * 1.50 = 1.98x bonus)
+    perk_mult = 1.0
+    _RARE_AND_ABOVE = {Rarity.RARE, Rarity.VERY_RARE, Rarity.LEGENDARY}
+    if state and hasattr(state, "has_upgrade"):
+        # Market Connections: all pig sale values +10%
+        if state.has_upgrade("market_connections"):
+            perk_mult *= 1.10
+        # Premium Branding: rare+ pigs sell for additional +20%
+        if state.has_upgrade("premium_branding") and pig.phenotype.rarity in _RARE_AND_ABOVE:
+            perk_mult *= 1.20
+        # Influencer Pig: legendary pigs sell for +50%
+        if state.has_upgrade("influencer_pig") and pig.phenotype.rarity == Rarity.LEGENDARY:
+            perk_mult *= 1.50
+
+    total = base_value * rarity_mult * age_mult * health_mult * grooming_mult * perk_mult
 
     return {
         "base": base_value,
@@ -83,6 +98,7 @@ def calculate_pig_value_breakdown(pig: GuineaPig, state: Optional[Union[GameStat
         "age_mult": age_mult,
         "health_mult": health_mult,
         "grooming_mult": grooming_mult,
+        "perk_mult": perk_mult,
         "total": max(1, int(total)),
     }
 
@@ -96,6 +112,9 @@ def sell_pig(state: GameState, pig: GuineaPig) -> SaleResult:
     matched_contract = state.contract_board.check_and_fulfill(pig, farm=state.farm)
     if matched_contract:
         contract_bonus = matched_contract.reward
+        # Trade Network perk: contract reward payouts +25%
+        if state.has_upgrade("trade_network"):
+            contract_bonus = int(contract_bonus * 1.25)
         state.contract_board.remove_fulfilled()
 
     result = SaleResult(
