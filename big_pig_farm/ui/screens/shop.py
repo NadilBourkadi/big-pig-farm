@@ -1,6 +1,8 @@
 """Shop screen for purchasing facilities, items, and adopting pigs."""
 
 import random
+from itertools import groupby
+from operator import attrgetter
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
@@ -74,16 +76,36 @@ class PerkWidget(ListItem):
 
     def __init__(self, upgrade: UpgradeDefinition, purchased: bool, can_afford: bool):
         cost_str = format_currency(upgrade.cost)
-        if purchased:
-            label = f"[dim]✓ {upgrade.name:20} {cost_str:>8}  (owned)[/dim]"
+        if not upgrade.implemented:
+            label = f"[dim]  {upgrade.name:22} {cost_str:>8}  (coming soon)[/dim]"
+        elif purchased:
+            label = f"[dim]✓ {upgrade.name:22} {cost_str:>8}  (owned)[/dim]"
         else:
             afford_str = "" if can_afford else " (!)"
-            label = f"  {upgrade.name:20} {cost_str:>8}{afford_str}"
+            label = f"  {upgrade.name:22} {cost_str:>8}{afford_str}"
 
         super().__init__(Label(label, markup=True))
         self.upgrade = upgrade
         self.purchased = purchased
         self.can_afford = can_afford
+
+
+class TierHeaderWidget(ListItem):
+    """Non-selectable tier separator in the shop list."""
+
+    DEFAULT_CSS = """
+    TierHeaderWidget {
+        background: #cccccc;
+        color: #1a1a1a;
+        height: 1;
+        padding: 0;
+    }
+    """
+
+    def __init__(self, tier: int):
+        label = f"Tier {tier}"
+        super().__init__(Label(label))
+        self.disabled = True
 
 
 class ShopScreen(Screen):
@@ -128,6 +150,10 @@ class ShopScreen(Screen):
         height: 1fr;
         border: solid $primary;
         margin: 1;
+    }
+
+    #item-list ListItem {
+        padding: 0 0 0 1;
     }
 
     #item-detail {
@@ -193,9 +219,25 @@ class ShopScreen(Screen):
 
     def on_mount(self) -> None:
         """Handle mount event."""
+        self._refund_unimplemented_perks()
         self._refresh_items()
         list_view = self.query_one("#item-list", ListView)
         list_view.focus()
+
+    def _refund_unimplemented_perks(self) -> None:
+        """Refund any accidentally purchased unimplemented perks."""
+        from big_pig_farm.economy.currency import add_money
+        from big_pig_farm.economy.upgrades import UPGRADES
+
+        to_refund = [
+            uid for uid in self.state.purchased_upgrades
+            if uid in UPGRADES and not UPGRADES[uid].implemented
+        ]
+        for uid in to_refund:
+            upgrade = UPGRADES[uid]
+            self.state.purchased_upgrades.discard(uid)
+            add_money(self.state, upgrade.cost, f"Refunded {upgrade.name}")
+            self.notify(f"Refunded {upgrade.name} ({format_currency(upgrade.cost)})")
 
     def _refresh_items(self) -> None:
         """Refresh the item list."""
@@ -212,10 +254,12 @@ class ShopScreen(Screen):
 
         if self.current_category == ShopCategory.PERKS:
             perks = get_available_perks(self.state.farm_tier, self.state.purchased_upgrades)
-            for perk in perks:
-                purchased = perk.id in self.state.purchased_upgrades
-                can_afford = self.state.money >= perk.cost
-                list_view.append(PerkWidget(perk, purchased, can_afford))
+            for tier, group in groupby(perks, key=attrgetter("required_tier")):
+                list_view.append(TierHeaderWidget(tier))
+                for perk in group:
+                    purchased = perk.id in self.state.purchased_upgrades
+                    can_afford = self.state.money >= perk.cost
+                    list_view.append(PerkWidget(perk, purchased, can_afford))
         elif self.current_category == ShopCategory.ADOPTION:
             if not self._available_pigs:
                 self._generate_available_pigs()
@@ -247,10 +291,11 @@ class ShopScreen(Screen):
                 list_view.append(ListItem(Label(label), id="farm-upgrade"))
         else:
             items = get_shop_items(self.current_category, self.state.farm_tier)
-            for item in items:
-                can_afford = self.state.money >= item.cost
-                widget = ShopItemWidget(item, can_afford)
-                list_view.append(widget)
+            for tier, group in groupby(items, key=attrgetter("required_tier")):
+                list_view.append(TierHeaderWidget(tier))
+                for item in group:
+                    can_afford = self.state.money >= item.cost
+                    list_view.append(ShopItemWidget(item, can_afford))
 
     def _generate_available_pigs(self) -> None:
         """Generate a new set of pigs available for adoption."""
@@ -574,6 +619,9 @@ class ShopScreen(Screen):
             return
 
         perk = self._selected_perk
+        if not perk.implemented:
+            self.notify("This perk is coming soon!", severity="warning")
+            return
         if perk.id in self.state.purchased_upgrades:
             self.notify("Already owned!", severity="warning")
             return
