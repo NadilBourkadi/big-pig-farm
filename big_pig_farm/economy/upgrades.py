@@ -65,6 +65,7 @@ _register(
         cost=400,
         required_tier=2,
         category="Breeding",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="breeding_insight",
@@ -81,6 +82,7 @@ _register(
         cost=7000,
         required_tier=4,
         category="Breeding",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="genetic_accelerator",
@@ -89,6 +91,7 @@ _register(
         cost=20000,
         required_tier=5,
         category="Breeding",
+        implemented=True,
     ),
 )
 
@@ -101,6 +104,7 @@ _register(
         cost=250,
         required_tier=2,
         category="Comfort",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="enrichment_program",
@@ -109,6 +113,7 @@ _register(
         cost=1000,
         required_tier=3,
         category="Comfort",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="climate_control",
@@ -117,6 +122,7 @@ _register(
         cost=2000,
         required_tier=3,
         category="Comfort",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="pig_spa",
@@ -125,6 +131,7 @@ _register(
         cost=5000,
         required_tier=4,
         category="Comfort",
+        implemented=True,
     ),
 )
 
@@ -137,6 +144,7 @@ _register(
         cost=500,
         required_tier=2,
         category="Economy",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="premium_branding",
@@ -145,6 +153,7 @@ _register(
         cost=2500,
         required_tier=3,
         category="Economy",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="trade_network",
@@ -153,6 +162,7 @@ _register(
         cost=8000,
         required_tier=4,
         category="Economy",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="influencer_pig",
@@ -161,6 +171,7 @@ _register(
         cost=25000,
         required_tier=5,
         category="Economy",
+        implemented=True,
     ),
 )
 
@@ -173,6 +184,7 @@ _register(
         cost=300,
         required_tier=2,
         category="Movement",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="express_lanes",
@@ -181,6 +193,7 @@ _register(
         cost=4000,
         required_tier=4,
         category="Movement",
+        implemented=True,
     ),
 )
 
@@ -193,6 +206,7 @@ _register(
         cost=200,
         required_tier=2,
         category="Quality of Life",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="adoption_discount",
@@ -201,6 +215,7 @@ _register(
         cost=300,
         required_tier=2,
         category="Quality of Life",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="speed_breeding",
@@ -209,6 +224,7 @@ _register(
         cost=1500,
         required_tier=3,
         category="Quality of Life",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="contract_negotiator",
@@ -217,6 +233,7 @@ _register(
         cost=1200,
         required_tier=3,
         category="Quality of Life",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="lucky_clover",
@@ -225,6 +242,7 @@ _register(
         cost=5000,
         required_tier=4,
         category="Quality of Life",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="vip_contracts",
@@ -233,6 +251,7 @@ _register(
         cost=15000,
         required_tier=5,
         category="Quality of Life",
+        implemented=True,
     ),
     UpgradeDefinition(
         id="talent_scout",
