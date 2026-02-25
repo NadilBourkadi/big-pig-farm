@@ -163,6 +163,10 @@ def _attempt_breeding(male: GuineaPig, female: GuineaPig, game_state: "BreedingC
     # Random chance based on conditions
     base_chance = BREEDING.BASE_BREEDING_CHANCE
 
+    # Fertility Herbs perk: +5% base breeding chance
+    if game_state.has_upgrade("fertility_herbs"):
+        base_chance += 0.05
+
     # Bonus from breeding den
     breeding_dens = game_state.get_facilities_by_type(FacilityType.BREEDING_DEN)
     if breeding_dens:
